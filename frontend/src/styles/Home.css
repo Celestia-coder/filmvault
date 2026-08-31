@@ -1,0 +1,99 @@
+@import "./variables.css";
+
+.home-page {
+	position: relative;
+	background-color: var(--color-bg-dark);
+}
+
+.hero-bg {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100vh; 
+	background-size: cover;
+	background-position: center;
+	z-index: 0;
+}
+
+.hero-bg::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		to bottom,
+		rgba(25, 25, 25, 0.4) 0%,
+		rgba(25, 25, 25, 0.6) 55%,
+		var(--color-bg-dark) 100%
+	);
+}
+
+.hero {
+	position: relative;
+	z-index: 2;
+	min-height: 100vh; 
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+.hero-content {
+	max-width: 1200px;
+	text-align: center;
+	padding: 0 24px;
+	margin: 100px 0px;
+}
+
+.hero-logo {
+	height: 120px;
+	margin: 100px 0 10px 0;
+}
+
+.hero-content h1 {
+	font-size: 2.5rem;
+	font-weight: 800;
+	margin-bottom: 18px;
+}
+
+.hero-content p {
+	color: var(--color-text-muted);
+	font-size: 0.8rem;
+	line-height: 1.7;
+	margin-bottom: 40px;
+}
+
+.hero-buttons {
+	display: flex;
+	justify-content: center;
+	gap: 16px;
+}
+
+.btn-primary,
+.btn-secondary {
+	padding: 16px 40px;
+	border-radius: 8px;
+	font-weight: 700;
+	font-size: 15px;
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.btn-primary {
+	background-color: var(--color-red);
+	color: var(--color-white);
+	border: 1px solid var(--color-red);
+}
+
+.btn-primary:hover {
+	opacity: 0.8;
+}
+
+.btn-secondary {
+	background-color: transparent;
+	color: var(--color-white);
+	border: 1px solid var(--color-red);
+}
+
+.btn-secondary:hover {
+	background-color: rgba(238, 17, 43, 0.194);
+}

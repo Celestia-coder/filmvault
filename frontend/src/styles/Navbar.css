@@ -1,0 +1,67 @@
+@import "./variables.css";
+
+.navbar {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 24px 48px;
+	z-index: 10;
+}
+
+.navbar-logo {
+	color: var(--color-red);
+	font-size: 1.5rem;
+	font-weight: 800;
+}
+
+.navbar-links {
+	display: flex;
+	gap: 30px;
+	background-color: rgba(255, 255, 255, 0.05);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 999px;
+	padding: 12px 15px;
+}
+
+.navbar-links a {
+	color: var(--color-white);
+	text-decoration: none;
+	font-weight: 500;
+	font-size: 1rem;
+	padding: 8px 20px;
+}
+
+.navbar-links a:hover {
+	opacity: 0.6;
+}
+
+.navbar-icons {
+	display: flex;
+	gap: 20px;
+}
+
+.icon-btn {
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.icon-btn:hover {
+	background: rgba(255, 255, 255, 0.21);
+	border-radius: 2rem;
+	transition: background-color 0.3s ease-in-out;
+}
+
+
+.icon-img {
+	width: 50px;
+	object-fit: contain;
+}

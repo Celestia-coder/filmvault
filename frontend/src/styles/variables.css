@@ -1,0 +1,49 @@
+/* variables.css
+   Shared design tokens + self-hosted Poppins font.
+   Import this in EVERY page/component CSS file:  @import './variables.css'; */
+
+@font-face {
+	font-family: "Poppins";
+	src: url("../assets/fonts/Poppins-Regular.ttf") format("truetype");
+	font-weight: 400;
+}
+@font-face {
+	font-family: "Poppins";
+	src: url("../assets/fonts/Poppins-Medium.ttf") format("truetype");
+	font-weight: 500;
+}
+@font-face {
+	font-family: "Poppins";
+	src: url("../assets/fonts/Poppins-SemiBold.ttf") format("truetype");
+	font-weight: 600;
+}
+@font-face {
+	font-family: "Poppins";
+	src: url("../assets/fonts/Poppins-Bold.ttf") format("truetype");
+	font-weight: 700;
+}
+@font-face {
+	font-family: "Poppins";
+	src: url("../assets/fonts/Poppins-ExtraBold.ttf") format("truetype");
+	font-weight: 800;
+}
+
+:root {
+	--color-red: #ee112b;
+	--color-bg-dark: #191919;
+	--color-bg-dark2: #0F0F0F;
+	--color-white: #ffffff;
+	--color-text-muted: #b3b3b3;
+	--font-main: "Poppins", sans-serif;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	font-family: var(--font-main);
+	background-color: var(--color-bg-dark);
+	color: var(--color-white);
+}

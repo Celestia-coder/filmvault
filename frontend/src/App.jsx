@@ -1,16 +1,16 @@
 // App.jsx — all page routes are declared here.
 // Do not add page content here — only routing.
 
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Home from './pages/client/Home';
+import { Routes, Route } from "react-router";
+import Home from "./pages/client/Home.jsx";
+import SignUp from "./pages/client/SignUp.jsx";
 
 function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/signup" element={<SignUp />} />
+    </Routes>
   );
 }
 

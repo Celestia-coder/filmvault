@@ -1,6 +1,7 @@
 // Home.jsx — Owner: [Your Name]
 // Route: "/"
 
+import { Link } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
@@ -37,13 +38,12 @@ function Home() {
 					</p>
 
 					<div className="hero-buttons">
-						{/* TODO: wrap with <Link to="/login"> once React Router is used here */}
-						<a href="/login" className="btn-primary">
+						<Link to="/login" className="btn-primary">
 							Login
-						</a>
-						<a href="/signup" className="btn-secondary">
+						</Link>
+						<Link to="/signup" className="btn-secondary">
 							Sign Up
-						</a>
+						</Link>
 					</div>
 				</div>
 			</section>

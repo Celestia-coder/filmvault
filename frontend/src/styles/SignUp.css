@@ -1,0 +1,603 @@
+@import "./variables.css";
+
+:root {
+	--signup-card-bg: rgba(15, 15, 15, 0.82);
+	--signup-border: rgba(255, 255, 255, 0.08);
+	--signup-input-bg: rgba(255, 255, 255, 0.04);
+	--signup-danger: #ff6b6b;
+}
+
+/* ---------- Page + background ---------- */
+
+.signup-page {
+	position: relative;
+	background-color: var(--color-bg-dark);
+}
+
+.signup-bg {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100vh;
+	background-size: cover;
+	background-position: center;
+	z-index: 0;
+}
+
+.signup-bg::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		to bottom,
+		rgba(25, 25, 25, 0.4) 0%,
+		rgba(25, 25, 25, 0.6) 55%,
+		var(--color-bg-dark) 100%
+	);
+}
+
+.signup-hero {
+	position: relative;
+	z-index: 2;
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding-bottom: 80px;
+}
+
+.signup-layout {
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	gap: 64px;
+	width: 100%;
+	max-width: 1320px;
+	margin: 0 auto;
+	padding: 150px 24px 0;
+}
+
+.text-red {
+	color: var(--color-red);
+}
+
+/* ---------- Left column: intro + features ---------- */
+
+.signup-intro {
+	flex: 1 1 420px;
+	max-width: 460px;
+	padding-top: 36px;
+}
+
+.signup-heading {
+	font-size: clamp(2rem, 4vw, 3rem);
+	line-height: 1.15;
+	font-weight: 800;
+}
+
+.signup-subtext {
+	color: var(--color-text-muted);
+	font-size: 0.95rem;
+	line-height: 1.7;
+	margin: 20px 0 0;
+	max-width: 420px;
+}
+
+.feature-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin: 32px 0 28px;
+}
+
+.feature-card {
+	display: flex;
+	align-items: flex-start;
+	gap: 14px;
+	padding: 16px;
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid var(--signup-border);
+	border-radius: 12px;
+}
+
+.feature-icon {
+	flex-shrink: 0;
+	width: 38px;
+	height: 38px;
+	border-radius: 8px;
+	background: rgba(238, 17, 43, 0.12);
+	color: var(--color-red);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.feature-title {
+	font-weight: 700;
+	font-size: 14px;
+	margin-bottom: 4px;
+}
+
+.feature-desc {
+	font-size: 13px;
+	color: var(--color-text-muted);
+	line-height: 1.5;
+}
+
+.btn-back-page {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	width: auto;
+	text-decoration: none;
+}
+
+/* ---------- Right column: step card ---------- */
+
+.signup-card {
+	flex: 1 1 420px;
+	max-width: 440px;
+	background: var(--signup-card-bg);
+	border: 1px solid var(--signup-border);
+	border-radius: 20px;
+	padding: 40px;
+	backdrop-filter: blur(12px);
+}
+
+.card-eyebrow {
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--color-red);
+	margin-bottom: 8px;
+}
+
+.card-title {
+	font-size: 32px;
+	font-weight: 800;
+	margin-bottom: 8px;
+}
+
+.card-subtitle {
+	font-size: 13px;
+	color: var(--color-text-muted);
+	line-height: 1.6;
+}
+
+/* ---------- Step indicator ---------- */
+
+.step-indicator {
+	display: flex;
+	align-items: center;
+	margin: 28px 0 32px;
+}
+
+.step-indicator-item {
+	display: flex;
+	align-items: center;
+}
+
+.step-circle {
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 12px;
+	font-weight: 700;
+	background: rgba(255, 255, 255, 0.06);
+	color: var(--color-text-muted);
+	flex-shrink: 0;
+}
+
+.step-circle.active {
+	background: var(--color-red);
+	color: var(--color-white);
+}
+
+.step-circle.completed {
+	background: rgba(255, 255, 255, 0.14);
+	color: var(--color-white);
+}
+
+.step-label {
+	margin: 0 10px 0 8px;
+	font-size: 13px;
+	color: var(--color-text-muted);
+	white-space: nowrap;
+}
+
+.step-label.active {
+	color: var(--color-white);
+	font-weight: 600;
+}
+
+.step-line {
+	width: 28px;
+	height: 1px;
+	background: rgba(255, 255, 255, 0.15);
+	margin-right: 8px;
+}
+
+/* ---------- Form fields ---------- */
+
+.form-row {
+	display: flex;
+	gap: 16px;
+}
+
+.form-row .form-group {
+	flex: 1;
+	min-width: 0;
+}
+
+.form-group {
+	margin-bottom: 20px;
+}
+
+.form-label {
+	display: block;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+	margin-bottom: 8px;
+}
+
+.label-hint {
+	text-transform: none;
+	font-weight: 400;
+	letter-spacing: normal;
+	color: var(--color-text-muted);
+	opacity: 0.8;
+}
+
+.input-wrapper {
+	position: relative;
+	display: flex;
+	align-items: center;
+	color: var(--color-text-muted);
+}
+
+.input-wrapper svg {
+	position: absolute;
+	left: 14px;
+	pointer-events: none;
+}
+
+.input-wrapper .select-caret {
+	left: auto;
+	right: 14px;
+}
+
+.form-input,
+.form-select {
+	width: 100%;
+	padding: 12px 14px 12px 40px;
+	background: var(--signup-input-bg);
+	border: 1px solid var(--signup-border);
+	border-radius: 10px;
+	color: var(--color-white);
+	font-size: 14px;
+	font-family: inherit;
+}
+
+.form-select {
+	appearance: none;
+	-webkit-appearance: none;
+	padding-right: 36px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	/* Tells the browser to render this control's native UI (including the
+	   dropdown popup) with its dark palette, so every row gets a dark
+	   background + light text natively instead of only the one row the
+	   per-option override below happened to reach. */
+	color-scheme: dark;
+}
+
+/* Belt-and-suspenders for browsers that respect option-level color but
+   don't fully dark-theme the popup from color-scheme alone. */
+.form-select option {
+	background-color: var(--color-bg-dark);
+	color: var(--color-white);
+}
+
+.form-input::placeholder {
+	color: rgba(255, 255, 255, 0.35);
+}
+
+.form-input:focus,
+.form-select:focus {
+	outline: none;
+	border-color: var(--color-red);
+}
+
+.form-input[type="date"] {
+	color-scheme: dark;
+}
+
+.field-error {
+	font-size: 12px;
+	color: var(--signup-danger);
+	margin-top: 6px;
+}
+
+/* ---------- Terms checkbox ---------- */
+
+.terms-row {
+	display: flex;
+	gap: 10px;
+	align-items: flex-start;
+	margin: 4px 0;
+}
+
+.terms-row input[type="checkbox"] {
+	margin-top: 3px;
+	width: 16px;
+	height: 16px;
+	accent-color: var(--color-red);
+	flex-shrink: 0;
+}
+
+.terms-text {
+	font-size: 11px;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+	line-height: 1.7;
+}
+
+.terms-text a {
+	color: var(--color-red);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.terms-text a:hover {
+	text-decoration: underline;
+}
+
+.signup-card button,
+.signup-card select {
+	font-family: inherit;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn-submit {
+	width: 100%;
+	padding: 14px;
+	border-radius: 10px;
+	background: var(--color-red);
+	color: var(--color-white);
+	font-weight: 400;
+	font-size: 15px;
+	border: 1px solid var(--color-red);
+	cursor: pointer;
+	margin-top: 24px;
+}
+
+.btn-submit:hover {
+	opacity: 0.85;
+}
+
+.btn-outline {
+	padding: 14px 24px;
+	border-radius: 10px;
+	background: transparent;
+	border: 1px solid var(--signup-border);
+	color: var(--color-white);
+	font-weight: 400;
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.btn-outline:hover {
+	background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-google {
+	width: 100%;
+	padding: 12px;
+	margin-top: 16px;
+	border-radius: 10px;
+	background: transparent;
+	border: 1px solid var(--signup-border);
+	color: var(--color-white);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	font-weight: 400;
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.btn-google:hover {
+	background: rgba(255, 255, 255, 0.05);
+}
+
+.step-actions {
+	display: flex;
+	gap: 12px;
+	margin-top: 28px;
+}
+
+.step-actions .btn-outline {
+	flex: 1;
+}
+
+.step-actions .btn-submit {
+	flex: 2;
+	margin-top: 0;
+}
+
+/* ---------- Divider + sign-in hint ---------- */
+
+.divider {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 20px 0;
+	color: var(--color-text-muted);
+	font-size: 12px;
+}
+
+.divider::before,
+.divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--signup-border);
+}
+
+.signin-hint {
+	text-align: center;
+	font-size: 13px;
+	color: var(--color-text-muted);
+	margin-top: 20px;
+}
+
+.signin-hint a {
+	color: var(--color-red);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.signin-hint a:hover {
+	text-decoration: underline;
+}
+
+/* ---------- Profile photo upload ---------- */
+
+.photo-upload {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 16px;
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px dashed var(--signup-border);
+	border-radius: 14px;
+	margin-bottom: 24px;
+	cursor: pointer;
+}
+
+.photo-upload:hover {
+	border-color: var(--color-red);
+}
+
+.photo-avatar {
+	width: 56px;
+	height: 56px;
+	border-radius: 50%;
+	background: rgba(238, 17, 43, 0.12);
+	color: var(--color-red);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	overflow: hidden;
+}
+
+.photo-avatar img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.photo-upload-title {
+	font-weight: 700;
+	font-size: 14px;
+	margin-bottom: 2px;
+}
+
+.photo-upload-desc {
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+/* ---------- Favorite genre chips ---------- */
+
+.genre-grid {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.genre-chip {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	border-radius: 20px;
+	background: var(--signup-input-bg);
+	border: 1px solid var(--signup-border);
+	color: var(--color-text-muted);
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.genre-chip.selected {
+	background: rgba(238, 17, 43, 0.15);
+	border-color: var(--color-red);
+	color: var(--color-white);
+}
+
+/* ---------- Confirm step ---------- */
+
+.confirm-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	background: rgba(255, 255, 255, 0.03);
+	border: 1px solid var(--signup-border);
+	border-radius: 12px;
+	padding: 16px 18px;
+	margin: 8px 0 4px;
+}
+
+.confirm-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 16px;
+	font-size: 13px;
+}
+
+.confirm-row span {
+	color: var(--color-text-muted);
+}
+
+.confirm-row strong {
+	font-weight: 600;
+	text-align: right;
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 980px) {
+	.signup-layout {
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.signup-intro,
+	.signup-card {
+		max-width: 100%;
+	}
+}
+
+@media (max-width: 520px) {
+	.form-row {
+		flex-direction: column;
+		gap: 0;
+	}
+
+	.signup-card {
+		padding: 28px 20px;
+	}
+}

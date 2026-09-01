@@ -132,6 +132,8 @@ const GENRES = [
     { label: "Documentary", emoji: "🎥" },
 ];
 
+const PH_COUNTRY_CODE = "+63";
+
 const STEPS = [
     { number: 1, label: "Account" },
     { number: 2, label: "Profile" },
@@ -205,6 +207,43 @@ function SignUp() {
         setForm((prev) => ({ ...prev, [field]: value }));
     };
 
+    const handlePhoneKeyDown = (e) => {
+        if (e.ctrlKey || e.metaKey || e.altKey) return; // don't block shortcuts
+        if (e.key.length > 1) return; // Backspace, Delete, arrows, Tab, etc.
+        // Extra layer on top of the onChange filter below: reject the
+        // keystroke itself for anything that isn't a digit or a space.
+        if (!/[\d ]/.test(e.key)) {
+            e.preventDefault();
+        }
+    };
+
+    const handlePhoneChange = (e) => {
+        // Digits and spaces only — no letters, no symbols (+63 is a static
+        // prefix now, so there's no reason for a + to end up in here
+        // either). Filtering the value (not just blocking keystrokes)
+        // means this also cleans up pasted text.
+        const digitsAndSpaces = e.target.value.replace(/[^\d\s]/g, "");
+        // Cap at 10 digits — the standard PH mobile number length — while
+        // still allowing the spaces the user types for formatting.
+        let digitCount = 0;
+        let capped = "";
+        let hitLimit = false;
+        for (const char of digitsAndSpaces) {
+            if (/\d/.test(char)) {
+                if (digitCount >= 10) {
+                    hitLimit = true;
+                    break;
+                }
+                digitCount++;
+            }
+            capped += char;
+        }
+        // Only trim when we actually cut something off — a normal trailing
+        // space while still under the limit is the user mid-formatting,
+        // not something to clean up.
+        setForm((prev) => ({ ...prev, phone: hitLimit ? capped.trimEnd() : capped }));
+    };
+
     const toggleGenre = (label) => {
         setForm((prev) => ({
             ...prev,
@@ -232,6 +271,16 @@ function SignUp() {
         return Object.keys(next).length === 0;
     };
 
+    const validateProfile = () => {
+        const next = {};
+        const digitsOnly = form.phone.replace(/\s/g, "");
+        if (digitsOnly && !/^\d+$/.test(digitsOnly)) {
+            next.phone = "Phone number should contain numbers only.";
+        }
+        setErrors(next);
+        return Object.keys(next).length === 0;
+    };
+
     const handleAccountSubmit = (e) => {
         e.preventDefault();
         // TODO: call the real account-creation endpoint once the auth API is wired up
@@ -240,8 +289,9 @@ function SignUp() {
 
     const handleProfileSubmit = (e) => {
         e.preventDefault();
-        // Profile fields are all optional per the design, so no hard validation here
-        setStep(3);
+        // Rest of the profile stays optional per the design; phone just
+        // needs to pass the numbers-only check if the user filled it in
+        if (validateProfile()) setStep(3);
     };
 
     const handleFinalSubmit = () => {
@@ -459,24 +509,6 @@ function SignUp() {
                                         </div>
                                     </div>
                                     <div className="form-group">
-                                        <label className="form-label" htmlFor="phone">Phone Number</label>
-                                        <div className="input-wrapper">
-                                            <IconPhone />
-                                            <input
-                                                id="phone"
-                                                className="form-input"
-                                                type="tel"
-                                                placeholder="+63 9XX XXX XXXX"
-                                                autoComplete="tel"
-                                                value={form.phone}
-                                                onChange={set("phone")}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="form-row">
-                                    <div className="form-group">
                                         <label className="form-label" htmlFor="dob">Date of Birth</label>
                                         <div className="input-wrapper">
                                             <IconCalendar />
@@ -490,24 +522,45 @@ function SignUp() {
                                             />
                                         </div>
                                     </div>
-                                    <div className="form-group">
-                                        <label className="form-label" htmlFor="gender">Gender</label>
-                                        <div className="input-wrapper">
-                                            <IconGender />
-                                            <select
-                                                id="gender"
-                                                className="form-select"
-                                                value={form.gender}
-                                                onChange={set("gender")}
-                                            >
-                                                <option value="">Select gender</option>
-                                                <option value="female">Female</option>
-                                                <option value="male">Male</option>
-                                                <option value="nonbinary">Non-binary</option>
-                                                <option value="prefer-not">Prefer not to say</option>
-                                            </select>
-                                            <IconChevronDown className="select-caret" />
-                                        </div>
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label" htmlFor="phone">Phone Number</label>
+                                    <div className="input-wrapper">
+                                        <IconPhone />
+                                        <span className="phone-prefix">{PH_COUNTRY_CODE}</span>
+                                        <input
+                                            id="phone"
+                                            className="form-input phone-input"
+                                            type="tel"
+                                            placeholder="9XX XXX XXXX"
+                                            autoComplete="tel-national"
+                                            inputMode="numeric"
+                                            value={form.phone}
+                                            onKeyDown={handlePhoneKeyDown}
+                                            onChange={handlePhoneChange}
+                                        />
+                                    </div>
+                                    {errors.phone && <p className="field-error">{errors.phone}</p>}
+                                </div>
+
+                                <div className="form-group">
+                                    <label className="form-label" htmlFor="gender">Gender</label>
+                                    <div className="input-wrapper">
+                                        <IconGender />
+                                        <select
+                                            id="gender"
+                                            className="form-select"
+                                            value={form.gender}
+                                            onChange={set("gender")}
+                                        >
+                                            <option value="">Select gender</option>
+                                            <option value="female">Female</option>
+                                            <option value="male">Male</option>
+                                            <option value="nonbinary">Non-binary</option>
+                                            <option value="prefer-not">Prefer not to say</option>
+                                        </select>
+                                        <IconChevronDown className="select-caret" />
                                     </div>
                                 </div>
 
@@ -581,7 +634,7 @@ function SignUp() {
                                     </div>
                                     <div className="confirm-row">
                                         <span>Phone</span>
-                                        <strong>{form.phone || "—"}</strong>
+                                        <strong>{form.phone ? `${PH_COUNTRY_CODE} ${form.phone}` : "—"}</strong>
                                     </div>
                                     <div className="confirm-row">
                                         <span>City</span>

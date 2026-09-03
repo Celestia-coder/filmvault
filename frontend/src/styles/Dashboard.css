@@ -1,0 +1,289 @@
+@import "./variables.css";
+
+.admin-dashboard {
+	display: flex;
+	min-height: 100vh;
+	background-color: var(--color-bg-dark);
+	color: var(--color-white);
+}
+
+/* ---------- Sidebar ---------- */
+
+.admin-sidebar {
+	width: 320px;
+	flex-shrink: 0;
+	background-color: var(--color-bg-dark2);
+}
+
+.admin-profile {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 40px 0 32px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.admin-avatar {
+	width: 85px;
+	height: 85px;
+	border-radius: 50%;
+	background-color: var(--color-surface);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.admin-avatar img {
+	width: 30px;
+	height: 34px;
+}
+
+.admin-role {
+	margin-top: 14px;
+	font-size: 20px;
+	font-weight: 400;
+}
+
+.admin-nav {
+	display: flex;
+	flex-direction: column;
+	padding-top: 12px;
+}
+
+.admin-nav-item {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	padding: 18px 20px 18px 24px;
+	color: var(--color-white);
+	font-size: 16px;
+	font-weight: 400;
+	text-decoration: none;
+	cursor: default;
+}
+
+.admin-nav-item img {
+	width: 24px;
+	height: 24px;
+	flex-shrink: 0;
+}
+
+/* Active page: red rail on the left plus a lifted background */
+.admin-nav-item.active {
+	background-color: var(--color-surface);
+	font-weight: 700;
+	cursor: pointer;
+}
+
+.admin-nav-item.active::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	width: 5px;
+	background-color: var(--color-red);
+}
+
+/* ---------- Main ---------- */
+
+.admin-main {
+	flex: 1;
+	min-width: 0;
+	padding: 0 40px 48px;
+}
+
+.admin-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 100px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.admin-title {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	font-size: 32px;
+	font-weight: 700;
+}
+
+.admin-title img {
+	width: 40px;
+	height: 40px;
+}
+
+/* "Dashboard" half of the heading is red */
+.admin-title em {
+	font-style: normal;
+	color: var(--color-red);
+}
+
+.admin-logout {
+	color: var(--color-red);
+	text-decoration: none;
+	font-size: 20px;
+	font-weight: 500;
+}
+
+.admin-logout:hover {
+	text-decoration: underline;
+}
+
+/* ---------- Stats ---------- */
+
+.admin-stats {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 24px;
+	margin: 32px 0 40px;
+}
+
+.stat-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	min-width: 0;
+	min-height: 140px;
+	padding: 24px 28px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 12px;
+	background-color: var(--color-surface);
+}
+
+.stat-label {
+	font-size: 20px;
+	font-weight: 600;
+}
+
+.stat-value {
+	margin-top: 12px;
+	font-size: 32px;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.stat-icon {
+	width: 54px;
+	height: 54px;
+	flex-shrink: 0;
+}
+
+/* ---------- Active shows ---------- */
+
+.active-shows h2 {
+	font-size: 28px;
+	font-weight: 700;
+	margin-bottom: 24px;
+}
+
+.show-grid {
+	display: grid;
+	grid-template-columns: repeat(5, 1fr);
+	gap: 24px;
+}
+
+.show-card {
+	border-radius: 12px;
+	overflow: hidden;
+	background-color: var(--color-surface);
+}
+
+.show-poster {
+	display: block;
+	width: 100%;
+	aspect-ratio: 4 / 5;
+	object-fit: cover;
+}
+
+.show-info {
+	padding: 20px;
+}
+
+.show-info h3 {
+	font-size: 20px;
+	font-weight: 700;
+}
+
+.show-price {
+	margin-top: 14px;
+	font-size: 24px;
+	font-weight: 700;
+}
+
+.show-schedule {
+	margin-top: 14px;
+	font-size: 16px;
+	font-weight: 400;
+	color: var(--color-text-muted);
+}
+
+/* ---------- Responsive ---------- */
+
+@media (max-width: 1400px) {
+	.admin-stats {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	.show-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+@media (max-width: 1100px) {
+	.admin-sidebar {
+		width: 260px;
+	}
+
+	.show-grid {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+
+@media (max-width: 768px) {
+	.admin-dashboard {
+		flex-direction: column;
+	}
+
+	.admin-sidebar {
+		width: 100%;
+	}
+
+	.admin-nav {
+		flex-direction: row;
+		overflow-x: auto;
+		padding-top: 0;
+	}
+
+	.admin-nav-item {
+		padding: 16px 20px;
+		white-space: nowrap;
+	}
+
+	.admin-nav-item.active::before {
+		top: auto;
+		width: 100%;
+		height: 4px;
+	}
+
+	.admin-main {
+		padding: 0 20px 32px;
+	}
+
+	.admin-header {
+		height: auto;
+		padding: 20px 0;
+	}
+
+	.admin-title {
+		font-size: 26px;
+	}
+
+	.admin-stats,
+	.show-grid {
+		grid-template-columns: 1fr;
+	}
+}

@@ -192,7 +192,7 @@
 
 .stat-label {
 	color: var(--color-red);
-	font-size: 20px;
+	font-size: 22px;
 	font-weight: 600;
 }
 
@@ -243,7 +243,7 @@
 /* Reserve two lines for every title so the price and showtime below it stay
    aligned across cards, however long the movie name is. */
 .show-info h3 {
-	font-size: 20px;
+	font-size: 26px;
 	font-weight: 700;
 	line-height: 1.3;
 	min-height: 2.6em;

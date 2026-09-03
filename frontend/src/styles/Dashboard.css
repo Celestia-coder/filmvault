@@ -63,10 +63,42 @@
 	cursor: default;
 }
 
-.admin-nav-item img {
+.admin-nav-icon {
 	width: 24px;
 	height: 24px;
 	flex-shrink: 0;
+	background-color: var(--color-white);
+	mask-repeat: no-repeat;
+	mask-position: center;
+	mask-size: contain;
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+	-webkit-mask-size: contain;
+}
+
+.admin-nav-icon--dashboard {
+	mask-image: url("../assets/images/dashboard/nav-dashboard.svg");
+	-webkit-mask-image: url("../assets/images/dashboard/nav-dashboard.svg");
+}
+
+.admin-nav-icon--movie {
+	mask-image: url("../assets/images/dashboard/nav-movie.svg");
+	-webkit-mask-image: url("../assets/images/dashboard/nav-movie.svg");
+}
+
+.admin-nav-icon--schedule {
+	mask-image: url("../assets/images/dashboard/nav-schedule.svg");
+	-webkit-mask-image: url("../assets/images/dashboard/nav-schedule.svg");
+}
+
+.admin-nav-icon--seat {
+	mask-image: url("../assets/images/dashboard/nav-seat.svg");
+	-webkit-mask-image: url("../assets/images/dashboard/nav-seat.svg");
+}
+
+.admin-nav-icon--bookings {
+	mask-image: url("../assets/images/dashboard/nav-bookings.svg");
+	-webkit-mask-image: url("../assets/images/dashboard/nav-bookings.svg");
 }
 
 /* Active page: red rail on the left plus a lifted background */
@@ -74,6 +106,10 @@
 	background-color: var(--color-surface);
 	font-weight: 700;
 	cursor: pointer;
+}
+
+.admin-nav-item.active .admin-nav-icon {
+	background-color: var(--color-red);
 }
 
 .admin-nav-item.active::before {
@@ -155,6 +191,7 @@
 }
 
 .stat-label {
+	color: var(--color-red);
 	font-size: 20px;
 	font-weight: 600;
 }

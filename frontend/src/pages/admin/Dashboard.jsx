@@ -7,12 +7,6 @@ import "../../styles/Dashboard.css";
 import avatarUser from "../../assets/images/dashboard/avatar-user.svg";
 import headerGrid from "../../assets/images/dashboard/header-grid.svg";
 
-import navDashboard from "../../assets/images/dashboard/nav-dashboard.svg";
-import navMovie from "../../assets/images/dashboard/nav-movie.svg";
-import navSchedule from "../../assets/images/dashboard/nav-schedule.svg";
-import navSeat from "../../assets/images/dashboard/nav-seat.svg";
-import navBookings from "../../assets/images/dashboard/nav-bookings.svg";
-
 import iconChart from "../../assets/images/dashboard/icon-chart.svg";
 import iconMoney from "../../assets/images/dashboard/icon-money.svg";
 import iconMonitor from "../../assets/images/dashboard/icon-monitor.svg";
@@ -26,12 +20,13 @@ import posterDevilWearsPrada from "../../assets/images/dashboard/devil-wears-pra
 
 // Sidebar links. Only Dashboard has a page so far — the rest are placeholders
 // until their own branches are merged, so they render as plain (non-link) rows.
+// `icon` maps to a .admin-nav-icon--* class that supplies the mask image.
 const NAV_ITEMS = [
-  { label: "Dashboard", icon: navDashboard, to: "/admin/dashboard" },
-  { label: "Movie Management", icon: navMovie, to: null },
-  { label: "Schedule Management", icon: navSchedule, to: null },
-  { label: "Seat Selection Management", icon: navSeat, to: null },
-  { label: "List of Bookings", icon: navBookings, to: null },
+  { label: "Dashboard", icon: "dashboard", to: "/admin/dashboard" },
+  { label: "Movie Management", icon: "movie", to: null },
+  { label: "Schedule Management", icon: "schedule", to: null },
+  { label: "Seat Selection Management", icon: "seat", to: null },
+  { label: "List of Bookings", icon: "bookings", to: null },
 ];
 
 // Placeholder figures until the backend is wired up
@@ -96,12 +91,12 @@ function Dashboard() {
           {NAV_ITEMS.map((item) =>
             item.to ? (
               <Link key={item.label} to={item.to} className="admin-nav-item active">
-                <img src={item.icon} alt="" />
+                <span className={`admin-nav-icon admin-nav-icon--${item.icon}`} />
                 <span>{item.label}</span>
               </Link>
             ) : (
               <span key={item.label} className="admin-nav-item">
-                <img src={item.icon} alt="" />
+                <span className={`admin-nav-icon admin-nav-icon--${item.icon}`} />
                 <span>{item.label}</span>
               </span>
             )

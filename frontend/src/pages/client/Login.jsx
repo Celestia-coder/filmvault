@@ -70,7 +70,6 @@ const IconStar = (props) => (
   </svg>
 );
 
-// Same feature list as the Sign Up page, per the Figma mockup
 const FEATURES = [
   {
     icon: <IconFilm />,

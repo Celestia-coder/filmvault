@@ -240,9 +240,13 @@
 	padding: 20px;
 }
 
+/* Reserve two lines for every title so the price and showtime below it stay
+   aligned across cards, however long the movie name is. */
 .show-info h3 {
 	font-size: 20px;
 	font-weight: 700;
+	line-height: 1.3;
+	min-height: 2.6em;
 }
 
 .show-price {

@@ -1,0 +1,4 @@
+CREATE TABLE BRANCH (
+    branch_id INT AUTO_INCREMENT PRIMARY KEY,
+    branch_name VARCHAR(100) NOT NULL
+);

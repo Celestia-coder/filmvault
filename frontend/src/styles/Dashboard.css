@@ -190,11 +190,17 @@
 	background-color: var(--color-surface);
 }
 
+.stat-text {
+	min-width: 0;
+}
+
 .stat-label {
 	color: var(--color-red);
 	font-size: 16px;
 	font-weight: 600;
 	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .stat-value {
@@ -271,13 +277,15 @@
 	}
 }
 
+@media (max-width: 1180px) {
+	.admin-stats {
+		grid-template-columns: repeat(2, 1fr);
+	}
+}
+
 @media (max-width: 900px) {
 	.admin-sidebar {
 		width: 220px;
-	}
-
-	.admin-stats {
-		grid-template-columns: repeat(2, 1fr);
 	}
 }
 

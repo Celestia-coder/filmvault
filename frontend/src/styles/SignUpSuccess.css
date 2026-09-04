@@ -1,0 +1,175 @@
+/*
+ * Step 4 — Account activated.
+ * Reuses the .btn classes defined in SignUpConfirm.css; the two extra
+ * modifiers below are the only button rules unique to this screen.
+ */
+
+/* ---------- Success-page positioning ---------- */
+.signup-success-hero {
+  min-height: 100vh;
+}
+
+.signup-success-shell {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 140px 24px 40px;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 1;
+}
+
+.activated {
+  --fv-red: var(--color-accent, #f5233b);
+  --fv-card: var(--color-card, #17171a);
+  --fv-panel: var(--color-panel, #232327);
+  --fv-line: var(--color-border, rgba(255, 255, 255, 0.08));
+  --fv-text: var(--color-text, #f2f2f4);
+  --fv-muted: var(--color-text-muted, #8f8f97);
+  --fv-green: #3ecf8e;
+
+  background: var(--fv-card);
+  border: 1px solid var(--fv-line);
+  border-top: 2px solid var(--fv-green);
+  border-radius: 14px;
+  padding: 36px 32px;
+  width: min(100%, 420px);
+  margin: 0 auto;
+  text-align: center;
+  color: var(--fv-text);
+  font-family: var(--font-body, "Poppins", system-ui, sans-serif);
+}
+
+.activated__check {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(62, 207, 142, 0.45);
+  background: rgba(62, 207, 142, 0.1);
+  color: var(--fv-green);
+}
+
+.activated__label {
+  margin: 0 0 10px;
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fv-green);
+}
+
+.activated__title {
+  margin: 0 0 12px;
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.activated__name {
+  display: block;
+  color: var(--fv-red);
+}
+
+.activated__lede {
+  margin: 0 auto 20px;
+  max-width: 46ch;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--fv-muted);
+}
+
+/* ---------- Badges ---------- */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.badge {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--fv-line);
+  background: var(--fv-panel);
+  font-size: 0.68rem;
+  color: var(--fv-muted);
+}
+
+.badge--verified {
+  border-color: rgba(62, 207, 142, 0.4);
+  background: rgba(62, 207, 142, 0.1);
+  color: var(--fv-green);
+}
+
+/* ---------- Shortcut cards ---------- */
+.shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.shortcut {
+  padding: 14px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--fv-line);
+  background: var(--fv-panel);
+}
+
+.shortcut__icon {
+  display: block;
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+.shortcut__title {
+  margin: 0 0 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.shortcut__copy {
+  margin: 0;
+  font-size: 0.64rem;
+  line-height: 1.45;
+  color: var(--fv-muted);
+}
+
+/* ---------- Actions ---------- */
+.activated__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.activated__actions .btn--ghost.btn--full {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 768px) {
+  .signup-success-shell {
+    padding: 120px 16px 36px;
+  }
+}
+
+@media (max-width: 480px) {
+  .signup-success-shell {
+    padding-top: 110px;
+  }
+
+  .activated {
+    padding: 28px 18px;
+  }
+
+  .shortcuts {
+    grid-template-columns: 1fr;
+  }
+}

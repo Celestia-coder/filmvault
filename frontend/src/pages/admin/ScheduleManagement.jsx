@@ -192,6 +192,13 @@ function formatDatetime(value) {
   return `${datePart} ${timePart}`;
 }
 
+// "2026-06-06" -> "Jun 6, 2026"
+function formatDateOnly(value) {
+  if (!value) return "";
+  const date = new Date(`${value}T00:00`);
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function getStatus(row) {
   return row.seatsBooked >= row.seatsTotal ? "Full" : "Active";
 }
@@ -203,6 +210,7 @@ function getOccupancyPercent(row) {
 function ScheduleManagement() {
   const [schedule, setSchedule] = useState(INITIAL_SCHEDULE);
   const [movieFilter, setMovieFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("");
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({ movieId: MOVIES[0].id, datetime: "", cinema: CINEMAS[0] });
@@ -249,6 +257,17 @@ function ScheduleManagement() {
   };
 
   const deletingRow = deletingId !== null ? schedule.find((row) => row.id === deletingId) : null;
+
+  const filteredSchedule = schedule.filter((row) => {
+    const matchesMovie = movieFilter === "all" || row.movieId === movieFilter;
+    const matchesDate = !dateFilter || row.datetime.startsWith(dateFilter);
+    return matchesMovie && matchesDate;
+  });
+
+  const filterSummaryParts = [];
+  if (movieFilter !== "all") filterSummaryParts.push(findMovie(movieFilter).title);
+  if (dateFilter) filterSummaryParts.push(formatDateOnly(dateFilter));
+  const filterSummary = filterSummaryParts.length ? filterSummaryParts.join(", ") : "All schedules";
 
   return (
     <div className="admin-dashboard">
@@ -298,7 +317,7 @@ function ScheduleManagement() {
 
           <label className="filter-field">
             <span>Date</span>
-            <input type="date" />
+            <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} />
           </label>
 
           <button type="button" className="add-showtime-btn" onClick={openAddModal}>
@@ -307,8 +326,25 @@ function ScheduleManagement() {
           </button>
         </section>
 
-        <p className="schedule-filter-note">Filter: All schedules</p>
+        <p className="schedule-filter-note">
+          Filter: {filterSummary}
+          {filterSummaryParts.length > 0 && (
+            <button
+              type="button"
+              className="schedule-filter-clear"
+              onClick={() => {
+                setMovieFilter("all");
+                setDateFilter("");
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </p>
 
+        {filteredSchedule.length === 0 ? (
+          <p className="schedule-empty">No showtimes match this filter.</p>
+        ) : (
         <div className="schedule-table-wrap">
           <table className="schedule-table">
             <thead>
@@ -322,7 +358,7 @@ function ScheduleManagement() {
               </tr>
             </thead>
             <tbody>
-              {schedule.map((row) => {
+              {filteredSchedule.map((row) => {
                 const movie = findMovie(row.movieId);
                 const status = getStatus(row);
                 const percent = getOccupancyPercent(row);
@@ -378,6 +414,7 @@ function ScheduleManagement() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {isAddOpen && (

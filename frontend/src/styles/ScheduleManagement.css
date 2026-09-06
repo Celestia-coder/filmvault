@@ -674,6 +674,12 @@
 		font-size: 22px;
 	}
 
+	/* Movie/Date share a row on desktop; stack them full-width on mobile so
+	   movie titles have room instead of truncating in a half-width field. */
+	.filter-field {
+		width: 100%;
+	}
+
 	.filter-field input,
 	.dropdown {
 		min-width: 0;

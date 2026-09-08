@@ -1,6 +1,6 @@
 // Route: "/signup"
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link, useNavigate } from "react-router";
 import SignUpConfirm from "../../components/SignUpConfirm.jsx";
 import SignUpSuccess from "../../components/SignUpSuccess.jsx";
@@ -140,6 +140,22 @@ const IconChevronDown = (props) => (
         {...props}
     >
         <path d="m6 9 6 6 6-6" />
+    </svg>
+);
+
+const IconX = (props) => (
+    <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...props}
+    >
+        <path d="M18 6 6 18M6 6l12 12" />
     </svg>
 );
 
@@ -286,8 +302,8 @@ function StepIndicator({ current }) {
                             (current === s.number
                                 ? " active"
                                 : current > s.number
-                                  ? " completed"
-                                  : "")
+                                    ? " completed"
+                                    : "")
                         }
                     >
                         {s.number}
@@ -351,6 +367,7 @@ function SignUp() {
     });
 
     const [errors, setErrors] = useState({});
+    const photoInputRef = useRef(null);
 
     const set = (field) => (e) => {
         const value =
@@ -413,10 +430,32 @@ function SignUp() {
 
         if (!file) return;
 
-        setForm((prev) => ({
-            ...prev,
-            photoPreview: URL.createObjectURL(file),
-        }));
+        setForm((prev) => {
+            if (prev.photoPreview) URL.revokeObjectURL(prev.photoPreview);
+
+            return {
+                ...prev,
+                photoPreview: URL.createObjectURL(file),
+            };
+        });
+    };
+
+    const triggerPhotoSelect = () => {
+        photoInputRef.current?.click();
+    };
+
+    const handleRemovePhoto = () => {
+        setForm((prev) => {
+            if (prev.photoPreview) URL.revokeObjectURL(prev.photoPreview);
+
+            return {
+                ...prev,
+                photoPreview: null,
+            };
+        });
+
+        // Reset so re-selecting the same file still fires onChange
+        if (photoInputRef.current) photoInputRef.current.value = "";
     };
 
     const validateAccount = () => {
@@ -454,10 +493,23 @@ function SignUp() {
 
     const validateProfile = () => {
         const next = {};
-        const digitsOnly = form.phone.replace(/\s/g, "");
 
-        if (digitsOnly && !/^\d+$/.test(digitsOnly)) {
-            next.phone = "Phone number should contain numbers only.";
+        if (!form.displayName.trim()) {
+            next.displayName = "Display name is required.";
+        }
+
+        if (!form.dob) {
+            next.dob = "Date of birth is required.";
+        }
+
+        if (!form.phone.trim()) {
+            next.phone = "Phone number is required.";
+        } else {
+            const digitsOnly = form.phone.replace(/\s/g, "");
+
+            if (!/^\d+$/.test(digitsOnly)) {
+                next.phone = "Phone number should contain numbers only.";
+            }
         }
 
         setErrors(next);
@@ -824,35 +876,53 @@ function SignUp() {
 
                                 <StepIndicator current={2} />
 
-                                <label className="photo-upload">
+                                <div className="photo-upload">
                                     <input
+                                        ref={photoInputRef}
                                         type="file"
                                         accept="image/png,image/jpeg"
                                         hidden
                                         onChange={handlePhoto}
                                     />
 
-                                    <span className="photo-avatar">
-                                        {form.photoPreview ? (
-                                            <img
-                                                src={form.photoPreview}
-                                                alt="Profile preview"
-                                            />
-                                        ) : (
-                                            <IconCamera />
-                                        )}
-                                    </span>
+                                    <button
+                                        type="button"
+                                        className="photo-upload-trigger"
+                                        onClick={triggerPhotoSelect}
+                                    >
+                                        <span className="photo-avatar">
+                                            {form.photoPreview ? (
+                                                <img
+                                                    src={form.photoPreview}
+                                                    alt="Profile preview"
+                                                />
+                                            ) : (
+                                                <IconCamera />
+                                            )}
+                                        </span>
 
-                                    <span>
-                                        <p className="photo-upload-title">
-                                            Upload a Profile Photo
-                                        </p>
+                                        <span className="photo-upload-text">
+                                            <p className="photo-upload-title">
+                                                Upload a Profile Photo
+                                            </p>
 
-                                        <p className="photo-upload-desc">
-                                            JPG or PNG · Max 5MB · Optional
-                                        </p>
-                                    </span>
-                                </label>
+                                            <p className="photo-upload-desc">
+                                                JPG or PNG · Max 5MB · Optional
+                                            </p>
+                                        </span>
+                                    </button>
+
+                                    {form.photoPreview && (
+                                        <button
+                                            type="button"
+                                            className="photo-remove"
+                                            onClick={handleRemovePhoto}
+                                            aria-label="Remove photo"
+                                        >
+                                            <IconX />
+                                        </button>
+                                    )}
+                                </div>
 
                                 <div className="form-row">
                                     <div className="form-group">
@@ -860,7 +930,8 @@ function SignUp() {
                                             className="form-label"
                                             htmlFor="displayName"
                                         >
-                                            Display Name
+                                            Display Name{" "}
+                                            <span className="required-mark">*</span>
                                         </label>
 
                                         <div className="input-wrapper">
@@ -877,6 +948,12 @@ function SignUp() {
                                                 )}
                                             />
                                         </div>
+
+                                        {errors.displayName && (
+                                            <p className="field-error">
+                                                {errors.displayName}
+                                            </p>
+                                        )}
                                     </div>
 
                                     <div className="form-group">
@@ -884,7 +961,8 @@ function SignUp() {
                                             className="form-label"
                                             htmlFor="dob"
                                         >
-                                            Date of Birth
+                                            Date of Birth{" "}
+                                            <span className="required-mark">*</span>
                                         </label>
 
                                         <div className="input-wrapper">
@@ -899,6 +977,12 @@ function SignUp() {
                                                 onChange={set("dob")}
                                             />
                                         </div>
+
+                                        {errors.dob && (
+                                            <p className="field-error">
+                                                {errors.dob}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
@@ -907,7 +991,8 @@ function SignUp() {
                                         className="form-label"
                                         htmlFor="phone"
                                     >
-                                        Phone Number
+                                        Phone Number{" "}
+                                        <span className="required-mark">*</span>
                                     </label>
 
                                     <div className="input-wrapper">

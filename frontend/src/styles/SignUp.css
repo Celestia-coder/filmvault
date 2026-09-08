@@ -248,6 +248,10 @@
 	margin-bottom: 8px;
 }
 
+.required-mark {
+	color: var(--color-red);
+}
+
 .label-hint {
 	text-transform: none;
 	font-weight: 400;
@@ -513,11 +517,29 @@
 	border: 1px dashed var(--signup-border);
 	border-radius: 14px;
 	margin-bottom: 24px;
-	cursor: pointer;
 }
 
-.photo-upload:hover {
+.photo-upload:hover,
+.photo-upload:focus-within {
 	border-color: var(--color-red);
+}
+
+/* Resets the <button> defaults so this reads as plain content, not an
+   obviously-styled button — only the cursor and click behavior remain. */
+.photo-upload-trigger {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	flex: 1;
+	min-width: 0;
+	background: none;
+	border: none;
+	padding: 0;
+	margin: 0;
+	text-align: left;
+	cursor: pointer;
+	color: inherit;
+	font: inherit;
 }
 
 .photo-avatar {
@@ -539,6 +561,12 @@
 	object-fit: cover;
 }
 
+.photo-upload-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
 .photo-upload-title {
 	font-weight: 700;
 	font-size: 14px;
@@ -548,6 +576,26 @@
 .photo-upload-desc {
 	font-size: 12px;
 	color: var(--color-text-muted);
+}
+
+.photo-remove {
+	flex-shrink: 0;
+	width: 32px;
+	height: 32px;
+	border-radius: 50%;
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid var(--signup-border);
+	color: var(--color-white);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+
+.photo-remove:hover {
+	background: rgba(238, 17, 43, 0.15);
+	border-color: var(--color-red);
+	color: var(--color-red);
 }
 
 /* ---------- Favorite genre chips ---------- */

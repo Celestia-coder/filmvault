@@ -4,20 +4,23 @@
  * so it works standalone and inherits the shared palette once that lands.
  */
 .confirm {
-  --fv-red: var(--color-accent, #f5233b);
-  --fv-card: var(--color-card, #17171a);
-  --fv-panel: var(--color-panel, #232327);
-  --fv-line: var(--color-border, rgba(255, 255, 255, 0.08));
-  --fv-text: var(--color-text, #f2f2f4);
-  --fv-muted: var(--color-text-muted, #8f8f97);
+  --fv-red: var(--color-red, #ee112b);
+  --fv-card: var(--color-bg-dark2, #0f0f0f);
+  --fv-panel: rgba(255, 255, 255, 0.04);
+  --fv-line: rgba(255, 255, 255, 0.08);
+  --fv-text: var(--color-white, #ffffff);
+  --fv-muted: var(--color-text-muted, #b3b3b3);
 
-  background: var(--fv-card);
-  border: 1px solid var(--fv-line);
-  border-radius: 14px;
-  padding: 32px;
-  width: min(100%, 420px);
+  /* Use the outer .signup-card only — no second card/container */
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  width: 100%;
+  max-width: none;
+
   color: var(--fv-text);
-  font-family: var(--font-body, "Poppins", system-ui, sans-serif);
+  font-family: var(--font-main, "Poppins", system-ui, sans-serif);
 }
 
 .confirm__step-label {
@@ -213,8 +216,6 @@
   border: none;
   margin: 0 0 18px;
   padding: 0;
-  width: 100%;
-  min-width: 0;
 }
 
 .code__legend {
@@ -232,16 +233,13 @@
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
   width: 100%;
-  min-width: 0;
 }
 
 .code__box {
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: 100%;
+  width: 100%;
+  min-width: 0;
   height: 44px;
-  padding: 0 !important;
-  box-sizing: border-box;
+  padding: 0;
   border-radius: 8px;
   border: 1px solid var(--fv-line);
   background: var(--fv-panel);
@@ -363,7 +361,7 @@
 
 @media (max-width: 480px) {
   .confirm {
-    padding: 24px 18px;
+    padding: 0;
   }
 
   .code__boxes {

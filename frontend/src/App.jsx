@@ -7,17 +7,22 @@ import SignUp from "./pages/client/SignUp.jsx";
 import Login from "./pages/client/Login.jsx";
 import AdminLogin from "./pages/client/AdminLogin.jsx";
 import ScheduleManagement from "./pages/admin/ScheduleManagement.jsx";
+import Dashboard from "./pages/admin/Dashboard.jsx";
 
 function App() {
-  return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/signup" element={<SignUp />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/admin/login" element={<AdminLogin />} />
-      <Route path="/admin/schedule" element={<ScheduleManagement />} />
-    </Routes>
-  );
+	return (
+		<Routes>
+      {/* CLIENT SIDE */}
+			<Route path="/" element={<Home />} />
+			<Route path="/signup" element={<SignUp />} />
+			<Route path="/login" element={<Login />} />
+
+      {/* ADMIN SIDE */}
+			<Route path="/admin/login" element={<AdminLogin />} />
+			<Route path="/admin/dashboard" element={<Dashboard />} />
+			<Route path="/admin/schedule" element={<ScheduleManagement />} />
+		</Routes>
+	);
 }
 
 export default App;

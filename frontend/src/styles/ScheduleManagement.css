@@ -1,127 +1,12 @@
 @import "./variables.css";
 
-/* ---------- Shared admin shell ----------
-   Same shell as the admin dashboard page (sidebar, header). Duplicated here
-   because each admin page currently owns its full markup/styles rather than
-   importing a shared layout — see Dashboard.jsx/.css on FE/admin-dashboard. */
+/* ---------- Admin Header ---------- */
 
 .admin-dashboard {
 	display: flex;
 	min-height: 100vh;
 	background-color: var(--color-bg-dark);
 	color: var(--color-white);
-}
-
-.admin-sidebar {
-	width: 260px;
-	flex-shrink: 0;
-	background-color: var(--color-bg-dark2);
-}
-
-.admin-profile {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	padding: 32px 0 24px;
-	border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.admin-avatar {
-	width: 68px;
-	height: 68px;
-	border-radius: 50%;
-	background-color: var(--color-surface);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-
-.admin-avatar img {
-	width: 24px;
-	height: 27px;
-}
-
-.admin-role {
-	margin-top: 10px;
-	font-size: 16px;
-	font-weight: 400;
-}
-
-.admin-nav {
-	display: flex;
-	flex-direction: column;
-	padding-top: 8px;
-}
-
-.admin-nav-item {
-	position: relative;
-	display: flex;
-	align-items: center;
-	gap: 12px;
-	padding: 14px 16px 14px 20px;
-	color: var(--color-white);
-	font-size: 14px;
-	font-weight: 400;
-	text-decoration: none;
-	cursor: default;
-}
-
-.admin-nav-icon {
-	width: 20px;
-	height: 20px;
-	flex-shrink: 0;
-	background-color: var(--color-white);
-	mask-repeat: no-repeat;
-	mask-position: center;
-	mask-size: contain;
-	-webkit-mask-repeat: no-repeat;
-	-webkit-mask-position: center;
-	-webkit-mask-size: contain;
-}
-
-.admin-nav-icon--dashboard {
-	mask-image: url("../assets/images/dashboard/nav-dashboard.svg");
-	-webkit-mask-image: url("../assets/images/dashboard/nav-dashboard.svg");
-}
-
-.admin-nav-icon--movie {
-	mask-image: url("../assets/images/dashboard/nav-movie.svg");
-	-webkit-mask-image: url("../assets/images/dashboard/nav-movie.svg");
-}
-
-.admin-nav-icon--schedule {
-	mask-image: url("../assets/images/dashboard/nav-schedule.svg");
-	-webkit-mask-image: url("../assets/images/dashboard/nav-schedule.svg");
-}
-
-.admin-nav-icon--seat {
-	mask-image: url("../assets/images/dashboard/nav-seat.svg");
-	-webkit-mask-image: url("../assets/images/dashboard/nav-seat.svg");
-}
-
-.admin-nav-icon--bookings {
-	mask-image: url("../assets/images/dashboard/nav-bookings.svg");
-	-webkit-mask-image: url("../assets/images/dashboard/nav-bookings.svg");
-}
-
-.admin-nav-item.active {
-	background-color: var(--color-surface);
-	font-weight: 700;
-	cursor: pointer;
-}
-
-.admin-nav-item.active .admin-nav-icon {
-	background-color: var(--color-red);
-}
-
-.admin-nav-item.active::before {
-	content: "";
-	position: absolute;
-	left: 0;
-	top: 0;
-	bottom: 0;
-	width: 4px;
-	background-color: var(--color-red);
 }
 
 .admin-main {
@@ -277,7 +162,7 @@
 	list-style: none;
 	border-radius: 8px;
 	border: 1px solid rgba(255, 255, 255, 0.15);
-	background-color: var(--color-bg-dark2);
+	background-color: var(--color-surface);
 	box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
 }
 
@@ -526,7 +411,7 @@
 	overflow-y: auto;
 	padding: 28px;
 	border-radius: 12px;
-	background-color: var(--color-bg-dark2);
+	background-color: var(--color-surface);
 	border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
@@ -567,8 +452,17 @@
 	outline-offset: 1px;
 }
 
+.modal-field input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.filter-field input[type="date"]::-webkit-calendar-picker-indicator {
+	filter: invert(1);
+	cursor: pointer;
+}
+
 /* Informational note (e.g. reschedule's ticket-update notice) */
 .modal-notice {
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
 	margin-top: 18px;
 	padding: 12px 14px;
 	border-radius: 8px;
@@ -577,6 +471,12 @@
 	color: var(--color-text-muted);
 	font-size: 12px;
 	line-height: 1.5;
+}
+
+.modal-notice svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+	color: #f5a623;
 }
 
 /* Destructive-action warning (e.g. delete confirmation) */

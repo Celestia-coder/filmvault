@@ -1,7 +1,7 @@
 @import "./variables.css";
 
 .admin-sidebar {
-	width: 260px;
+	width: 230px;
 	flex-shrink: 0;
 	background-color: var(--color-bg-dark2);
 }

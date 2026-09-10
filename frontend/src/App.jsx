@@ -7,6 +7,7 @@ import SignUp from "./pages/client/SignUp.jsx";
 import Login from "./pages/client/Login.jsx";
 import AdminLogin from "./pages/client/AdminLogin.jsx";
 import Dashboard from "./pages/admin/Dashboard.jsx";
+import MovieManagement from "./pages/admin/MovieManagement.jsx";
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/admin/login" element={<AdminLogin />} />  
       <Route path="/admin/dashboard" element={<Dashboard />} />  
+      <Route path="/admin/movies" element={<MovieManagement />} />
     </Routes>
   );
 }

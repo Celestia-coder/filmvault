@@ -294,3 +294,33 @@ VALUES
 (10,32),
 (10,33);
 
+INSERT INTO BRANCH
+(branch_id, branch_name)
+VALUES
+
+(1, 'Vista Mall Taguig'),
+(2, 'Market! Market!'),
+(3, 'Venice McKinley');
+
+INSERT INTO 
+CINEMA (cinema_id,  branch_id, cinema_num) 
+VALUES
+
+(1, 1, 1),
+(2, 1, 2),
+(3, 1, 3),
+(4, 2, 1),
+(5, 2, 2),
+(6, 2, 3),
+(7, 3, 1),
+(8, 3, 2),
+(9, 3, 3);
+
+INSERT INTO User
+(branch_id, role, email, username, name, phone_num)
+VALUES
+(1, 'admin', 'admin@filmvault.com', 'admin', 'FilmVault Admin', '09171234567'),
+(1, 'customer', 'ariana@gmail.com', 'ariana123', 'Ariana Grande', '09181234567'),
+(2, 'customer', 'maria@gmail.com', 'maria123', 'Maria Cruz', '09191234567'),
+(2, 'customer', 'ana@gmail.com', 'ana123', 'Ana Andrade', '09201234567'),
+(3, 'customer', 'mark@gmail.com', 'mark123', 'Mark Garcia', '09211234567');

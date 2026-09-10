@@ -1,44 +1,59 @@
 // controllers/authController.js
 // Holds the actual logic for register (signup) and login.
-// NOTE: No real database yet. Using a plain in-memory array to simulate
-// a "users table" until Database Lead's MySQL connection is wired in.
+// Now backed by the real MySQL `USER` table via config/database.js.
 
-const users = []; // temporary in-memory "database"
+const bcrypt = require("bcryptjs");
+const pool = require("../config/database");
 
 // POST /api/auth/register
-const register = (req, res) => {
-  const { firstName, lastName, email, password } = req.body;
+const register = async (req, res) => {
+  const { firstName, lastName, email, password, username, phoneNum } = req.body;
 
-  if (!firstName || !lastName || !email || !password) {
+  if (!firstName || !lastName || !email || !password || !username) {
     return res.status(400).json({
       success: false,
-      message: "All fields (firstName, lastName, email, password) are required.",
+      message:
+        "All fields (firstName, lastName, email, password, username) are required.",
     });
   }
 
-  const existingUser = users.find((user) => user.email === email);
-  if (existingUser) {
-    return res.status(409).json({
+  try {
+    const [existing] = await pool.query(
+      "SELECT user_id FROM `USER` WHERE email = ?",
+      [email]
+    );
+
+    if (existing.length > 0) {
+      return res.status(409).json({
+        success: false,
+        message: "An account with this email already exists.",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const fullName = `${firstName} ${lastName}`;
+
+    const [result] = await pool.query(
+      "INSERT INTO `USER` (role, email, password, username, name, phone_num) VALUES (?, ?, ?, ?, ?, ?)",
+      ["customer", email, hashedPassword, username, fullName, phoneNum || null]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: "Registration successful.",
+      user: { userId: result.insertId, username, name: fullName, email },
+    });
+  } catch (error) {
+    console.error("Register error:", error);
+    return res.status(500).json({
       success: false,
-      message: "An account with this email already exists.",
+      message: "Something went wrong while creating the account.",
     });
   }
-
-  // --- TODO: real database insert goes here once Database Lead's MySQL User table is ready ---
-
-  // TODO: hash the password before storing (e.g. with bcrypt) — MUST fix before real deployment.
-  const newUser = { firstName, lastName, email, password };
-  users.push(newUser);
-
-  return res.status(201).json({
-    success: true,
-    message: "Registration successful.",
-    user: { firstName, lastName, email },
-  });
 };
 
 // POST /api/auth/login
-const login = (req, res) => {
+const login = async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -48,25 +63,47 @@ const login = (req, res) => {
     });
   }
 
-  // --- TODO: real database lookup goes here once connected to MySQL ---
+  try {
+    const [rows] = await pool.query(
+      "SELECT * FROM `USER` WHERE email = ?",
+      [email]
+    );
 
-  // TODO: replace plain-text comparison with a hashed password check (bcrypt.compare) later.
-  const matchedUser = users.find(
-    (user) => user.email === email && user.password === password
-  );
+    if (rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password.",
+      });
+    }
 
-  if (!matchedUser) {
-    return res.status(401).json({
+    const matchedUser = rows[0];
+    const isMatch = await bcrypt.compare(password, matchedUser.password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Login successful.",
+      user: {
+        userId: matchedUser.user_id,
+        username: matchedUser.username,
+        name: matchedUser.name,
+        email: matchedUser.email,
+        role: matchedUser.role,
+      },
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    return res.status(500).json({
       success: false,
-      message: "Invalid email or password.",
+      message: "Something went wrong while logging in.",
     });
   }
-
-  return res.status(200).json({
-    success: true,
-    message: "Login successful.",
-    user: { firstName: matchedUser.firstName, lastName: matchedUser.lastName, email: matchedUser.email },
-  });
 };
 
 module.exports = { register, login };

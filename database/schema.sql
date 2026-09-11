@@ -55,6 +55,7 @@ CREATE TABLE `USER` (
     role VARCHAR(50) NOT NULL,
     email VARCHAR(150) NOT NULL,
     username VARCHAR(100) NOT NULL,
+    password VARCHAR(255) NOT NULL,
     name VARCHAR(150) NOT NULL,
     phone_num VARCHAR(20),
 

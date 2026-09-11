@@ -317,10 +317,10 @@ VALUES
 (9, 3, 3);
 
 INSERT INTO User
-(branch_id, role, email, username, name, phone_num)
+(branch_id, role, email, username, password, name, phone_num)
 VALUES
-(1, 'admin', 'admin@filmvault.com', 'admin', 'FilmVault Admin', '09171234567'),
-(1, 'customer', 'ariana@gmail.com', 'ariana123', 'Ariana Grande', '09181234567'),
-(2, 'customer', 'maria@gmail.com', 'maria123', 'Maria Cruz', '09191234567'),
-(2, 'customer', 'ana@gmail.com', 'ana123', 'Ana Andrade', '09201234567'),
-(3, 'customer', 'mark@gmail.com', 'mark123', 'Mark Garcia', '09211234567');
+(1, 'admin', 'admin@filmvault.com', 'admin', '<hash_password>', 'FilmVault Admin', '09171234567'),
+(1, 'customer', 'ariana@gmail.com', 'ariana123', '<hash_password>', 'Ariana Grande', '09181234567'),
+(2, 'customer', 'maria@gmail.com', 'maria123', '<hash_password>', 'Maria Cruz', '09191234567'),
+(2, 'customer', 'ana@gmail.com', 'ana123', '<hash_password>', 'Ana Andrade', '09201234567'),
+(3, 'customer', 'mark@gmail.com', 'mark123', '<hash_password>', 'Mark Garcia', '09211234567'); 

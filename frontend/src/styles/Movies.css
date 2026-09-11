@@ -1,0 +1,144 @@
+@import "./variables.css";
+
+.movies-page {
+  position: relative;
+  background-color: var(--color-bg-dark);
+  min-height: 100vh;
+}
+
+.movies-page .footer {
+  position: relative;
+  z-index: 2;
+}
+
+.movies-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+}
+
+.movies-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(25, 25, 25, 0.4) 0%,
+    rgba(25, 25, 25, 0.6) 55%,
+    var(--color-bg-dark) 100%
+  );
+}
+
+.movies-section {
+  position: relative;
+  z-index: 2;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+.movies-section:first-of-type {
+  padding-top: 140px;
+}
+
+.section-label {
+  color: var(--color-red);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+
+.section-title {
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin-bottom: 28px;
+  color: var(--color-white);
+}
+
+.movie-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 40px;
+}
+
+.movie-card {
+  text-decoration: none;
+  color: var(--color-white);
+  display: block;
+}
+
+.movie-poster {
+  position: relative;
+  width: 92%;
+  margin: 0 auto;
+  aspect-ratio: 2 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: var(--color-surface);
+}
+
+.movie-poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+.movie-card:hover .movie-poster img {
+  transform: scale(1.04);
+}
+
+.soon-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: var(--color-red);
+  color: var(--color-white);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.movie-info {
+  width: 92%;
+  margin: 10px auto 0;
+}
+
+.movie-info h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.movie-title-text {
+  flex: 1;
+}
+
+.rating-badge {
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--color-text-muted);
+  border-radius: 4px;
+  padding: 2px 7px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.movie-genre {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  margin: 0;
+}

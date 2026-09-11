@@ -15,7 +15,7 @@ function Navbar() {
 			</div>
 
 			<div className="navbar-links">
-				<a href="/movies">Movies</a>
+				<a href="/movies" onClick={(e) => e.preventDefault()}>Movies</a>
 				<a href="/cinemas">Cinemas</a>
 				<a href="/tickets">Tickets</a>
 			</div>

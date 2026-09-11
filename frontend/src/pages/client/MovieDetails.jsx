@@ -7,9 +7,6 @@ import heroBg from "../../assets/images/hero-bg.png";
 import moviePoster from "../../assets/images/movie-poster.webp";
 import "../../styles/MovieDetails.css";
 
-/* ---------------------------------------------------------------- */
-/* Icons — small inline SVGs, same approach as SignUp.jsx            */
-/* ---------------------------------------------------------------- */
 
 const IconClock = (props) => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>

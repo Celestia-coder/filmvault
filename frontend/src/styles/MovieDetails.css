@@ -45,17 +45,17 @@
 	padding-bottom: 80px;
 }
 
-/* Same 150px top clearance as SignUp — the real Navbar doesn't take up
-   layout space (it floats), so this offset is what keeps content from
-   rendering underneath it. */
 .movie-layout {
-	display: flex;
-	align-items: flex-start;
-	gap: 48px;
-	width: 100%;
-	max-width: 1320px;
-	margin: 0 auto;
-	padding: 150px 24px 0;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 56px;
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 120px 40px 60px;
+    box-sizing: border-box;
 }
 
 /* ---------- Poster ---------- */
@@ -78,8 +78,8 @@
 /* ---------- Details column ---------- */
 
 .movie-details {
-	flex: 1;
-	min-width: 0;
+    flex: 0 1 760px;
+    min-width: 0;
 }
 
 .movie-status {

@@ -1,13 +1,13 @@
 @import "./variables.css";
 
+/* ---------- Admin Header ---------- */
+
 .admin-dashboard {
 	display: flex;
 	min-height: 100vh;
 	background-color: var(--color-bg-dark);
 	color: var(--color-white);
 }
-
-/* ---------- Main ---------- */
 
 .admin-main {
 	flex: 1;

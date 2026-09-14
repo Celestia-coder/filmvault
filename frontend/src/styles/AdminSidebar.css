@@ -33,6 +33,7 @@
 	margin-top: 10px;
 	font-size: 16px;
 	font-weight: 400;
+	color: var(--color-white);
 }
 
 .admin-nav {
@@ -47,24 +48,31 @@
 	align-items: center;
 	gap: 12px;
 	padding: 14px 16px 14px 20px;
-	color: var(--color-white);
+	color: rgba(255, 255, 255, 0.6);
 	font-size: 14px;
 	font-weight: 400;
 	text-decoration: none;
 	cursor: default;
+	background-color: var(--color-bg-dark2);
+	transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.admin-nav-item.active {
+	color: var(--color-white);
 }
 
 .admin-nav-icon {
 	width: 20px;
 	height: 20px;
 	flex-shrink: 0;
-	background-color: var(--color-white);
+	background-color: rgba(255, 255, 255, 0.6);
 	mask-repeat: no-repeat;
 	mask-position: center;
 	mask-size: contain;
 	-webkit-mask-repeat: no-repeat;
 	-webkit-mask-position: center;
 	-webkit-mask-size: contain;
+	transition: background-color 0.15s ease;
 }
 
 .admin-nav-icon--dashboard {
@@ -92,14 +100,19 @@
 	-webkit-mask-image: url("../assets/images/dashboard/nav-bookings.svg");
 }
 
+.admin-nav-item:hover {
+	background-color: rgba(255, 255, 255, 0.1);
+	cursor: pointer;
+}
+
 .admin-nav-item.active {
-	background-color: var(--color-surface);
+	background-color: rgba(255, 255, 255, 0.1);
 	font-weight: 700;
 	cursor: pointer;
 }
 
 .admin-nav-item.active .admin-nav-icon {
-	background-color: var(--color-red);
+	background-color: var(--color-white);
 }
 
 .admin-nav-item.active::before {

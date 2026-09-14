@@ -1,0 +1,318 @@
+@import './variables.css';
+
+.branches {
+  /* derived from the shared tokens — only values variables.css does not define */
+  --branch-red-dark: #c40e23;
+  --branch-border: rgba(255, 255, 255, 0.08);
+
+  max-width: 1180px;
+  margin: 0 auto;
+  /* Navbar is position:absolute and ~114px tall (66px pill + 48px padding) */
+  padding: 128px 24px 64px;
+  font-family: var(--font-main);
+  color: var(--color-white);
+}
+
+/* ---------- Hero ---------- */
+.branches__hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  /* Path is relative to this file (src/styles/) */
+  background-image: linear-gradient(rgba(12, 12, 12, 0.45), rgba(12, 12, 12, 0.62)),
+    url("../assets/images/hero-bg.png");
+  background-size: cover;
+  background-position: center;
+  background-color: var(--color-bg-dark2);
+}
+
+.branches__hero-inner {
+  padding: 34px 24px 26px;
+  text-align: center;
+}
+
+.branches__title {
+  margin: 0;
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.branches__subtitle {
+  margin: 8px auto 16px;
+  max-width: 74ch;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: #d6d6d6;
+}
+
+.branches__search {
+  display: flex;
+  justify-content: center;
+  max-width: 355px;
+  margin: 0 auto;
+  background: var(--color-white);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.branches__search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  padding: 0 12px;
+}
+
+.branches__search-icon {
+  color: var(--color-red);
+  flex-shrink: 0;
+}
+
+.branches__search-field input {
+  width: 100%;
+  border: 0;
+  outline: none;
+  padding: 11px 0;
+  font-family: var(--font-main);
+  font-size: 0.88rem;
+  color: #1a1a1a;
+  background: transparent;
+}
+
+.branches__search-field input::placeholder {
+  color: #8c8c8c;
+}
+
+.branches__search-button {
+  border: 0;
+  padding: 0 22px;
+  background: var(--color-red);
+  color: var(--color-white);
+  font-family: var(--font-main);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.branches__search-button:hover {
+  background: var(--branch-red-dark);
+}
+
+/* ---------- Branch list ---------- */
+.branch-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  margin-top: 56px;
+}
+
+.branch-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 26px 24px 20px;
+  background: var(--color-bg-dark2);
+  border: 1px solid var(--branch-border);
+  border-radius: 10px;
+}
+
+.branch-card__name {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-red);
+}
+
+.branch-card__address {
+  margin: 0;
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+.branch-card__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-white);
+  font-family: var(--font-main);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.branch-card__link:hover {
+  color: var(--color-red);
+}
+
+/* ---------- Branch detail ---------- */
+.branch-detail {
+  position: relative;
+  margin-top: 56px;
+  padding: 30px 28px;
+  background: var(--color-bg-dark2);
+  border: 1px solid var(--branch-border);
+  border-radius: 10px;
+}
+
+.branch-detail__back {
+  position: absolute;
+  top: 22px;
+  right: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--branch-border);
+  border-radius: 6px;
+  background: var(--color-bg-dark);
+  color: var(--color-white);
+  font-family: var(--font-main);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.branch-detail__back:hover {
+  border-color: var(--color-red);
+  color: var(--color-red);
+}
+
+.branch-detail__body {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: 40px;
+  padding-top: 12px;
+}
+
+.branch-detail__name {
+  margin: 0 0 12px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-red);
+}
+
+.branch-detail__address {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+.branch-detail__address svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.branch-detail__hours-title {
+  margin: 0 0 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.branch-detail__hours-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+}
+
+.branch-detail__hours-column {
+  margin: 0;
+}
+
+.branch-detail__hours-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  padding: 6px 0;
+  font-size: 0.85rem;
+}
+
+.branch-detail__hours-row dt {
+  font-weight: 500;
+  color: var(--color-white);
+}
+
+.branch-detail__hours-row dd {
+  margin: 0;
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+/* ---------- Empty search result ---------- */
+.branch-empty {
+  margin-top: 48px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.branch-empty button {
+  margin-top: 12px;
+  padding: 9px 18px;
+  border: 1px solid var(--branch-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-white);
+  font-family: var(--font-main);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.branch-empty button:hover {
+  border-color: var(--color-red);
+  color: var(--color-red);
+}
+
+/* ---------- Focus states ---------- */
+.branches :focus-visible {
+  outline: 2px solid var(--color-red);
+  outline-offset: 2px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .branch-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .branch-detail__body {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding-top: 36px;
+  }
+
+  .branch-detail__hours-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .branches {
+    padding: 128px 14px 48px;
+  }
+
+  .branches__search {
+    flex-direction: column;
+    background: transparent;
+  }
+
+  .branches__search-field {
+    background: var(--color-white);
+    border-radius: 6px;
+    margin-bottom: 10px;
+  }
+
+  .branches__search-button {
+    border-radius: 6px;
+    padding: 11px 0;
+  }
+}

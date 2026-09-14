@@ -7,6 +7,7 @@ import AdminLogin from "./pages/client/AdminLogin.jsx";
 import Dashboard from "./pages/admin/Dashboard.jsx";
 import MovieDetails from "./pages/client/MovieDetails.jsx";
 import Branches from "./pages/client/Branches.jsx";
+import MovieManagement from "./pages/admin/MovieManagement.jsx";
 
 function App() {
 	return (
@@ -18,9 +19,9 @@ function App() {
 			<Route path="/admin/login" element={<AdminLogin />} />
 			<Route path="/admin/dashboard" element={<Dashboard />} />
 			<Route path="/movies/:movieId" element={<MovieDetails />} />
+			<Route path="/admin/movies" element={<MovieManagement />} />
 			<Route path="/cinemas" element={<Branches />} />
 		</Routes>
 	);
 }
-
 export default App;

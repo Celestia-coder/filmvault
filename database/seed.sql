@@ -344,3 +344,16 @@ VALUES
 (2, 'customer', 'maria@gmail.com', 'maria123', '<hash_password>', 'Maria Cruz', '09191234567'),
 (2, 'customer', 'ana@gmail.com', 'ana123', '<hash_password>', 'Ana Andrade', '09201234567'),
 (3, 'customer', 'mark@gmail.com', 'mark123', '<hash_password>', 'Mark Garcia', '09211234567'); 
+
+INSERT INTO SEAT (cinema_id, row_num, seat_num, status)
+VALUES
+(1, 1, 1, 'active'),
+(1, 1, 2, 'active'),
+(1, 1, 3, 'active'),
+(1, 1, 4, 'active'),
+(1, 1, 5, 'active'),
+(1, 2, 1, 'active'),
+(1, 2, 2, 'active'),
+(1, 2, 3, 'active'),
+(1, 2, 4, 'active'),
+(1, 2, 5, 'active');

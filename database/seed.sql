@@ -67,7 +67,7 @@ VALUES
 ('Cedrick Juan');
 
 INSERT INTO MOVIE
-(title, synopsis, duration, age_rating, language, base_price, poster, director, release_date)
+(title, synopsis, duration, age_rating, language, base_price, poster, director, release_date, status, trailer_url)
 VALUES
 
 (
@@ -79,7 +79,9 @@ VALUES
 350.00,
 '/images/spider-man-brand-new-day.jpg',
 'Destin Daniel Cretton',
-'2026-07-31'
+'2026-07-31',
+'upcoming',
+'https://www.youtube.com/watch?v=8TZMtslA3UY'
 ),
 
 (
@@ -91,7 +93,9 @@ VALUES
 350.00,
 '/images/insidious-out-of-the-further.jpg',
 'Jeremy Slater',
-'2026-08-19'
+'2026-08-19',
+'now-showing',
+'https://www.youtube.com/watch?v=jxU8FU3o75A'
 ),
 
 (
@@ -103,7 +107,9 @@ VALUES
 350.00,
 '/images/onslaught.jpg',
 'Adam Egypt Mortimer',
-'2026-09-01'
+'2026-09-01',
+'upcoming',
+'https://www.youtube.com/watch?v=L24CYVpQ-LI'
 ),
 
 (
@@ -115,7 +121,9 @@ VALUES
 400.00,
 '/images/the-odyssey.jpg',
 'Christopher Nolan',
-'2026-07-17'
+'2026-07-17',
+'upcoming',
+'https://www.youtube.com/watch?v=LgOMT7ka6do'
 ),
 
 (
@@ -127,7 +135,9 @@ VALUES
 350.00,
 '/images/practical-magic-2.jpg',
 'Susanne Bier',
-'2026-09-18'
+'2026-09-18',
+'upcoming',
+'https://www.youtube.com/watch?v=Ho10_4IX1jE'
 ),
 
 (
@@ -139,7 +149,9 @@ VALUES
 350.00,
 '/images/resident-evil.jpg',
 'Zach Cregger',
-'2026-09-18'
+'2026-09-18',
+'now-showing',
+'https://www.youtube.com/watch?v=mNd1gb19A-c'
 ),
 
 (
@@ -151,7 +163,9 @@ VALUES
 300.00,
 '/images/forgotten-island.jpg',
 'Andy Muschietti',
-'2026-10-09'
+'2026-10-09',
+'ended',
+'https://www.youtube.com/watch?v=f7mFVeWnVLw'
 ),
 
 (
@@ -163,7 +177,9 @@ VALUES
 300.00,
 '/images/saving-cherry.jpg',
 'Mae Cruz-Alviar',
-'2026-08-27'
+'2026-08-27',
+'now-showing',
+'https://www.youtube.com/watch?v=ABMAJv8--uY'
 ),
 
 (
@@ -175,7 +191,9 @@ VALUES
 300.00,
 '/images/life-after-you.jpg',
 'Dan Villegas',
-'2026-09-10'
+'2026-09-10',
+'now-showing',
+'https://www.youtube.com/watch?v=YUgBpkrBb8g'
 ),
 
 (
@@ -187,7 +205,9 @@ VALUES
 300.00,
 '/images/edjop.jpg',
 'Jun Robles Lana',
-'2026-09-30'
+'2026-09-30',
+'ended',
+'https://www.youtube.com/watch?v=ANwFKwfl9Tg'
 );
 
 INSERT INTO MOVIE_GENRE
@@ -316,7 +336,7 @@ VALUES
 (8, 3, 2),
 (9, 3, 3);
 
-INSERT INTO User
+INSERT INTO `USER`
 (branch_id, role, email, username, password, name, phone_num)
 VALUES
 (1, 'admin', 'admin@filmvault.com', 'admin', '<hash_password>', 'FilmVault Admin', '09171234567'),

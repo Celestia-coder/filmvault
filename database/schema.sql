@@ -74,7 +74,9 @@ CREATE TABLE MOVIE (
     base_price DECIMAL(10,2) NOT NULL,
     poster VARCHAR(255),
     director VARCHAR(150),
-    release_date DATE
+    release_date DATE,
+    status VARCHAR(30) NOT NULL,
+    trailer_url VARCHAR(255)
 );
 
 CREATE TABLE TOTAL_PURCHASE (

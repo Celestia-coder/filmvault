@@ -18,6 +18,7 @@ CREATE TABLE SEAT (
     cinema_id INT NOT NULL,
     row_num INT NOT NULL,
     seat_num INT NOT NULL,
+    seat_status VARCHAR(20) NOT NULL DEFAULT 'active',
 
     CONSTRAINT fk_seat_cinema
         FOREIGN KEY (cinema_id)
@@ -102,11 +103,15 @@ CREATE TABLE SCREENING (
 
     CONSTRAINT fk_screening_movie
         FOREIGN KEY (movie_id)
-        REFERENCES MOVIE(movie_id),
+        REFERENCES MOVIE(movie_id)
+        ON DELETE CASCADE,
 
     CONSTRAINT fk_screening_cinema
         FOREIGN KEY (cinema_id)
         REFERENCES CINEMA(cinema_id)
+        ON DELETE RESTRICT,
+
+    INDEX idx_screening_movie_datetime (movie_id, show_date, show_time)
 );
 
 CREATE TABLE MOVIE_GENRE (
@@ -180,4 +185,7 @@ CREATE TABLE TICKET (
     CONSTRAINT fk_ticket_type
         FOREIGN KEY (type_id)
         REFERENCES TICKET_TYPE(type_id)
+
+    CONSTRAINT uq_ticket_screening_seat
+        UNIQUE (screening_id, seat_id)
 );

@@ -345,7 +345,7 @@ VALUES
 (2, 'customer', 'ana@gmail.com', 'ana123', '<hash_password>', 'Ana Andrade', '09201234567'),
 (3, 'customer', 'mark@gmail.com', 'mark123', '<hash_password>', 'Mark Garcia', '09211234567'); 
 
-INSERT INTO SEAT (cinema_id, row_num, seat_num, status)
+INSERT INTO SEAT (cinema_id, row_num, seat_num, seat_status)
 VALUES
 (1, 1, 1, 'active'),
 (1, 1, 2, 'active'),
@@ -357,3 +357,18 @@ VALUES
 (1, 2, 3, 'active'),
 (1, 2, 4, 'active'),
 (1, 2, 5, 'active');
+
+INSERT INTO SCREENING
+(movie_id, cinema_id, show_date, show_time, total_seats, booked_seats, status)
+VALUES
+-- Insidious: Out of the Further
+(2, 1, '2026-09-18', '10:00:00', 10, 0, 'scheduled'),
+
+-- Resident Evil
+(6, 1, '2026-09-18', '13:00:00', 10, 0, 'scheduled'),
+
+-- Saving Cherry
+(8, 1, '2026-09-18', '16:00:00', 10, 0, 'scheduled'),
+
+-- Life After You
+(9, 1, '2026-09-18', '19:00:00', 10, 0, 'scheduled');

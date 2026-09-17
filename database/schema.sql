@@ -28,25 +28,6 @@ CREATE TABLE SEAT (
         UNIQUE (cinema_id, row_num, seat_num)
 );
 
-CREATE TABLE SEATBOOKING (
-    seat_id INT NOT NULL,
-    screening_id INT NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'available',
-    held_until DATETIME,
-
-    PRIMARY KEY (seat_id, screening_id),
-
-    CONSTRAINT fk_seatbooking_seat
-        FOREIGN KEY (seat_id)
-        REFERENCES SEAT(seat_id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_seatbooking_screening
-        FOREIGN KEY (screening_id)
-        REFERENCES SCREENING(screening_id)
-        ON DELETE CASCADE
-);
-
 CREATE TABLE GENRE (
     genre_id INT AUTO_INCREMENT PRIMARY KEY,
     genre_name VARCHAR(50) NOT NULL
@@ -118,6 +99,8 @@ CREATE TABLE SCREENING (
     cinema_id INT NOT NULL,
     show_date DATE NOT NULL,
     show_time TIME NOT NULL,
+    total_seats INT NOT NULL,
+    booked_seats INT NOT NULL DEFAULT 0,
     status VARCHAR(50) NOT NULL,
 
     CONSTRAINT fk_screening_movie
@@ -131,6 +114,25 @@ CREATE TABLE SCREENING (
         ON DELETE RESTRICT,
 
     INDEX idx_screening_movie_datetime (movie_id, show_date, show_time)
+);
+
+CREATE TABLE SEATBOOKING (
+    seat_id INT NOT NULL,
+    screening_id INT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'available',
+    held_until DATETIME,
+
+    PRIMARY KEY (seat_id, screening_id),
+
+    CONSTRAINT fk_seatbooking_seat
+        FOREIGN KEY (seat_id)
+        REFERENCES SEAT(seat_id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_seatbooking_screening
+        FOREIGN KEY (screening_id)
+        REFERENCES SCREENING(screening_id)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE MOVIE_GENRE (
@@ -203,7 +205,7 @@ CREATE TABLE TICKET (
 
     CONSTRAINT fk_ticket_type
         FOREIGN KEY (type_id)
-        REFERENCES TICKET_TYPE(type_id)
+        REFERENCES TICKET_TYPE(type_id),
 
     CONSTRAINT uq_ticket_screening_seat
         UNIQUE (screening_id, seat_id)

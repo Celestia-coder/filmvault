@@ -575,16 +575,17 @@
 		max-width: 130px;
 	}
 
-	.bookings-table td[data-label="Cinema"] {
-		max-width: 120px;
-		white-space: normal;
+	/* The initials circle is decoration; the name beside it carries the info. */
+	.booking-avatar {
+		display: none;
 	}
 }
 
-/* Below ~1240px the eight columns no longer fit, so the table turns into
-   one card per booking; each cell labels itself from its `data-label`.
-   Cards sit two per row on tablets, one per row on phones (below). */
-@media (max-width: 1240px) {
+/* Below ~1260px the eight columns no longer fit (with room for a desktop
+   scrollbar), so the table turns into one card per booking; each cell
+   labels itself from its `data-label`. Cards sit two per row on tablets,
+   one per row on phones (below). */
+@media (max-width: 1260px) {
 	.bookings-table-wrap {
 		border: none;
 		overflow-x: visible;
@@ -655,14 +656,17 @@
 	}
 
 	/* Cards have room, so drop the desktop column squeeze. */
-	.bookings-table td[data-label="Seats"],
-	.bookings-table td[data-label="Cinema"] {
+	.bookings-table td[data-label="Seats"] {
 		min-width: 0;
 		max-width: none;
 	}
 
 	.booking-customer .booking-secondary {
 		max-width: none;
+	}
+
+	.booking-avatar {
+		display: inline-flex;
 	}
 
 	/* Multi-line cells: stack the label above the content. */

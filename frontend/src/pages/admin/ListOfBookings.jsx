@@ -31,14 +31,14 @@ const MOVIES = [
 ];
 
 const SHOWTIMES = [
-	{ movieId: "devil-wears-prada-2", datetime: "2026-06-05T10:00", cinema: "Cinema 1", branch: "SM North EDSA" },
-	{ movieId: "toy-story-5", datetime: "2026-06-05T13:00", cinema: "Cinema 2", branch: "SM North EDSA" },
-	{ movieId: "mean-girls", datetime: "2026-06-06T10:30", cinema: "Cinema 1", branch: "Glorietta 4" },
-	{ movieId: "disclosure-day", datetime: "2026-06-06T15:00", cinema: "Cinema 3", branch: "Glorietta 4" },
-	{ movieId: "white-chicks", datetime: "2026-06-06T19:30", cinema: "Cinema 2", branch: "SM City East Ortigas" },
-	{ movieId: "toy-story-5", datetime: "2026-06-07T12:00", cinema: "Cinema 1", branch: "SM City East Ortigas" },
-	{ movieId: "devil-wears-prada-2", datetime: "2026-06-07T18:30", cinema: "Cinema 3", branch: "SM North EDSA" },
-	{ movieId: "mean-girls", datetime: "2026-06-08T16:00", cinema: "Cinema 2", branch: "Glorietta 4" },
+	{ movieId: "devil-wears-prada-2", datetime: "2026-06-05T10:00", cinema: "Cinema 1", branch: "Vista Mall Taguig" },
+	{ movieId: "toy-story-5", datetime: "2026-06-05T13:00", cinema: "Cinema 2", branch: "Vista Mall Taguig" },
+	{ movieId: "mean-girls", datetime: "2026-06-06T10:30", cinema: "Cinema 1", branch: "Market! Market!" },
+	{ movieId: "disclosure-day", datetime: "2026-06-06T15:00", cinema: "Cinema 3", branch: "Market! Market!" },
+	{ movieId: "white-chicks", datetime: "2026-06-06T19:30", cinema: "Cinema 2", branch: "Venice McKinley" },
+	{ movieId: "toy-story-5", datetime: "2026-06-07T12:00", cinema: "Cinema 1", branch: "Venice McKinley" },
+	{ movieId: "devil-wears-prada-2", datetime: "2026-06-07T18:30", cinema: "Cinema 3", branch: "Vista Mall Taguig" },
+	{ movieId: "mean-girls", datetime: "2026-06-08T16:00", cinema: "Cinema 2", branch: "Market! Market!" },
 ];
 
 const FIRST_NAMES = ["Ralph", "Jose", "Trisha", "Juan", "Christine", "Gabriel", "Juliana", "Ben", "Maria", "Angelo", "Patricia", "Miguel", "Andrea", "Carlo", "Bea"];

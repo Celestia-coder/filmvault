@@ -1,0 +1,741 @@
+@import "./variables.css";
+
+/* ---------- Page shell ----------
+   Sidebar comes from components/AdminSidebar. The main-area shell below
+   matches Dashboard.css — it isn't shared yet, so it's repeated here. */
+
+.admin-dashboard {
+	display: flex;
+	min-height: 100vh;
+	background-color: var(--color-bg-dark);
+	color: var(--color-white);
+}
+
+.admin-main {
+	flex: 1;
+	min-width: 0;
+	padding: 0 32px 40px;
+}
+
+.admin-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 68px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.admin-title {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 26px;
+	font-weight: 700;
+}
+
+.admin-title img {
+	width: 32px;
+	height: 32px;
+}
+
+.admin-title em {
+	font-style: normal;
+	color: var(--color-red);
+}
+
+.admin-logout {
+	color: var(--color-red);
+	text-decoration: none;
+	font-size: 16px;
+	font-weight: 500;
+}
+
+.admin-logout:hover {
+	text-decoration: underline;
+}
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+/* ---------- Intro + Movie/Date filters ---------- */
+
+.bookings-intro {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 16px;
+	margin-top: 24px;
+}
+
+.bookings-intro h2 {
+	font-size: 20px;
+	font-weight: 700;
+}
+
+.bookings-intro p {
+	margin-top: 4px;
+	font-size: 13px;
+	color: var(--color-text-muted);
+}
+
+.bookings-filters {
+	display: flex;
+	gap: 12px;
+}
+
+.filter-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--color-text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.bookings-filters .dropdown {
+	min-width: 190px;
+	text-transform: none;
+	letter-spacing: normal;
+}
+
+/* ---------- Summary cards ---------- */
+
+.bookings-summary {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 200px));
+	gap: 16px;
+	margin-top: 20px;
+}
+
+.summary-card {
+	padding: 14px 18px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 10px;
+	background-color: var(--color-surface);
+}
+
+.summary-label {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--color-text-muted);
+}
+
+.summary-value {
+	margin-top: 6px;
+	font-size: 26px;
+	font-weight: 700;
+}
+
+.summary-value--confirmed {
+	color: var(--color-green);
+}
+
+.summary-value--cancelled {
+	color: var(--color-red);
+}
+
+/* ---------- Panel: search, status tabs, pagination, table ---------- */
+
+.bookings-panel {
+	margin-top: 20px;
+	padding: 18px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 12px;
+	background-color: rgba(255, 255, 255, 0.02);
+}
+
+.bookings-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 14px;
+}
+
+.bookings-search {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: 1;
+	min-width: 240px;
+	max-width: 420px;
+	height: 42px;
+	padding: 0 14px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 8px;
+	background-color: var(--color-surface);
+	color: var(--color-text-muted);
+}
+
+.bookings-search:focus-within {
+	outline: 2px solid var(--color-red);
+	outline-offset: 1px;
+}
+
+.bookings-search input {
+	flex: 1;
+	min-width: 0;
+	border: none;
+	background: transparent;
+	color: var(--color-white);
+	font-family: var(--font-main);
+	font-size: 14px;
+	outline: none;
+}
+
+.bookings-search input::placeholder {
+	color: var(--color-text-muted);
+}
+
+.status-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.status-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	height: 34px;
+	padding: 0 12px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 999px;
+	background-color: transparent;
+	color: var(--color-white);
+	font-family: var(--font-main);
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.status-tab:hover {
+	background-color: rgba(255, 255, 255, 0.06);
+}
+
+.status-tab.active {
+	border-color: var(--color-red);
+	background-color: rgba(238, 17, 43, 0.12);
+}
+
+.status-tab-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+}
+
+.status-tab--confirmed .status-tab-dot {
+	background-color: var(--color-green);
+}
+
+.status-tab--pending .status-tab-dot {
+	background-color: var(--color-yellow);
+}
+
+.status-tab--cancelled .status-tab-dot {
+	background-color: var(--color-red);
+}
+
+.status-tab-count {
+	min-width: 22px;
+	padding: 1px 7px;
+	border-radius: 999px;
+	background-color: rgba(255, 255, 255, 0.1);
+	font-size: 12px;
+	text-align: center;
+}
+
+.status-tab.active .status-tab-count {
+	background-color: var(--color-red);
+}
+
+.bookings-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 16px;
+	font-size: 13px;
+	color: var(--color-text-muted);
+}
+
+.pagination {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.pagination-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 32px;
+	height: 32px;
+	padding: 0 8px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 8px;
+	background-color: transparent;
+	color: var(--color-white);
+	font-family: var(--font-main);
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.pagination-btn:hover:not(:disabled) {
+	background-color: rgba(255, 255, 255, 0.08);
+}
+
+.pagination-btn.active {
+	border-color: var(--color-red);
+	background-color: var(--color-red);
+}
+
+.pagination-btn:disabled {
+	opacity: 0.35;
+	cursor: not-allowed;
+}
+
+.bookings-empty {
+	margin-top: 14px;
+	padding: 32px;
+	text-align: center;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 10px;
+	background-color: var(--color-surface);
+	color: var(--color-text-muted);
+	font-size: 14px;
+}
+
+.bookings-table-wrap {
+	margin-top: 14px;
+	overflow-x: auto;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 10px;
+}
+
+.bookings-table {
+	width: 100%;
+	border-collapse: collapse;
+	background-color: var(--color-surface);
+}
+
+.bookings-table th,
+.bookings-table td {
+	padding: 12px 10px;
+	text-align: left;
+	vertical-align: middle;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	font-size: 13px;
+	white-space: nowrap;
+}
+
+.bookings-table tbody tr:last-child td {
+	border-bottom: none;
+}
+
+.bookings-table th {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--color-text-muted);
+}
+
+.bookings-table tbody tr {
+	cursor: pointer;
+}
+
+.bookings-table tbody tr:hover {
+	background-color: rgba(255, 255, 255, 0.04);
+}
+
+.booking-reference {
+	color: var(--color-red);
+	font-weight: 600;
+}
+
+.booking-customer {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.booking-avatar {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	flex-shrink: 0;
+	border-radius: 50%;
+	background-color: rgba(238, 17, 43, 0.16);
+	color: var(--color-red);
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.booking-primary {
+	font-weight: 600;
+}
+
+.booking-secondary {
+	margin-top: 2px;
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+/* Keep the table from overflowing on laptop widths: long emails elide
+   (the full address is in the detail view) and seat lists can wrap. */
+.booking-customer .booking-secondary {
+	max-width: 170px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.bookings-table td[data-label="Seats"] {
+	min-width: 80px;
+	max-width: 110px;
+	white-space: normal;
+}
+
+.booking-amount {
+	font-weight: 700;
+}
+
+.booking-view-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 8px;
+	background-color: transparent;
+	color: var(--color-white);
+	cursor: pointer;
+}
+
+.booking-view-btn:hover {
+	background-color: rgba(255, 255, 255, 0.08);
+}
+
+.status-pill {
+	display: inline-block;
+	padding: 4px 12px;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.status-pill--confirmed {
+	background-color: rgba(31, 169, 113, 0.18);
+	color: var(--color-green);
+}
+
+.status-pill--pending {
+	background-color: rgba(224, 167, 43, 0.18);
+	color: var(--color-yellow);
+}
+
+.status-pill--cancelled {
+	background-color: rgba(238, 17, 43, 0.18);
+	color: var(--color-red);
+}
+
+/* ---------- Booking detail modal ---------- */
+
+.modal-overlay {
+	position: fixed;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+	background-color: rgba(0, 0, 0, 0.6);
+	z-index: 100;
+}
+
+.modal-card {
+	width: 100%;
+	max-width: 460px;
+	max-height: calc(100vh - 40px);
+	overflow-y: auto;
+	padding: 28px;
+	border-radius: 12px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	background-color: var(--color-bg-dark2);
+}
+
+.modal-card h2 {
+	margin-top: 4px;
+	font-size: 20px;
+	font-weight: 700;
+}
+
+.modal-subtitle {
+	margin-top: 2px;
+	font-size: 13px;
+	color: var(--color-text-muted);
+}
+
+.booking-detail-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.booking-detail-movie {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin-top: 20px;
+	padding: 12px;
+	border-radius: 10px;
+	background-color: var(--color-surface);
+	font-size: 14px;
+}
+
+.booking-detail-movie img {
+	width: 44px;
+	height: 56px;
+	flex-shrink: 0;
+	border-radius: 6px;
+	object-fit: cover;
+}
+
+.booking-detail-list {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 16px;
+	margin-top: 20px;
+}
+
+.booking-detail-list dt {
+	font-size: 11px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--color-text-muted);
+}
+
+.booking-detail-list dd {
+	margin: 4px 0 0;
+	font-size: 14px;
+}
+
+.modal-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 12px;
+	margin-top: 26px;
+}
+
+.modal-btn {
+	padding: 10px 20px;
+	border-radius: 8px;
+	font-family: var(--font-main);
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.modal-btn--ghost {
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	background-color: transparent;
+	color: var(--color-white);
+}
+
+.modal-btn--ghost:hover {
+	background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ---------- Responsive ---------- */
+
+/* Smaller laptops (e.g. 1280px): squeeze the two widest columns further
+   so the table still fits without scrolling sideways. */
+@media (max-width: 1320px) {
+	.bookings-table th,
+	.bookings-table td {
+		padding: 12px 8px;
+	}
+
+	.booking-customer .booking-secondary {
+		max-width: 130px;
+	}
+
+	.bookings-table td[data-label="Cinema"] {
+		max-width: 120px;
+		white-space: normal;
+	}
+}
+
+/* Below ~1240px the eight columns no longer fit, so the table turns into
+   one card per booking; each cell labels itself from its `data-label`.
+   Cards sit two per row on tablets, one per row on phones (below). */
+@media (max-width: 1240px) {
+	.bookings-table-wrap {
+		border: none;
+		overflow-x: visible;
+	}
+
+	.bookings-table thead {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+	}
+
+	.bookings-table,
+	.bookings-table tbody,
+	.bookings-table tr,
+	.bookings-table td {
+		display: block;
+		width: 100%;
+	}
+
+	.bookings-table {
+		background-color: transparent;
+	}
+
+	.bookings-table tbody {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 12px;
+	}
+
+	.bookings-table tr {
+		padding: 6px 16px;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 10px;
+		background-color: var(--color-surface);
+	}
+
+	.bookings-table td {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 10px 0;
+		white-space: normal;
+		text-align: right;
+	}
+
+	/* Undo the desktop "no border on the last row" rule so the last card
+	   keeps its separators too — only each card's final cell drops it. */
+	.bookings-table tbody tr:last-child td {
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	}
+
+	.bookings-table tbody tr td:last-child {
+		border-bottom: none;
+	}
+
+	.bookings-table td::before {
+		content: attr(data-label);
+		flex-shrink: 0;
+		font-size: 11px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-text-muted);
+		text-align: left;
+	}
+
+	/* Cards have room, so drop the desktop column squeeze. */
+	.bookings-table td[data-label="Seats"],
+	.bookings-table td[data-label="Cinema"] {
+		min-width: 0;
+		max-width: none;
+	}
+
+	.booking-customer .booking-secondary {
+		max-width: none;
+	}
+
+	/* Multi-line cells: stack the label above the content. */
+	.bookings-table td[data-label="Customer"],
+	.bookings-table td[data-label="Movie & Showtime"],
+	.bookings-table td[data-label="Cinema"] {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+		text-align: left;
+	}
+
+	.bookings-table td[data-label="Customer"]::before,
+	.bookings-table td[data-label="Movie & Showtime"]::before,
+	.bookings-table td[data-label="Cinema"]::before {
+		margin-bottom: 6px;
+	}
+}
+
+@media (max-width: 900px) {
+	.bookings-table tbody {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 768px) {
+	.admin-dashboard {
+		flex-direction: column;
+	}
+
+	.admin-main {
+		padding: 0 20px 32px;
+	}
+
+	.admin-header {
+		height: auto;
+		padding: 20px 0;
+	}
+
+	.admin-title {
+		font-size: 22px;
+	}
+
+	.bookings-filters {
+		width: 100%;
+		flex-direction: column;
+	}
+
+	.bookings-filters .dropdown {
+		min-width: 0;
+	}
+
+	.bookings-summary {
+		grid-template-columns: repeat(2, 1fr);
+	}
+
+	.bookings-panel {
+		padding: 14px;
+	}
+
+	.bookings-search {
+		min-width: 0;
+		max-width: none;
+		width: 100%;
+		flex-basis: 100%;
+	}
+
+	.bookings-meta {
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.booking-detail-list {
+		grid-template-columns: 1fr;
+	}
+}

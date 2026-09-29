@@ -5,6 +5,7 @@ const express = require("express");
 const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
+const movieRoutes = require("./routes/movieRoutes");
 
 const app = express();
 
@@ -21,6 +22,9 @@ app.get("/", (req, res) => {
 
 // Connect the auth routes — anything hitting /api/... goes here
 app.use("/api/auth", authRoutes);
+
+// Movie routes: public (/api/movies) and admin (/api/admin/movies)
+app.use("/api", movieRoutes);
 
 const PORT = process.env.PORT || 5000;
 

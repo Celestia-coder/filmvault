@@ -6,6 +6,8 @@ const cors = require("cors");
 
 const authRoutes = require("./routes/authRoutes");
 const movieRoutes = require("./routes/movieRoutes");
+const showtimeRoutes = require("./routes/showtimeRoutes");
+const searchRoutes = require("./routes/searchRoutes");
 
 const app = express();
 
@@ -23,8 +25,16 @@ app.get("/", (req, res) => {
 // Connect the auth routes — anything hitting /api/... goes here
 app.use("/api/auth", authRoutes);
 
+// Search routes: MUST be mounted before movieRoutes, or Express will match
+// GET /api/movies/search against movieRoutes' GET /movies/:id first and try
+// to treat "search" as a movie ID.
+app.use("/api", searchRoutes);
+
 // Movie routes: public (/api/movies) and admin (/api/admin/movies)
 app.use("/api", movieRoutes);
+
+// Showtime routes: public (/api/showtimes, /api/movies/:id/showtimes) and admin (/api/admin/showtimes)
+app.use("/api", showtimeRoutes);
 
 const PORT = process.env.PORT || 5000;
 

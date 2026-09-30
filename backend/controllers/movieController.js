@@ -225,7 +225,7 @@ const deleteMovie = async (req, res) => {
     }
 
     const [showtimes] = await pool.query(
-      "SELECT showtime_id FROM SHOWTIME WHERE movie_id = ? LIMIT 1",
+      "SELECT screening_id FROM SCREENING WHERE movie_id = ? LIMIT 1",
       [id]
     );
     if (showtimes.length > 0) {

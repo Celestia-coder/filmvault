@@ -1,0 +1,707 @@
+@import "./variables.css";
+
+/* ---------- Admin Header ---------- */
+
+.admin-dashboard {
+	display: flex;
+	min-height: 100vh;
+	background-color: var(--color-bg-dark);
+	color: var(--color-white);
+}
+
+.admin-main {
+	flex: 1;
+	min-width: 0;
+	padding: 0 32px 28px;
+}
+
+.admin-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 68px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.admin-title {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 26px;
+	font-weight: 700;
+}
+
+.admin-title svg {
+	width: 32px;
+	height: 32px;
+	flex-shrink: 0;
+}
+
+.admin-title em {
+	font-style: normal;
+	color: var(--color-red);
+}
+
+.admin-logout {
+	color: var(--color-red);
+	text-decoration: none;
+	font-size: 16px;
+	font-weight: 500;
+}
+
+.admin-logout:hover {
+	text-decoration: underline;
+}
+
+/* ---------- Intro + filters ---------- */
+
+.ssm-filters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 24px;
+	margin: 22px 0 24px;
+}
+
+.ssm-field {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.ssm-field label {
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.55);
+}
+
+.ssm-select {
+	appearance: none;
+	height: 40px;
+	padding: 0 40px 0 14px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 8px;
+	background-color: var(--color-surface);
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b3b3b3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 12px center;
+	color: var(--color-white);
+	font-family: inherit;
+	font-size: 13px;
+	cursor: pointer;
+	transition: border-color 0.15s ease;
+}
+
+.ssm-select:hover {
+	border-color: rgba(255, 255, 255, 0.35);
+}
+
+.ssm-select:focus-visible {
+	outline: 2px solid var(--color-red);
+	outline-offset: 2px;
+}
+
+.ssm-select--cinema {
+	min-width: 180px;
+}
+
+.ssm-select--showtime {
+	min-width: 300px;
+	max-width: 100%;
+}
+
+/* ---------- Stats ---------- */
+
+.ssm-stats {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 16px;
+	margin: 18px 0 24px;
+}
+
+.ssm-stat-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	min-width: 0;
+	min-height: 92px;
+	padding: 14px 18px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 10px;
+	background-color: var(--color-surface);
+}
+
+.ssm-stat-text {
+	min-width: 0;
+}
+
+.ssm-stat-label {
+	color: var(--color-white);
+	font-size: 16px;
+	font-weight: 600;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.ssm-stat-value {
+	margin-top: 8px;
+	font-size: 26px;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.ssm-stat-value--green {
+	color: #1fa971;
+}
+
+.ssm-stat-value--red {
+	color: var(--color-red);
+}
+
+.ssm-stat-icon {
+	width: 42px;
+	height: 42px;
+	flex-shrink: 0;
+}
+
+/* ---------- Main layout: wide seat map + inspector ---------- */
+
+.ssm-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 320px;
+	gap: 20px;
+	align-items: start;
+}
+
+/* ---------- Seat map panel ---------- */
+
+.ssm-map-panel {
+	min-width: 0;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 10px;
+	background-color: rgba(0, 0, 0, 0.25);
+}
+
+.ssm-panel-head {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 16px 24px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ssm-panel-head h3 {
+	font-size: 17px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+}
+
+.ssm-panel-icon {
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 8px;
+	background-color: rgba(238, 17, 43, 0.15);
+	color: var(--color-red);
+}
+
+/* ---------- Legend ---------- */
+
+.ssm-legend {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 12px 28px;
+	margin: 24px 24px 0;
+	padding: 0 0 18px;
+	border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+	list-style: none;
+	font-size: 14px;
+}
+
+.ssm-legend li {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+
+.ssm-legend-swatch {
+	width: 28px;
+	height: 28px;
+	cursor: default;
+	pointer-events: none;
+}
+
+/* Map */
+
+.ssm-map-scroll {
+	overflow-x: auto;
+	padding: 0 24px 28px;
+}
+
+.ssm-map {
+	min-width: calc(var(--ssm-seats-per-row) * 28px + 64px);
+	margin: 0 auto;
+}
+
+.ssm-screen {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	margin: 26px 0 28px;
+}
+
+.ssm-screen-bar {
+	width: 56%;
+	height: 8px;
+	border-radius: 2px;
+	background-color: var(--color-red);
+	box-shadow: 0 6px 22px rgba(238, 17, 43, 0.35);
+}
+
+.ssm-screen span {
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+}
+
+.ssm-row {
+	display: flex;
+	align-items: center;
+	gap: 36px; /* the aisle */
+}
+
+.ssm-row-label {
+	flex: 0 0 28px;
+	margin-right: -28px;
+	font-size: 13px;
+	font-weight: 500;
+	color: rgba(255, 255, 255, 0.8);
+}
+
+.ssm-group {
+	display: grid;
+	gap: 6px;
+	padding: 5px 0;
+	border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.ssm-group--left {
+	flex: var(--ssm-left-cols) 1 0;
+	grid-template-columns: repeat(var(--ssm-left-cols), minmax(0, 1fr));
+}
+
+.ssm-group--right {
+	flex: var(--ssm-right-cols) 1 0;
+	grid-template-columns: repeat(var(--ssm-right-cols), minmax(0, 1fr));
+}
+
+/* ---------- Seats ---------- */
+
+.ssm-seat {
+	display: grid;
+	place-items: center;
+	justify-self: center;
+	width: 100%;
+	max-width: 34px;
+	aspect-ratio: 1 / 1;
+	padding: 0;
+	border: 1px solid rgba(255, 255, 255, 0.14);
+	border-radius: 50%;
+	background-color: #232323;
+	color: rgba(255, 255, 255, 0.85);
+	font-family: inherit;
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1;
+	cursor: pointer;
+	transition:
+		background-color 0.15s ease,
+		border-color 0.15s ease;
+}
+
+.ssm-seat:hover {
+	border-color: var(--color-red);
+}
+
+.ssm-seat:focus-visible {
+	outline: 2px solid var(--color-white);
+	outline-offset: 2px;
+}
+
+.ssm-seat--booked {
+	border-color: #c4c4c4;
+	background-color: #c4c4c4;
+	color: #121212;
+	font-weight: 600;
+}
+
+.ssm-seat--booked:hover {
+	border-color: var(--color-white);
+}
+
+.ssm-seat--blocked {
+	border-color: rgba(245, 166, 35, 0.7);
+	background-color: rgba(245, 166, 35, 0.12);
+	background-image: repeating-linear-gradient(
+		135deg,
+		rgba(245, 166, 35, 0.28) 0 2px,
+		transparent 2px 5px
+	);
+	color: rgba(255, 255, 255, 0.75);
+}
+
+.ssm-seat.is-selected {
+	border-color: var(--color-red);
+	background-color: var(--color-red);
+	background-image: none;
+	color: var(--color-white);
+	box-shadow: 0 0 0 3px rgba(238, 17, 43, 0.25);
+}
+
+/* ---------- Inspector ---------- */
+
+.ssm-inspector {
+	position: sticky;
+	top: 16px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 10px;
+	background-color: var(--color-surface);
+	overflow: hidden;
+}
+
+.ssm-inspector-head {
+	padding: 14px 16px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.ssm-inspector-head h3 {
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.ssm-inspector-head p {
+	margin-top: 4px;
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+.ssm-inspector-body {
+	padding: 16px;
+}
+
+.ssm-notice {
+	margin-bottom: 14px;
+	padding: 9px 12px;
+	border: 1px solid rgba(31, 169, 113, 0.4);
+	border-radius: 8px;
+	background-color: rgba(31, 169, 113, 0.12);
+	font-size: 13px;
+	color: #1fa971;
+}
+
+.ssm-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 24px 4px;
+	text-align: center;
+}
+
+.ssm-empty-icon {
+	display: grid;
+	place-items: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 10px;
+	background-color: rgba(255, 255, 255, 0.06);
+	color: rgba(255, 255, 255, 0.5);
+}
+
+.ssm-empty-title {
+	margin-top: 14px;
+	font-size: 14px;
+	font-weight: 600;
+}
+
+.ssm-empty-text {
+	margin-top: 8px;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
+/* ---------- Status tag ---------- */
+
+.ssm-tag {
+	display: inline-block;
+	padding: 3px 10px;
+	border-radius: 999px;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.ssm-tag--available {
+	background-color: rgba(31, 169, 113, 0.15);
+	color: #1fa971;
+}
+
+.ssm-tag--booked {
+	background-color: rgba(255, 255, 255, 0.14);
+	color: #e0e0e0;
+}
+
+.ssm-tag--blocked {
+	background-color: rgba(245, 166, 35, 0.15);
+	color: #f5a623;
+}
+
+/* ---------- Booking details ---------- */
+
+.ssm-details {
+	margin: 14px 0 0;
+}
+
+.ssm-details div {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 0;
+	border-bottom: 1px dashed rgba(255, 255, 255, 0.12);
+}
+
+.ssm-details dt {
+	font-size: 12px;
+	color: var(--color-text-muted);
+}
+
+.ssm-details dd {
+	margin: 0;
+	font-size: 14px;
+	font-weight: 600;
+	text-align: right;
+	overflow-wrap: anywhere;
+}
+
+/* Seat chips (open / blocked selections) */
+
+.ssm-chip-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	max-height: 140px;
+	margin: 14px 0 0;
+	padding: 0;
+	overflow-y: auto;
+	list-style: none;
+}
+
+.ssm-chip-list li {
+	padding: 4px 10px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 6px;
+	background-color: rgba(0, 0, 0, 0.2);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.ssm-hint {
+	margin-top: 12px;
+	font-size: 12px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
+/* ---------- Actions ---------- */
+
+.ssm-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.ssm-btn {
+	height: 38px;
+	padding: 0 14px;
+	border: 1px solid transparent;
+	border-radius: 8px;
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	transition:
+		background-color 0.15s ease,
+		border-color 0.15s ease;
+}
+
+.ssm-btn:focus-visible {
+	outline: 2px solid var(--color-white);
+	outline-offset: 2px;
+}
+
+.ssm-btn--primary {
+	background-color: var(--color-red);
+	color: var(--color-white);
+}
+
+.ssm-btn--primary:hover {
+	background-color: #d10f26;
+}
+
+.ssm-btn--outline {
+	border-color: #f5a623;
+	background-color: transparent;
+	color: #f5a623;
+}
+
+.ssm-btn--outline:hover {
+	background-color: rgba(245, 166, 35, 0.12);
+}
+
+.ssm-btn--danger {
+	border-color: var(--color-red);
+	background-color: transparent;
+	color: var(--color-red);
+}
+
+.ssm-btn--danger:hover {
+	background-color: rgba(238, 17, 43, 0.12);
+}
+
+.ssm-btn--ghost {
+	border-color: rgba(255, 255, 255, 0.15);
+	background-color: transparent;
+	color: rgba(255, 255, 255, 0.8);
+}
+
+.ssm-btn--ghost:hover {
+	background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ---------- Cancel booking modal ---------- */
+
+.ssm-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	display: grid;
+	place-items: center;
+	padding: 20px;
+	background-color: rgba(0, 0, 0, 0.7);
+}
+
+.ssm-modal {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: 100%;
+	max-width: 400px;
+	padding: 28px 24px 22px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 12px;
+	background-color: var(--color-surface);
+	text-align: center;
+}
+
+.ssm-modal-icon {
+	color: #f5a623;
+}
+
+.ssm-modal h3 {
+	margin-top: 12px;
+	font-size: 18px;
+	font-weight: 700;
+}
+
+.ssm-modal p {
+	margin-top: 8px;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--color-text-muted);
+}
+
+.ssm-modal-actions {
+	display: flex;
+	gap: 10px;
+	width: 100%;
+	margin-top: 20px;
+}
+
+.ssm-modal-actions .ssm-btn {
+	flex: 1;
+}
+
+/* ---------- Responsive (largest to smallest) ---------- */
+
+@media (max-width: 1180px) {
+	.ssm-layout {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.ssm-inspector {
+		position: static;
+	}
+
+	.ssm-stats {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 768px) {
+	.admin-dashboard {
+		flex-direction: column;
+	}
+
+	.admin-main {
+		padding: 0 20px 32px;
+	}
+
+	.admin-header {
+		height: auto;
+		padding: 20px 0;
+	}
+
+	.admin-title {
+		font-size: 22px;
+	}
+
+	.ssm-field,
+	.ssm-select {
+		width: 100%;
+	}
+
+	.ssm-select--showtime {
+		min-width: 0;
+	}
+}
+
+@media (max-width: 640px) {
+	.ssm-stats {
+		grid-template-columns: 1fr;
+	}
+
+	.ssm-map-scroll {
+		padding: 0 12px 24px;
+	}
+
+	.ssm-legend {
+		margin: 20px 12px 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ssm-seat,
+	.ssm-btn,
+	.ssm-select {
+		transition: none;
+	}
+}

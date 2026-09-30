@@ -13,6 +13,7 @@ import AdminLogin from "./pages/client/AdminLogin.jsx";
 import Dashboard from "./pages/admin/Dashboard.jsx";
 import ScheduleManagement from "./pages/admin/ScheduleManagement.jsx";
 import MovieManagement from "./pages/admin/MovieManagement.jsx";
+import SeatSelectionManagement from "./pages/admin/SeatSelectionManagement";
 
 function App() {
 	return (
@@ -30,6 +31,7 @@ function App() {
 			<Route path="/admin/dashboard" element={<Dashboard />} />
 			<Route path="/admin/movies" element={<MovieManagement />} />
 			<Route path="/admin/schedule" element={<ScheduleManagement />} />
+			<Route path="/admin/seats" element={<SeatSelectionManagement />} />
 		</Routes>
 	);
 }

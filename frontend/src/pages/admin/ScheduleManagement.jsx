@@ -1,13 +1,15 @@
 // ScheduleManagement.jsx — Admin schedule management
 // Route: "/admin/schedule"
 //
-// Data is all client-side state (no backend yet). "Add showtime" appends a
-// row; the pencil icon on a row opens "Reschedule", which updates that row's
-// date/time/cinema in place; the trash icon opens a confirmation before
-// removing the row. The Movie/Date filter controls at the top are hardcoded
-// display only — no filtering logic (per spec, optional/skipped).
+// Connected to the real backend (Week 3): movies come from GET /api/movies,
+// showtimes from GET /api/showtimes, and Add/Reschedule/Delete call the
+// admin showtime endpoints directly with fetch() (no separate api/ folder —
+// all request logic lives in this file). The pencil icon opens
+// "Reschedule", which PUTs date/time/cinema for that row; the trash icon
+// DELETEs after confirming. The Movie/Date filter controls at the top are
+// still local, client-side filtering over whatever showtimes are loaded.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import "../../styles/ScheduleManagement.css";
 
@@ -15,99 +17,29 @@ import AdminSidebar from "../../components/AdminSidebar";
 
 import navSchedule from "../../assets/images/dashboard/nav-schedule.svg";
 
-import posterWhiteChicks from "../../assets/images/dashboard/white-chicks.png";
-import posterMeanGirls from "../../assets/images/dashboard/mean-girls.png";
-import posterDisclosureDay from "../../assets/images/dashboard/disclosure-day.png";
-import posterToyStory from "../../assets/images/dashboard/toy-story-5.png";
-import posterDevilWearsPrada from "../../assets/images/dashboard/devil-wears-prada-2.png";
+// Set this to wherever your backend actually runs.
+const API_BASE = "http://localhost:5000/api";
 
-// Placeholder catalog until real movie data is available. Reuses the same
-// posters as the admin dashboard so both pages agree on what's showing.
-const MOVIES = [
-	{
-		id: "white-chicks",
-		title: "White Chicks",
-		genre: "Comedy",
-		poster: posterWhiteChicks,
-	},
-	{
-		id: "mean-girls",
-		title: "Mean Girls",
-		genre: "Comedy/Drama",
-		poster: posterMeanGirls,
-	},
-	{
-		id: "disclosure-day",
-		title: "Disclosure Day",
-		genre: "Sci-Fi/Thriller",
-		poster: posterDisclosureDay,
-	},
-	{
-		id: "toy-story-5",
-		title: "Toy Story 5",
-		genre: "Animation/Family",
-		poster: posterToyStory,
-	},
-	{
-		id: "devil-wears-prada-2",
-		title: "The Devil Wears Prada 2",
-		genre: "Comedy/Drama",
-		poster: posterDevilWearsPrada,
-	},
+// Placeholder cinema list until a real /api/cinemas (or /api/branches)
+// endpoint exists — that's the Week 3 Search & Filter ticket, not this one.
+// IDs match database/seed.sql exactly, so Add/Reschedule work correctly
+// against a freshly seeded DB.
+const CINEMA_OPTIONS = [
+	{ value: 1, label: "Vista Mall Taguig — Cinema 1" },
+	{ value: 2, label: "Vista Mall Taguig — Cinema 2" },
+	{ value: 3, label: "Vista Mall Taguig — Cinema 3" },
+	{ value: 4, label: "Market! Market! — Cinema 1" },
+	{ value: 5, label: "Market! Market! — Cinema 2" },
+	{ value: 6, label: "Market! Market! — Cinema 3" },
+	{ value: 7, label: "Venice McKinley — Cinema 1" },
+	{ value: 8, label: "Venice McKinley — Cinema 2" },
+	{ value: 9, label: "Venice McKinley — Cinema 3" },
 ];
 
-const CINEMAS = ["Cinema 1", "Cinema 2", "Cinema 3"];
-const CINEMA_OPTIONS = CINEMAS.map((cinema) => ({
-	value: cinema,
-	label: cinema,
-}));
-const MOVIE_OPTIONS = MOVIES.map((movie) => ({
-	value: movie.id,
-	label: movie.title,
-	thumbnail: movie.poster,
-}));
-const MOVIE_FILTER_OPTIONS = [
-	{ value: "all", label: "All Movies" },
-	...MOVIE_OPTIONS,
-];
-
-// Placeholder schedule until the backend exists. `datetime` is kept in the
-// same "YYYY-MM-DDTHH:mm" shape a <input type="datetime-local"> produces, so
-// rows load straight into the reschedule form with no conversion.
-const INITIAL_SCHEDULE = [
-	{
-		id: 1,
-		movieId: "devil-wears-prada-2",
-		datetime: "2026-06-06T10:00",
-		cinema: "Cinema 1",
-		seatsTotal: 50,
-		seatsBooked: 18,
-	},
-	{
-		id: 2,
-		movieId: "mean-girls",
-		datetime: "2026-06-06T10:30",
-		cinema: "Cinema 1",
-		seatsTotal: 50,
-		seatsBooked: 30,
-	},
-	{
-		id: 3,
-		movieId: "mean-girls",
-		datetime: "2026-06-06T19:30",
-		cinema: "Cinema 3",
-		seatsTotal: 50,
-		seatsBooked: 50,
-	},
-	{
-		id: 4,
-		movieId: "toy-story-5",
-		datetime: "2026-06-07T18:30",
-		cinema: "Cinema 1",
-		seatsTotal: 50,
-		seatsBooked: 22,
-	},
-];
+// Seat count for newly-added showtimes. Real per-cinema capacity (from the
+// SEAT table) isn't wired up yet — that's a separate ticket — so every new
+// showtime is created with this placeholder capacity for now.
+const DEFAULT_TOTAL_SEATS = 50;
 
 const IconPlus = () => (
 	<svg
@@ -276,14 +208,14 @@ function Dropdown({ options, value, onChange, ariaLabel }) {
 				onClick={() => setIsOpen((open) => !open)}
 			>
 				<span className="dropdown-trigger-label">
-					{selected.thumbnail && (
+					{selected?.thumbnail && (
 						<img
 							className="dropdown-thumb"
 							src={selected.thumbnail}
 							alt=""
 						/>
 					)}
-					{selected.label}
+					{selected?.label ?? "Loading…"}
 				</span>
 				<IconChevron open={isOpen} />
 			</button>
@@ -322,8 +254,35 @@ function Dropdown({ options, value, onChange, ariaLabel }) {
 	);
 }
 
-function findMovie(movieId) {
-	return MOVIES.find((movie) => movie.id === movieId);
+function findMovie(movies, movieId) {
+	return movies.find((movie) => movie.movie_id === movieId);
+}
+
+// Backend gives us show_date ("2026-06-06") and show_time ("10:00:00")
+// separately; <input type="datetime-local"> wants one combined string.
+function toDatetimeLocal(showDate, showTime) {
+	if (!showDate || !showTime) return "";
+	return `${showDate}T${showTime.slice(0, 5)}`;
+}
+
+// ...and the reverse, for sending a reschedule/create request back.
+function splitDatetimeLocal(value) {
+	return {
+		showDate: value.slice(0, 10),
+		showTime: `${value.slice(11, 16)}:00`,
+	};
+}
+
+function mapShowtime(row) {
+	return {
+		id: row.showtime_id,
+		movieId: row.movie_id,
+		cinemaId: row.cinema_id,
+		cinemaLabel: `${row.branch_name} — Cinema ${row.cinema_num}`,
+		datetime: toDatetimeLocal(row.show_date, row.show_time),
+		seatsTotal: row.total_seats,
+		seatsBooked: row.booked_seats,
+	};
 }
 
 // "2026-06-06T10:00" -> "Jun 6, 2026 10:00 AM"
@@ -362,68 +321,170 @@ function getOccupancyPercent(row) {
 	return Math.min(100, Math.round((row.seatsBooked / row.seatsTotal) * 100));
 }
 
+// Small fetch helper: parses JSON either way, and throws the backend's own
+// message on a non-2xx response, so every caller can just `await` and
+// `catch`.
+async function apiRequest(path, options = {}) {
+	const response = await fetch(`${API_BASE}${path}`, {
+		headers: { "Content-Type": "application/json" },
+		...options,
+	});
+	let body = null;
+	try {
+		body = await response.json();
+	} catch {
+		// no JSON body — leave body as null
+	}
+	if (!response.ok) {
+		throw new Error(body?.message || `Request failed with status ${response.status}`);
+	}
+	return body;
+}
+
 function ScheduleManagement() {
-	const [schedule, setSchedule] = useState(INITIAL_SCHEDULE);
+	const [movies, setMovies] = useState([]);
+	const [schedule, setSchedule] = useState([]);
+	const [isLoading, setIsLoading] = useState(true);
+	const [loadError, setLoadError] = useState("");
+	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [formError, setFormError] = useState("");
+
 	const [movieFilter, setMovieFilter] = useState("all");
 	const [dateFilter, setDateFilter] = useState("");
 
 	const [isAddOpen, setIsAddOpen] = useState(false);
 	const [addForm, setAddForm] = useState({
-		movieId: MOVIES[0].id,
+		movieId: null,
 		datetime: "",
-		cinema: CINEMAS[0],
+		cinemaId: CINEMA_OPTIONS[0].value,
 	});
 
 	const [editingId, setEditingId] = useState(null);
 	const [editForm, setEditForm] = useState({
 		datetime: "",
-		cinema: CINEMAS[0],
+		cinemaId: CINEMA_OPTIONS[0].value,
 	});
 
 	const [deletingId, setDeletingId] = useState(null);
 
+	// Initial load: movies (for the dropdown/labels) + showtimes, in parallel.
+	useEffect(() => {
+		let cancelled = false;
+
+		async function load() {
+			setIsLoading(true);
+			setLoadError("");
+			try {
+				const [moviesData, showtimesData] = await Promise.all([
+					apiRequest("/movies"),
+					apiRequest("/showtimes"),
+				]);
+				if (cancelled) return;
+				setMovies(moviesData.movies);
+				setSchedule(showtimesData.showtimes.map(mapShowtime));
+				setAddForm((form) => ({
+					...form,
+					movieId: form.movieId ?? moviesData.movies[0]?.movie_id ?? null,
+				}));
+			} catch (error) {
+				if (!cancelled) setLoadError(error.message);
+			} finally {
+				if (!cancelled) setIsLoading(false);
+			}
+		}
+
+		load();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	async function reloadShowtimes() {
+		const data = await apiRequest("/showtimes");
+		setSchedule(data.showtimes.map(mapShowtime));
+	}
+
+	const movieOptions = useMemo(
+		() =>
+			movies.map((movie) => ({
+				value: movie.movie_id,
+				label: movie.title,
+				thumbnail: movie.poster,
+			})),
+		[movies],
+	);
+	const movieFilterOptions = useMemo(
+		() => [{ value: "all", label: "All Movies" }, ...movieOptions],
+		[movieOptions],
+	);
+
 	const openAddModal = () => {
-		setAddForm({ movieId: MOVIES[0].id, datetime: "", cinema: CINEMAS[0] });
+		setFormError("");
+		setAddForm({
+			movieId: movies[0]?.movie_id ?? null,
+			datetime: "",
+			cinemaId: CINEMA_OPTIONS[0].value,
+		});
 		setIsAddOpen(true);
 	};
 
-	const handleAddSubmit = (event) => {
+	const handleAddSubmit = async (event) => {
 		event.preventDefault();
-		if (!addForm.datetime) return;
-		setSchedule((prev) => [
-			...prev,
-			{
-				id: Date.now(),
-				movieId: addForm.movieId,
-				datetime: addForm.datetime,
-				cinema: addForm.cinema,
-				seatsTotal: 50,
-				seatsBooked: 0,
-			},
-		]);
-		setIsAddOpen(false);
+		if (!addForm.datetime || !addForm.movieId) return;
+
+		setFormError("");
+		setIsSubmitting(true);
+		try {
+			const { showDate, showTime } = splitDatetimeLocal(addForm.datetime);
+			await apiRequest("/admin/showtimes", {
+				method: "POST",
+				body: JSON.stringify({
+					movieId: addForm.movieId,
+					cinemaId: addForm.cinemaId,
+					showDate,
+					showTime,
+					totalSeats: DEFAULT_TOTAL_SEATS,
+					status: "scheduled",
+				}),
+			});
+			await reloadShowtimes();
+			setIsAddOpen(false);
+		} catch (error) {
+			setFormError(error.message);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	const openRescheduleModal = (row) => {
-		setEditForm({ datetime: row.datetime, cinema: row.cinema });
+		setFormError("");
+		setEditForm({ datetime: row.datetime, cinemaId: row.cinemaId });
 		setEditingId(row.id);
 	};
 
-	const handleRescheduleSubmit = (event) => {
+	const handleRescheduleSubmit = async (event) => {
 		event.preventDefault();
 		if (!editForm.datetime) return;
-		setSchedule((prev) =>
-			prev.map((row) =>
-				row.id === editingId
-					? {
-							...row,
-							datetime: editForm.datetime,
-							cinema: editForm.cinema,
-						}
-					: row,
-			),
-		);
-		setEditingId(null);
+
+		setFormError("");
+		setIsSubmitting(true);
+		try {
+			const { showDate, showTime } = splitDatetimeLocal(editForm.datetime);
+			await apiRequest(`/admin/showtimes/${editingId}`, {
+				method: "PUT",
+				body: JSON.stringify({
+					cinemaId: editForm.cinemaId,
+					showDate,
+					showTime,
+				}),
+			});
+			await reloadShowtimes();
+			setEditingId(null);
+		} catch (error) {
+			setFormError(error.message);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	const editingRow =
@@ -431,9 +492,18 @@ function ScheduleManagement() {
 			? schedule.find((row) => row.id === editingId)
 			: null;
 
-	const handleDeleteConfirm = () => {
-		setSchedule((prev) => prev.filter((row) => row.id !== deletingId));
-		setDeletingId(null);
+	const handleDeleteConfirm = async () => {
+		setFormError("");
+		setIsSubmitting(true);
+		try {
+			await apiRequest(`/admin/showtimes/${deletingId}`, { method: "DELETE" });
+			await reloadShowtimes();
+			setDeletingId(null);
+		} catch (error) {
+			setFormError(error.message);
+		} finally {
+			setIsSubmitting(false);
+		}
 	};
 
 	const deletingRow =
@@ -449,8 +519,10 @@ function ScheduleManagement() {
 	});
 
 	const filterSummaryParts = [];
-	if (movieFilter !== "all")
-		filterSummaryParts.push(findMovie(movieFilter).title);
+	if (movieFilter !== "all") {
+		const filterMovie = findMovie(movies, movieFilter);
+		if (filterMovie) filterSummaryParts.push(filterMovie.title);
+	}
 	if (dateFilter) filterSummaryParts.push(formatDateOnly(dateFilter));
 	const filterSummary = filterSummaryParts.length
 		? filterSummaryParts.join(", ")
@@ -473,11 +545,17 @@ function ScheduleManagement() {
 					</Link>
 				</header>
 
+				{loadError && (
+					<p className="schedule-empty" role="alert">
+						Couldn't load the schedule: {loadError}
+					</p>
+				)}
+
 				<section className="schedule-filters" aria-label="Filters">
 					<div className="filter-field">
 						<span>Movie</span>
 						<Dropdown
-							options={MOVIE_FILTER_OPTIONS}
+							options={movieFilterOptions}
 							value={movieFilter}
 							onChange={setMovieFilter}
 							ariaLabel="Filter by movie"
@@ -499,6 +577,7 @@ function ScheduleManagement() {
 						type="button"
 						className="add-showtime-btn"
 						onClick={openAddModal}
+						disabled={isLoading || movies.length === 0}
 					>
 						<IconPlus />
 						Add Showtime
@@ -521,7 +600,9 @@ function ScheduleManagement() {
 					)}
 				</p>
 
-				{filteredSchedule.length === 0 ? (
+				{isLoading ? (
+					<p className="schedule-empty">Loading schedule…</p>
+				) : filteredSchedule.length === 0 ? (
 					<p className="schedule-empty">
 						No showtimes match this filter.
 					</p>
@@ -540,24 +621,26 @@ function ScheduleManagement() {
 							</thead>
 							<tbody>
 								{filteredSchedule.map((row) => {
-									const movie = findMovie(row.movieId);
+									const movie = findMovie(movies, row.movieId);
 									const status = getStatus(row);
 									const percent = getOccupancyPercent(row);
 									return (
 										<tr key={row.id}>
 											<td data-label="Movie">
 												<div className="schedule-movie">
-													<img
-														className="schedule-poster"
-														src={movie.poster}
-														alt=""
-													/>
+													{movie?.poster && (
+														<img
+															className="schedule-poster"
+															src={movie.poster}
+															alt=""
+														/>
+													)}
 													<div>
 														<p className="schedule-movie-title">
-															{movie.title}
+															{movie?.title ?? `Movie #${row.movieId}`}
 														</p>
 														<p className="schedule-movie-genre">
-															{movie.genre}
+															{(movie?.genres || []).join(", ")}
 														</p>
 													</div>
 												</div>
@@ -571,7 +654,7 @@ function ScheduleManagement() {
 												</span>
 											</td>
 											<td data-label="Cinema">
-												{row.cinema}
+												{row.cinemaLabel}
 											</td>
 											<td data-label="Seats">
 												<div
@@ -603,19 +686,20 @@ function ScheduleManagement() {
 																row,
 															)
 														}
-														aria-label={`Reschedule ${movie.title}`}
+														aria-label={`Reschedule ${movie?.title ?? "showtime"}`}
 													>
 														<IconEdit />
 													</button>
 													<button
 														type="button"
 														className="schedule-edit-btn schedule-edit-btn--danger"
-														onClick={() =>
+														onClick={() => {
+															setFormError("");
 															setDeletingId(
 																row.id,
-															)
-														}
-														aria-label={`Delete ${movie.title} showtime`}
+															);
+														}}
+														aria-label={`Delete ${movie?.title ?? "showtime"} showtime`}
 													>
 														<IconTrash />
 													</button>
@@ -628,195 +712,224 @@ function ScheduleManagement() {
 						</table>
 					</div>
 				)}
-			</div>
 
-			{isAddOpen && (
-				<div
-					className="modal-overlay"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="add-showtime-title"
-				>
-					<form className="modal-card" onSubmit={handleAddSubmit}>
-						<h2 id="add-showtime-title">Add showtime</h2>
-						<p className="modal-subtitle">
-							Fill in details for the new schedule entry.
-						</p>
-
-						<div className="modal-field">
-							<span>Movie</span>
-							<Dropdown
-								options={MOVIE_OPTIONS}
-								value={addForm.movieId}
-								onChange={(movieId) =>
-									setAddForm((form) => ({ ...form, movieId }))
-								}
-								ariaLabel="Movie"
-							/>
-						</div>
-
-						<label className="modal-field">
-							<span>Date &amp; Time</span>
-							<input
-								type="datetime-local"
-								required
-								value={addForm.datetime}
-								onChange={(event) =>
-									setAddForm((form) => ({
-										...form,
-										datetime: event.target.value,
-									}))
-								}
-							/>
-						</label>
-
-						<div className="modal-field">
-							<span>Cinema</span>
-							<Dropdown
-								options={CINEMA_OPTIONS}
-								value={addForm.cinema}
-								onChange={(cinema) =>
-									setAddForm((form) => ({ ...form, cinema }))
-								}
-								ariaLabel="Cinema"
-							/>
-						</div>
-
-						<div className="modal-actions">
-							<button
-								type="button"
-								className="modal-btn modal-btn--ghost"
-								onClick={() => setIsAddOpen(false)}
-							>
-								Cancel
-							</button>
-							<button
-								type="submit"
-								className="modal-btn modal-btn--primary"
-							>
-								Save showtime
-							</button>
-						</div>
-					</form>
-				</div>
-			)}
-
-			{editingRow && (
-				<div
-					className="modal-overlay"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="reschedule-title"
-				>
-					<form
-						className="modal-card"
-						onSubmit={handleRescheduleSubmit}
+				{isAddOpen && (
+					<div
+						className="modal-overlay"
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="add-showtime-title"
 					>
-						<h2 id="reschedule-title">Reschedule showtime</h2>
-						<p className="modal-subtitle">
-							Update the date, time, or cinema for{" "}
-							<strong>
-								{findMovie(editingRow.movieId).title}
-							</strong>
-							.
-						</p>
+						<form className="modal-card" onSubmit={handleAddSubmit}>
+							<h2 id="add-showtime-title">Add showtime</h2>
+							<p className="modal-subtitle">
+								Fill in details for the new schedule entry.
+							</p>
 
-						<label className="modal-field">
-							<span>Date &amp; Time</span>
-							<input
-								type="datetime-local"
-								required
-								value={editForm.datetime}
-								onChange={(event) =>
-									setEditForm((form) => ({
-										...form,
-										datetime: event.target.value,
-									}))
-								}
-							/>
-						</label>
+							<div className="modal-field">
+								<span>Movie</span>
+								<Dropdown
+									options={movieOptions}
+									value={addForm.movieId}
+									onChange={(movieId) =>
+										setAddForm((form) => ({ ...form, movieId }))
+									}
+									ariaLabel="Movie"
+								/>
+							</div>
 
-						<div className="modal-field">
-							<span>Cinema</span>
-							<Dropdown
-								options={CINEMA_OPTIONS}
-								value={editForm.cinema}
-								onChange={(cinema) =>
-									setEditForm((form) => ({ ...form, cinema }))
-								}
-								ariaLabel="Cinema"
-							/>
-						</div>
+							<label className="modal-field">
+								<span>Date &amp; Time</span>
+								<input
+									type="datetime-local"
+									required
+									value={addForm.datetime}
+									onChange={(event) =>
+										setAddForm((form) => ({
+											...form,
+											datetime: event.target.value,
+										}))
+									}
+								/>
+							</label>
 
-						<p className="modal-notice">
-							<IconWarning />
-							<span>
-								Rescheduling this will automatically update all
-								reserved tickets. Ticket holders will be
-								notified via email.
-							</span>
-						</p>
+							<div className="modal-field">
+								<span>Cinema</span>
+								<Dropdown
+									options={CINEMA_OPTIONS}
+									value={addForm.cinemaId}
+									onChange={(cinemaId) =>
+										setAddForm((form) => ({ ...form, cinemaId }))
+									}
+									ariaLabel="Cinema"
+								/>
+							</div>
 
-						<div className="modal-actions">
-							<button
-								type="button"
-								className="modal-btn modal-btn--ghost"
-								onClick={() => setEditingId(null)}
-							>
-								Cancel
-							</button>
-							<button
-								type="submit"
-								className="modal-btn modal-btn--primary"
-							>
-								Save changes
-							</button>
-						</div>
-					</form>
-				</div>
-			)}
+							{formError && (
+								<p className="modal-notice" role="alert">
+									<IconWarning />
+									<span>{formError}</span>
+								</p>
+							)}
 
-			{deletingRow && (
-				<div
-					className="modal-overlay"
-					role="dialog"
-					aria-modal="true"
-					aria-labelledby="delete-title"
-				>
-					<div className="modal-card">
-						<h2 id="delete-title">Delete showtime?</h2>
-						<p className="modal-subtitle">
-							You're about to delete{" "}
-							<strong>
-								{findMovie(deletingRow.movieId).title}
-							</strong>{" "}
-							on {formatDatetime(deletingRow.datetime)}.
-						</p>
+							<div className="modal-actions">
+								<button
+									type="button"
+									className="modal-btn modal-btn--ghost"
+									onClick={() => setIsAddOpen(false)}
+									disabled={isSubmitting}
+								>
+									Cancel
+								</button>
+								<button
+									type="submit"
+									className="modal-btn modal-btn--primary"
+									disabled={isSubmitting}
+								>
+									{isSubmitting ? "Saving…" : "Save showtime"}
+								</button>
+							</div>
+						</form>
+					</div>
+				)}
 
-						<p className="modal-warning">
-							This action cannot be undone. Any bookings for this
-							showtime may also be affected.
-						</p>
+				{editingRow && (
+					<div
+						className="modal-overlay"
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="reschedule-title"
+					>
+						<form
+							className="modal-card"
+							onSubmit={handleRescheduleSubmit}
+						>
+							<h2 id="reschedule-title">Reschedule showtime</h2>
+							<p className="modal-subtitle">
+								Update the date, time, or cinema for{" "}
+								<strong>
+									{findMovie(movies, editingRow.movieId)?.title ??
+										`Movie #${editingRow.movieId}`}
+								</strong>
+								.
+							</p>
 
-						<div className="modal-actions">
-							<button
-								type="button"
-								className="modal-btn modal-btn--ghost"
-								onClick={() => setDeletingId(null)}
-							>
-								Cancel
-							</button>
-							<button
-								type="button"
-								className="modal-btn modal-btn--primary"
-								onClick={handleDeleteConfirm}
-							>
-								Delete showtime
-							</button>
+							<label className="modal-field">
+								<span>Date &amp; Time</span>
+								<input
+									type="datetime-local"
+									required
+									value={editForm.datetime}
+									onChange={(event) =>
+										setEditForm((form) => ({
+											...form,
+											datetime: event.target.value,
+										}))
+									}
+								/>
+							</label>
+
+							<div className="modal-field">
+								<span>Cinema</span>
+								<Dropdown
+									options={CINEMA_OPTIONS}
+									value={editForm.cinemaId}
+									onChange={(cinemaId) =>
+										setEditForm((form) => ({ ...form, cinemaId }))
+									}
+									ariaLabel="Cinema"
+								/>
+							</div>
+
+							<p className="modal-notice">
+								<IconWarning />
+								<span>
+									Rescheduling this will automatically update all
+									reserved tickets. Ticket holders will be
+									notified via email.
+								</span>
+							</p>
+
+							{formError && (
+								<p className="modal-notice" role="alert">
+									<IconWarning />
+									<span>{formError}</span>
+								</p>
+							)}
+
+							<div className="modal-actions">
+								<button
+									type="button"
+									className="modal-btn modal-btn--ghost"
+									onClick={() => setEditingId(null)}
+									disabled={isSubmitting}
+								>
+									Cancel
+								</button>
+								<button
+									type="submit"
+									className="modal-btn modal-btn--primary"
+									disabled={isSubmitting}
+								>
+									{isSubmitting ? "Saving…" : "Save changes"}
+								</button>
+							</div>
+						</form>
+					</div>
+				)}
+
+				{deletingRow && (
+					<div
+						className="modal-overlay"
+						role="dialog"
+						aria-modal="true"
+						aria-labelledby="delete-title"
+					>
+						<div className="modal-card">
+							<h2 id="delete-title">Delete showtime?</h2>
+							<p className="modal-subtitle">
+								You're about to delete{" "}
+								<strong>
+									{findMovie(movies, deletingRow.movieId)?.title ??
+										`Movie #${deletingRow.movieId}`}
+								</strong>{" "}
+								on {formatDatetime(deletingRow.datetime)}.
+							</p>
+
+							<p className="modal-warning">
+								This action cannot be undone. Any bookings for this
+								showtime may also be affected.
+							</p>
+
+							{formError && (
+								<p className="modal-notice" role="alert">
+									<IconWarning />
+									<span>{formError}</span>
+								</p>
+							)}
+
+							<div className="modal-actions">
+								<button
+									type="button"
+									className="modal-btn modal-btn--ghost"
+									onClick={() => setDeletingId(null)}
+									disabled={isSubmitting}
+								>
+									Cancel
+								</button>
+								<button
+									type="button"
+									className="modal-btn modal-btn--primary"
+									onClick={handleDeleteConfirm}
+									disabled={isSubmitting}
+								>
+									{isSubmitting ? "Deleting…" : "Delete showtime"}
+								</button>
+							</div>
 						</div>
 					</div>
-				</div>
-			)}
+				)}
+			</div>
 		</div>
 	);
 }

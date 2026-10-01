@@ -1,13 +1,8 @@
 // ScheduleManagement.jsx — Admin schedule management
 // Route: "/admin/schedule"
-//
-// Connected to the real backend (Week 3): movies come from GET /api/movies,
-// showtimes from GET /api/showtimes, and Add/Reschedule/Delete call the
-// admin showtime endpoints directly with fetch() (no separate api/ folder —
-// all request logic lives in this file). The pencil icon opens
-// "Reschedule", which PUTs date/time/cinema for that row; the trash icon
-// DELETEs after confirming. The Movie/Date filter controls at the top are
-// still local, client-side filtering over whatever showtimes are loaded.
+
+// Each admin owns one branch, so this page only shows (and only lets the
+// admin pick) cinemas that belong to that branch.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
@@ -20,21 +15,31 @@ import navSchedule from "../../assets/images/dashboard/nav-schedule.svg";
 // Set this to wherever your backend actually runs.
 const API_BASE = "http://localhost:5000/api";
 
+// TEMP: the branch this admin owns. Replace with the logged-in admin's
+// branch_id (USER.branch_id) once the login session is available here.
+// 1 = Vista Mall Taguig, 2 = Market! Market!, 3 = Venice McKinley.
+const ADMIN_BRANCH_ID = 1;
+
 // Placeholder cinema list until a real /api/cinemas (or /api/branches)
 // endpoint exists — that's the Week 3 Search & Filter ticket, not this one.
-// IDs match database/seed.sql exactly, so Add/Reschedule work correctly
-// against a freshly seeded DB.
+// IDs and branch IDs match database/seed.sql exactly, so Add/Reschedule work
+// correctly against a freshly seeded DB.
 const CINEMA_OPTIONS = [
-	{ value: 1, label: "Vista Mall Taguig — Cinema 1" },
-	{ value: 2, label: "Vista Mall Taguig — Cinema 2" },
-	{ value: 3, label: "Vista Mall Taguig — Cinema 3" },
-	{ value: 4, label: "Market! Market! — Cinema 1" },
-	{ value: 5, label: "Market! Market! — Cinema 2" },
-	{ value: 6, label: "Market! Market! — Cinema 3" },
-	{ value: 7, label: "Venice McKinley — Cinema 1" },
-	{ value: 8, label: "Venice McKinley — Cinema 2" },
-	{ value: 9, label: "Venice McKinley — Cinema 3" },
+	{ value: 1, branchId: 1, label: "Cinema 1" },
+	{ value: 2, branchId: 1, label: "Cinema 2" },
+	{ value: 3, branchId: 1, label: "Cinema 3" },
+	{ value: 4, branchId: 2, label: "Cinema 1" },
+	{ value: 5, branchId: 2, label: "Cinema 2" },
+	{ value: 6, branchId: 2, label: "Cinema 3" },
+	{ value: 7, branchId: 3, label: "Cinema 1" },
+	{ value: 8, branchId: 3, label: "Cinema 2" },
+	{ value: 9, branchId: 3, label: "Cinema 3" },
 ];
+
+// Only the cinemas of the admin's own branch.
+const BRANCH_CINEMAS = CINEMA_OPTIONS.filter(
+	(cinema) => cinema.branchId === ADMIN_BRANCH_ID,
+);
 
 // Seat count for newly-added showtimes. Real per-cinema capacity (from the
 // SEAT table) isn't wired up yet — that's a separate ticket — so every new
@@ -163,12 +168,26 @@ const IconWarning = () => (
 	</svg>
 );
 
-// Custom dropdown used in place of a native <select> so the menu always
-// opens directly below the field (a native <select>'s popup position and
-// style are drawn by the OS, not by our CSS — on macOS it centers on the
-// current value instead) and, for movies, can show a poster per option.
-function Dropdown({ options, value, onChange, ariaLabel }) {
+const IconSearch = () => (
+	<svg
+		width="18"
+		height="18"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		strokeWidth="1.8"
+		strokeLinecap="round"
+		strokeLinejoin="round"
+		aria-hidden="true"
+	>
+		<circle cx="11" cy="11" r="7" />
+		<path d="m20 20-3.5-3.5" />
+	</svg>
+);
+
+function Dropdown({ options, value, onChange, ariaLabel, searchable = false }) {
 	const [isOpen, setIsOpen] = useState(false);
+	const [query, setQuery] = useState("");
 	const containerRef = useRef(null);
 
 	useEffect(() => {
@@ -197,6 +216,14 @@ function Dropdown({ options, value, onChange, ariaLabel }) {
 	const selected =
 		options.find((option) => option.value === value) ?? options[0];
 
+	const trimmedQuery = query.trim().toLowerCase();
+	const visibleOptions =
+		searchable && trimmedQuery
+			? options.filter((option) =>
+					option.label.toLowerCase().includes(trimmedQuery),
+				)
+			: options;
+
 	return (
 		<div className="dropdown" ref={containerRef}>
 			<button
@@ -205,7 +232,10 @@ function Dropdown({ options, value, onChange, ariaLabel }) {
 				aria-haspopup="listbox"
 				aria-expanded={isOpen}
 				aria-label={ariaLabel}
-				onClick={() => setIsOpen((open) => !open)}
+				onClick={() => {
+					setQuery("");
+					setIsOpen((open) => !open);
+				}}
 			>
 				<span className="dropdown-trigger-label">
 					{selected?.thumbnail && (
@@ -222,7 +252,28 @@ function Dropdown({ options, value, onChange, ariaLabel }) {
 
 			{isOpen && (
 				<ul className="dropdown-menu" role="listbox">
-					{options.map((option) => (
+					{searchable && (
+						<li
+							className="dropdown-search-wrap"
+							role="presentation"
+						>
+							<div className="schedule-search schedule-search--compact">
+								<IconSearch />
+								<input
+									type="text"
+									className="schedule-search-input"
+									placeholder="Search movies….."
+									value={query}
+									onChange={(event) =>
+										setQuery(event.target.value)
+									}
+									autoFocus
+								/>
+							</div>
+						</li>
+					)}
+
+					{visibleOptions.map((option) => (
 						<li
 							key={option.value}
 							role="option"
@@ -248,10 +299,21 @@ function Dropdown({ options, value, onChange, ariaLabel }) {
 							</button>
 						</li>
 					))}
+
+					{visibleOptions.length === 0 && (
+						<li className="dropdown-empty" role="presentation">
+							No movies found
+						</li>
+					)}
 				</ul>
 			)}
 		</div>
 	);
+}
+
+// Ended movies can't be scheduled, so they're left out of "Add Showtime".
+function isEnded(movie) {
+	return String(movie?.status ?? "").toLowerCase() === "ended";
 }
 
 function findMovie(movies, movieId) {
@@ -278,7 +340,7 @@ function mapShowtime(row) {
 		id: row.showtime_id,
 		movieId: row.movie_id,
 		cinemaId: row.cinema_id,
-		cinemaLabel: `${row.branch_name} — Cinema ${row.cinema_num}`,
+		cinemaLabel: `Cinema ${row.cinema_num}`,
 		datetime: toDatetimeLocal(row.show_date, row.show_time),
 		seatsTotal: row.total_seats,
 		seatsBooked: row.booked_seats,
@@ -336,7 +398,9 @@ async function apiRequest(path, options = {}) {
 		// no JSON body — leave body as null
 	}
 	if (!response.ok) {
-		throw new Error(body?.message || `Request failed with status ${response.status}`);
+		throw new Error(
+			body?.message || `Request failed with status ${response.status}`,
+		);
 	}
 	return body;
 }
@@ -349,6 +413,7 @@ function ScheduleManagement() {
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [formError, setFormError] = useState("");
 
+	const [searchQuery, setSearchQuery] = useState("");
 	const [movieFilter, setMovieFilter] = useState("all");
 	const [dateFilter, setDateFilter] = useState("");
 
@@ -356,13 +421,13 @@ function ScheduleManagement() {
 	const [addForm, setAddForm] = useState({
 		movieId: null,
 		datetime: "",
-		cinemaId: CINEMA_OPTIONS[0].value,
+		cinemaId: BRANCH_CINEMAS[0].value,
 	});
 
 	const [editingId, setEditingId] = useState(null);
 	const [editForm, setEditForm] = useState({
 		datetime: "",
-		cinemaId: CINEMA_OPTIONS[0].value,
+		cinemaId: BRANCH_CINEMAS[0].value,
 	});
 
 	const [deletingId, setDeletingId] = useState(null);
@@ -384,7 +449,11 @@ function ScheduleManagement() {
 				setSchedule(showtimesData.showtimes.map(mapShowtime));
 				setAddForm((form) => ({
 					...form,
-					movieId: form.movieId ?? moviesData.movies[0]?.movie_id ?? null,
+					movieId:
+						form.movieId ??
+						moviesData.movies.find((movie) => !isEnded(movie))
+							?.movie_id ??
+						null,
 				}));
 			} catch (error) {
 				if (!cancelled) setLoadError(error.message);
@@ -410,8 +479,13 @@ function ScheduleManagement() {
 				value: movie.movie_id,
 				label: movie.title,
 				thumbnail: movie.poster,
+				ended: isEnded(movie),
 			})),
 		[movies],
+	);
+	const addMovieOptions = useMemo(
+		() => movieOptions.filter((option) => !option.ended),
+		[movieOptions],
 	);
 	const movieFilterOptions = useMemo(
 		() => [{ value: "all", label: "All Movies" }, ...movieOptions],
@@ -421,9 +495,9 @@ function ScheduleManagement() {
 	const openAddModal = () => {
 		setFormError("");
 		setAddForm({
-			movieId: movies[0]?.movie_id ?? null,
+			movieId: addMovieOptions[0]?.value ?? null,
 			datetime: "",
-			cinemaId: CINEMA_OPTIONS[0].value,
+			cinemaId: BRANCH_CINEMAS[0].value,
 		});
 		setIsAddOpen(true);
 	};
@@ -469,7 +543,9 @@ function ScheduleManagement() {
 		setFormError("");
 		setIsSubmitting(true);
 		try {
-			const { showDate, showTime } = splitDatetimeLocal(editForm.datetime);
+			const { showDate, showTime } = splitDatetimeLocal(
+				editForm.datetime,
+			);
 			await apiRequest(`/admin/showtimes/${editingId}`, {
 				method: "PUT",
 				body: JSON.stringify({
@@ -496,7 +572,9 @@ function ScheduleManagement() {
 		setFormError("");
 		setIsSubmitting(true);
 		try {
-			await apiRequest(`/admin/showtimes/${deletingId}`, { method: "DELETE" });
+			await apiRequest(`/admin/showtimes/${deletingId}`, {
+				method: "DELETE",
+			});
 			await reloadShowtimes();
 			setDeletingId(null);
 		} catch (error) {
@@ -511,14 +589,23 @@ function ScheduleManagement() {
 			? schedule.find((row) => row.id === deletingId)
 			: null;
 
+	// Only this admin's branch, then the Search/Movie/Date filters on top.
+	const searchTerm = searchQuery.trim().toLowerCase();
 	const filteredSchedule = schedule.filter((row) => {
+		const inBranch = BRANCH_CINEMAS.some(
+			(cinema) => cinema.value === row.cinemaId,
+		);
 		const matchesMovie =
 			movieFilter === "all" || row.movieId === movieFilter;
 		const matchesDate = !dateFilter || row.datetime.startsWith(dateFilter);
-		return matchesMovie && matchesDate;
+		const title = findMovie(movies, row.movieId)?.title ?? "";
+		const matchesSearch =
+			!searchTerm || title.toLowerCase().includes(searchTerm);
+		return inBranch && matchesMovie && matchesDate && matchesSearch;
 	});
 
 	const filterSummaryParts = [];
+	if (searchTerm) filterSummaryParts.push(`"${searchQuery.trim()}"`);
 	if (movieFilter !== "all") {
 		const filterMovie = findMovie(movies, movieFilter);
 		if (filterMovie) filterSummaryParts.push(filterMovie.title);
@@ -552,6 +639,22 @@ function ScheduleManagement() {
 				)}
 
 				<section className="schedule-filters" aria-label="Filters">
+					<div className="filter-field filter-field--search">
+						<span>Search</span>
+						<div className="schedule-search">
+							<IconSearch />
+							<input
+								type="text"
+								className="schedule-search-input"
+								placeholder="Search by movie title....."
+								value={searchQuery}
+								onChange={(event) =>
+									setSearchQuery(event.target.value)
+								}
+							/>
+						</div>
+					</div>
+
 					<div className="filter-field">
 						<span>Movie</span>
 						<Dropdown
@@ -577,7 +680,7 @@ function ScheduleManagement() {
 						type="button"
 						className="add-showtime-btn"
 						onClick={openAddModal}
-						disabled={isLoading || movies.length === 0}
+						disabled={isLoading || addMovieOptions.length === 0}
 					>
 						<IconPlus />
 						Add Showtime
@@ -591,6 +694,7 @@ function ScheduleManagement() {
 							type="button"
 							className="schedule-filter-clear"
 							onClick={() => {
+								setSearchQuery("");
 								setMovieFilter("all");
 								setDateFilter("");
 							}}
@@ -621,7 +725,10 @@ function ScheduleManagement() {
 							</thead>
 							<tbody>
 								{filteredSchedule.map((row) => {
-									const movie = findMovie(movies, row.movieId);
+									const movie = findMovie(
+										movies,
+										row.movieId,
+									);
 									const status = getStatus(row);
 									const percent = getOccupancyPercent(row);
 									return (
@@ -637,10 +744,14 @@ function ScheduleManagement() {
 													)}
 													<div>
 														<p className="schedule-movie-title">
-															{movie?.title ?? `Movie #${row.movieId}`}
+															{movie?.title ??
+																`Movie #${row.movieId}`}
 														</p>
 														<p className="schedule-movie-genre">
-															{(movie?.genres || []).join(", ")}
+															{(
+																movie?.genres ||
+																[]
+															).join(", ")}
 														</p>
 													</div>
 												</div>
@@ -729,10 +840,14 @@ function ScheduleManagement() {
 							<div className="modal-field">
 								<span>Movie</span>
 								<Dropdown
-									options={movieOptions}
+									options={addMovieOptions}
+									searchable
 									value={addForm.movieId}
 									onChange={(movieId) =>
-										setAddForm((form) => ({ ...form, movieId }))
+										setAddForm((form) => ({
+											...form,
+											movieId,
+										}))
 									}
 									ariaLabel="Movie"
 								/>
@@ -756,10 +871,13 @@ function ScheduleManagement() {
 							<div className="modal-field">
 								<span>Cinema</span>
 								<Dropdown
-									options={CINEMA_OPTIONS}
+									options={BRANCH_CINEMAS}
 									value={addForm.cinemaId}
 									onChange={(cinemaId) =>
-										setAddForm((form) => ({ ...form, cinemaId }))
+										setAddForm((form) => ({
+											...form,
+											cinemaId,
+										}))
 									}
 									ariaLabel="Cinema"
 								/>
@@ -808,7 +926,8 @@ function ScheduleManagement() {
 							<p className="modal-subtitle">
 								Update the date, time, or cinema for{" "}
 								<strong>
-									{findMovie(movies, editingRow.movieId)?.title ??
+									{findMovie(movies, editingRow.movieId)
+										?.title ??
 										`Movie #${editingRow.movieId}`}
 								</strong>
 								.
@@ -832,10 +951,13 @@ function ScheduleManagement() {
 							<div className="modal-field">
 								<span>Cinema</span>
 								<Dropdown
-									options={CINEMA_OPTIONS}
+									options={BRANCH_CINEMAS}
 									value={editForm.cinemaId}
 									onChange={(cinemaId) =>
-										setEditForm((form) => ({ ...form, cinemaId }))
+										setEditForm((form) => ({
+											...form,
+											cinemaId,
+										}))
 									}
 									ariaLabel="Cinema"
 								/>
@@ -844,8 +966,8 @@ function ScheduleManagement() {
 							<p className="modal-notice">
 								<IconWarning />
 								<span>
-									Rescheduling this will automatically update all
-									reserved tickets. Ticket holders will be
+									Rescheduling this will automatically update
+									all reserved tickets. Ticket holders will be
 									notified via email.
 								</span>
 							</p>
@@ -890,15 +1012,16 @@ function ScheduleManagement() {
 							<p className="modal-subtitle">
 								You're about to delete{" "}
 								<strong>
-									{findMovie(movies, deletingRow.movieId)?.title ??
+									{findMovie(movies, deletingRow.movieId)
+										?.title ??
 										`Movie #${deletingRow.movieId}`}
 								</strong>{" "}
 								on {formatDatetime(deletingRow.datetime)}.
 							</p>
 
 							<p className="modal-warning">
-								This action cannot be undone. Any bookings for this
-								showtime may also be affected.
+								This action cannot be undone. Any bookings for
+								this showtime may also be affected.
 							</p>
 
 							{formError && (
@@ -923,7 +1046,9 @@ function ScheduleManagement() {
 									onClick={handleDeleteConfirm}
 									disabled={isSubmitting}
 								>
-									{isSubmitting ? "Deleting…" : "Delete showtime"}
+									{isSubmitting
+										? "Deleting…"
+										: "Delete showtime"}
 								</button>
 							</div>
 						</div>

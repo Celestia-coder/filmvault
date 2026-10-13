@@ -1,3 +1,9 @@
+-- Run once after schema.sql in an empty development database.
+-- Existing ID references depend on fresh AUTO_INCREMENT sequences.
+-- Use the same timestamp for screening dates, purchase times, and seat holds.
+SET @seed_now = NOW();
+START TRANSACTION;
+
 INSERT INTO GENRE (genre_name)
 VALUES
 ('Action'),
@@ -362,13 +368,85 @@ INSERT INTO SCREENING
 (movie_id, cinema_id, show_date, show_time, total_seats, booked_seats, status)
 VALUES
 -- Insidious: Out of the Further
-(2, 1, '2026-09-18', '10:00:00', 10, 0, 'scheduled'),
+(2, 1, DATE(DATE_ADD(@seed_now, INTERVAL 1 DAY)), '10:00:00', 10, 0, 'scheduled'),
 
 -- Resident Evil
-(6, 1, '2026-09-18', '13:00:00', 10, 0, 'scheduled'),
+(6, 1, DATE(DATE_ADD(@seed_now, INTERVAL 1 DAY)), '13:00:00', 10, 0, 'scheduled'),
 
 -- Saving Cherry
-(8, 1, '2026-09-18', '16:00:00', 10, 0, 'scheduled'),
+(8, 1, DATE(DATE_ADD(@seed_now, INTERVAL 1 DAY)), '16:00:00', 10, 0, 'scheduled'),
 
 -- Life After You
-(9, 1, '2026-09-18', '19:00:00', 10, 0, 'scheduled');
+(9, 1, DATE(DATE_ADD(@seed_now, INTERVAL 1 DAY)), '19:00:00', 10, 0, 'scheduled');
+
+-- Discounts are percentages used by these fixtures, not pricing policy.
+INSERT INTO TICKET_TYPE (type_id, type, ticket_discount)
+VALUES
+(1, 'Regular', 0.00),
+(2, 'Student', 10.00),
+(3, 'Senior', 20.00);
+
+INSERT INTO SNACK (snack_id, snack_name, snack_price)
+VALUES
+(1, 'Popcorn', 120.00),
+(2, 'Soda', 60.00),
+(3, 'Nachos', 100.00);
+
+-- Ariana has two confirmed purchases and a cancellation before ticket issuance.
+-- Mark (user 5) has no purchases, providing an empty-history scenario.
+INSERT INTO TOTAL_PURCHASE
+(purchase_id, user_id, payment_method, total_price, purchase_datetime, status)
+VALUES
+(1, 2, 'card', 905.00, DATE_SUB(@seed_now, INTERVAL 2 DAY), 'confirmed'),
+(2, 2, 'gcash', 280.00, DATE_SUB(@seed_now, INTERVAL 1 DAY), 'confirmed'),
+(3, 3, 'cash', 670.00, DATE_SUB(@seed_now, INTERVAL 6 HOUR), 'confirmed'),
+(4, 4, 'card', 300.00, DATE_SUB(@seed_now, INTERVAL 2 HOUR), 'confirmed'),
+(5, 2, 'gcash', 0.00, DATE_SUB(@seed_now, INTERVAL 1 HOUR), 'cancelled');
+
+-- Every ticket uses a seat in its screening's cinema.
+-- Each reference identifies a ticket; purchase_id groups tickets for checkout.
+INSERT INTO TICKET
+(ticket_id, purchase_id, screening_id, seat_id, type_id, ticket_price, booking_ref)
+VALUES
+(1, 1, 1, 1, 1, 350.00, 'W4-P001-T001'),
+(2, 1, 1, 2, 2, 315.00, 'W4-P001-T002'),
+(3, 2, 2, 1, 3, 280.00, 'W4-P002-T003'),
+(4, 3, 3, 1, 1, 300.00, 'W4-P003-T004'),
+(5, 3, 3, 2, 2, 270.00, 'W4-P003-T005'),
+(6, 4, 3, 3, 3, 240.00, 'W4-P004-T006');
+
+INSERT INTO SNACK_PURCHASE (purchase_id, snack_id, quantity, subtotal)
+VALUES
+(1, 1, 1, 120.00),
+(1, 2, 2, 120.00),
+(3, 3, 1, 100.00),
+(4, 2, 1, 60.00);
+
+-- One availability row for every seat belonging to each screening's cinema.
+INSERT INTO SEATBOOKING (seat_id, screening_id, status, held_until)
+SELECT s.seat_id, sc.screening_id, 'available', NULL
+FROM SCREENING AS sc
+JOIN SEAT AS s ON s.cinema_id = sc.cinema_id;
+
+UPDATE SEATBOOKING AS sb
+JOIN TICKET AS t
+    ON t.screening_id = sb.screening_id AND t.seat_id = sb.seat_id
+SET sb.status = 'booked', sb.held_until = NULL;
+
+-- Active holds block these seats until the hold expires.
+UPDATE SEATBOOKING
+SET status = 'held', held_until = DATE_ADD(@seed_now, INTERVAL 30 MINUTE)
+WHERE (screening_id, seat_id) IN ((1, 3), (2, 2));
+
+-- Intentionally retain expired holds for availability/cleanup testing.
+UPDATE SEATBOOKING
+SET status = 'held', held_until = DATE_SUB(@seed_now, INTERVAL 30 MINUTE)
+WHERE (screening_id, seat_id) IN ((1, 4), (2, 3));
+
+-- Holds do not count as booked seats; all seeded tickets are confirmed.
+UPDATE SCREENING AS sc
+SET booked_seats = (
+    SELECT COUNT(*) FROM TICKET AS t WHERE t.screening_id = sc.screening_id
+);
+
+COMMIT;

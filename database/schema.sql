@@ -90,7 +90,9 @@ CREATE TABLE TOTAL_PURCHASE (
 
     CONSTRAINT fk_total_purchase_user
         FOREIGN KEY (user_id)
-        REFERENCES `USER`(user_id)
+        REFERENCES `USER`(user_id),
+
+    INDEX idx_total_purchase_user_datetime (user_id, purchase_datetime)
 );
 
 CREATE TABLE SCREENING (
@@ -113,7 +115,8 @@ CREATE TABLE SCREENING (
         REFERENCES CINEMA(cinema_id)
         ON DELETE RESTRICT,
 
-    INDEX idx_screening_movie_datetime (movie_id, show_date, show_time)
+    INDEX idx_screening_movie_datetime (movie_id, show_date, show_time),
+    INDEX idx_screening_cinema_datetime (cinema_id, show_date, show_time)
 );
 
 CREATE TABLE SEATBOOKING (
@@ -132,7 +135,9 @@ CREATE TABLE SEATBOOKING (
     CONSTRAINT fk_seatbooking_screening
         FOREIGN KEY (screening_id)
         REFERENCES SCREENING(screening_id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+
+    INDEX idx_seatbooking_screening_status (screening_id, status)
 );
 
 CREATE TABLE MOVIE_GENRE (

@@ -1,6 +1,6 @@
 # Database changelog
 
-## 2026-10-14 - Week 4, Tasks 3-5
+## 2026-10-14 - Week 4
 
 ### Task 3: indexes and constraints
 
@@ -32,8 +32,8 @@
 
 - Added `reset.sql` to drop FilmVault tables in child-before-parent order without
   disabling foreign key checks; rebuild with `schema.sql`, then `seed.sql`.
-- Expanded the README with setup/reset instructions, index purposes, existing
-  delete behavior, seed scenarios, availability semantics, and validation SQL.
+- README documentation was intentionally deferred until all database tasks are
+  completed to avoid conflicts with other database changes.
 - Kept `USER -> TOTAL_PURCHASE -> TICKET` and `SEATBOOKING` availability. No new
   tables or relationship redesigns were introduced.
 

@@ -166,11 +166,6 @@
 	border-color: rgba(255, 255, 255, 0.2);
 }
 
-.branch-option.selected {
-	border-color: var(--color-red);
-	background: rgba(238, 17, 43, 0.1);
-}
-
 .branch-option-left {
 	display: flex;
 	align-items: center;
@@ -233,17 +228,34 @@
 	flex-shrink: 0;
 }
 
-.branch-option.selected .radio-dot {
-	border-color: var(--color-red);
-}
-
 .radio-dot::after {
 	content: "";
 	width: 9px;
 	height: 9px;
 	border-radius: 50%;
-	background: var(--color-red);
+	background: var(--color-white);
 	opacity: 0;
+}
+
+/* Selected state — solid red, same as the selected time slot.
+   Kept after the base rules above so nothing overrides it. */
+.branch-option.selected {
+	background: var(--color-red);
+	border-color: var(--color-red);
+}
+
+.branch-option.selected .branch-icon {
+	background: rgba(255, 255, 255, 0.2);
+	color: var(--color-white);
+}
+
+.branch-option.selected .branch-city,
+.branch-option.selected .branch-hours {
+	color: rgba(255, 255, 255, 0.85);
+}
+
+.branch-option.selected .radio-dot {
+	border-color: var(--color-white);
 }
 
 .branch-option.selected .radio-dot::after {
@@ -315,11 +327,6 @@
 	border-color: rgba(255, 255, 255, 0.2);
 }
 
-.calendar-day.selected {
-	border-color: var(--color-red);
-	background: rgba(238, 17, 43, 0.12);
-}
-
 .calendar-day-name {
 	font-size: 11px;
 	font-weight: 700;
@@ -338,6 +345,17 @@
 	font-weight: 800;
 	letter-spacing: 0.04em;
 	color: var(--color-red);
+}
+
+/* Selected state — solid red, same as the selected time slot. */
+.calendar-day.selected {
+	background: var(--color-red);
+	border-color: var(--color-red);
+}
+
+.calendar-day.selected .calendar-day-name,
+.calendar-day.selected .calendar-day-today {
+	color: rgba(255, 255, 255, 0.85);
 }
 
 /* ---------- Showtime slots ---------- */

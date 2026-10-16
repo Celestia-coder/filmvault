@@ -10,7 +10,10 @@ CREATE TABLE CINEMA (
 
     CONSTRAINT fk_cinema_branch
         FOREIGN KEY (branch_id)
-        REFERENCES BRANCH(branch_id)
+        REFERENCES BRANCH(branch_id),
+
+    CONSTRAINT uq_branch_cinema
+        UNIQUE (branch_id, cinema_num)
 );
 
 CREATE TABLE SEAT (
@@ -25,7 +28,10 @@ CREATE TABLE SEAT (
         REFERENCES CINEMA(cinema_id),
 
     CONSTRAINT uq_seat_position
-        UNIQUE (cinema_id, row_num, seat_num)
+        UNIQUE (cinema_id, row_num, seat_num),
+
+    CONSTRAINT chk_seat_status
+        CHECK (seat_status IN ('active', 'disabled'))
 );
 
 CREATE TABLE GENRE (
@@ -52,7 +58,7 @@ CREATE TABLE SNACK (
 
 CREATE TABLE `USER` (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
-    branch_id INT,
+    branch_id INT NULL,
     role VARCHAR(50) NOT NULL,
     email VARCHAR(150) NOT NULL,
     username VARCHAR(100) NOT NULL,
@@ -87,10 +93,14 @@ CREATE TABLE TOTAL_PURCHASE (
     total_price DECIMAL(10,2) NOT NULL,
     purchase_datetime DATETIME NOT NULL,
     status VARCHAR(50) NOT NULL,
+    reference_code VARCHAR(100) NOT NULL,
 
     CONSTRAINT fk_total_purchase_user
         FOREIGN KEY (user_id)
         REFERENCES `USER`(user_id),
+
+    CONSTRAINT uq_purchase_reference
+        UNIQUE (reference_code),
 
     INDEX idx_total_purchase_user_datetime (user_id, purchase_datetime)
 );
@@ -123,9 +133,13 @@ CREATE TABLE SEATBOOKING (
     seat_id INT NOT NULL,
     screening_id INT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'available',
-    held_until DATETIME,
+    held_until DATETIME NULL,
+    held_by INT NULL,
 
     PRIMARY KEY (seat_id, screening_id),
+
+    INDEX idx_seatbooking_screening_status
+        (screening_id, status),
 
     CONSTRAINT fk_seatbooking_seat
         FOREIGN KEY (seat_id)
@@ -137,7 +151,13 @@ CREATE TABLE SEATBOOKING (
         REFERENCES SCREENING(screening_id)
         ON DELETE CASCADE,
 
-    INDEX idx_seatbooking_screening_status (screening_id, status)
+    CONSTRAINT fk_seatbooking_user
+        FOREIGN KEY (held_by)
+        REFERENCES `USER`(user_id)
+        ON DELETE SET NULL,
+
+    CONSTRAINT chk_seatbooking_status
+        CHECK (status IN ('available', 'held', 'booked', 'blocked'))
 );
 
 CREATE TABLE MOVIE_GENRE (
@@ -213,5 +233,8 @@ CREATE TABLE TICKET (
         REFERENCES TICKET_TYPE(type_id),
 
     CONSTRAINT uq_ticket_screening_seat
-        UNIQUE (screening_id, seat_id)
+        UNIQUE (screening_id, seat_id),
+
+    INDEX idx_ticket_purchase (purchase_id),
+    INDEX idx_ticket_screening (screening_id)
 );

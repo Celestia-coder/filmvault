@@ -80,8 +80,10 @@ const createMovie = async (req, res) => {
     });
   }
 
-  const conn = await pool.getConnection();
+  let conn;
   try {
+    conn = await pool.getConnection();
+
     const [genreRows] = await conn.query(
       "SELECT genre_id, genre_name FROM GENRE WHERE genre_name IN (?)",
       [genres]
@@ -115,11 +117,11 @@ const createMovie = async (req, res) => {
       movie: { movieId, title, director, status, genres },
     });
   } catch (error) {
-    await conn.rollback();
+    if (conn) await conn.rollback();
     console.error("createMovie error:", error);
     return res.status(500).json({ success: false, message: "Failed to create movie." });
   } finally {
-    conn.release();
+    if (conn) conn.release();
   }
 };
 
@@ -155,8 +157,10 @@ const updateMovie = async (req, res) => {
     });
   }
 
-  const conn = await pool.getConnection();
+  let conn;
   try {
+    conn = await pool.getConnection();
+
     const [existing] = await conn.query("SELECT movie_id FROM MOVIE WHERE movie_id = ?", [id]);
     if (existing.length === 0) {
       return res.status(404).json({ success: false, message: "Movie not found." });
@@ -196,22 +200,22 @@ const updateMovie = async (req, res) => {
       movie: { movieId: id, title, director, status, genres },
     });
   } catch (error) {
-    await conn.rollback();
+    if (conn) await conn.rollback();
     console.error("updateMovie error:", error);
     return res.status(500).json({ success: false, message: "Failed to update movie." });
   } finally {
-    conn.release();
+    if (conn) conn.release();
   }
 };
 
 // DELETE /api/admin/movies/:id
 //
 // Decision (documented per Week 3 checklist): deletion is BLOCKED if the movie
-// has any existing showtimes, rather than cascading or leaving them orphaned.
-// Rationale: a showtime pointing at a deleted movie would break the Showtime
-// Selection and Booking pages downstream. Admin must remove/reassign the
-// movie's showtimes first. Revisit this with Database/QA if a cascade or
-// "archive instead of delete" approach is preferred later.
+// has any existing showtimes (rows in SCREENING), rather than cascading or
+// leaving them orphaned. SCREENING is ON DELETE CASCADE from MOVIE, so without
+// this check, deleting a movie would silently wipe its showtimes and seat
+// data. Admin must remove the movie's showtimes first. Revisit with
+// Database/QA if an "archive instead of delete" approach is preferred later.
 const deleteMovie = async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
@@ -235,8 +239,10 @@ const deleteMovie = async (req, res) => {
       });
     }
 
-    // MOVIE_GENRE rows for this movie are cleaned up first to avoid an FK constraint error.
+    // MOVIE_GENRE and MOVIE_CAST have no ON DELETE CASCADE, so clear them first
+    // to avoid a foreign key error.
     await pool.query("DELETE FROM MOVIE_GENRE WHERE movie_id = ?", [id]);
+    await pool.query("DELETE FROM MOVIE_CAST WHERE movie_id = ?", [id]);
     await pool.query("DELETE FROM MOVIE WHERE movie_id = ?", [id]);
 
     return res.status(200).json({ success: true, message: "Movie deleted." });

@@ -367,6 +367,7 @@ function SignUp() {
     });
 
     const [errors, setErrors] = useState({});
+    const [submitError, setSubmitError] = useState("");
     const photoInputRef = useRef(null);
 
     const set = (field) => (e) => {
@@ -535,8 +536,40 @@ function SignUp() {
         }
     };
 
+    const handleCreateAccount = async () => {
+        setSubmitError("");
+
+        try {
+            const res = await fetch("http://localhost:5000/api/auth/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    firstName: form.firstName.trim(),
+                    lastName: form.lastName.trim(),
+                    email: form.email.trim(),
+                    password: form.password,
+                    username: form.displayName.trim(),
+                    phoneNum: form.phone
+                        ? PH_COUNTRY_CODE + form.phone.replace(/\s/g, "")
+                        : null,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+
+            if (res.ok && data.success) {
+                setErrors({});
+                setStep(4);
+            } else {
+                setSubmitError(data.message || "Sign up failed.");
+            }
+        } catch (err) {
+            console.error("Signup request failed:", err);
+            setSubmitError("Unable to reach the server. Please try again.");
+        }
+    };
+
     /* ------------------------------------------------------------ */
-    /* Step 4 — success screen                                      */
+    /* Step 4 — success screen                                    */
     /* ------------------------------------------------------------ */
 
     if (step === 4) {
@@ -1163,10 +1196,8 @@ function SignUp() {
                                     setErrors({});
                                     setStep(targetStep);
                                 }}
-                                onSuccess={() => {
-                                    setErrors({});
-                                    setStep(4);
-                                }}
+                                submitError={submitError}
+                                onSuccess={handleCreateAccount}
                             />
                         )}
                     </div>

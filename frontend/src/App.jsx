@@ -8,6 +8,7 @@ import Movies from "./pages/client/Movies.jsx";
 import MovieDetails from "./pages/client/MovieDetails.jsx";
 import Branches from "./pages/client/Branches.jsx";
 import ShowtimeSelection from "./pages/client/ShowtimeSelection.jsx";
+import SeatSelection from "./pages/client/SeatSelection.jsx";
 
 {/* ADMIN SIDE */}
 import AdminLogin from "./pages/client/AdminLogin.jsx";
@@ -26,6 +27,7 @@ function App() {
 			<Route path="/movies/:movieId" element={<MovieDetails />} />
 			<Route path="/cinemas" element={<Branches />} />
 			<Route path="/booking/:movieId" element={<ShowtimeSelection />} />
+			<Route path="/booking/:movieId/seats" element={<SeatSelection />} />
 
 			{/* ADMIN SIDE */}
 			<Route path="/admin/login" element={<AdminLogin />} />

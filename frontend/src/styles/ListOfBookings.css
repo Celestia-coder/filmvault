@@ -444,7 +444,7 @@
 }
 
 .status-pill--pending {
-	background-color: rgba(224, 167, 43, 0.18);
+	background-color: rgba(245, 166, 35, 0.18);
 	color: var(--color-yellow);
 }
 
@@ -474,7 +474,7 @@
 	padding: 28px;
 	border-radius: 12px;
 	border: 1px solid rgba(255, 255, 255, 0.12);
-	background-color: var(--color-bg-dark2);
+	background-color: var(--color-surface);
 }
 
 .modal-card h2 {
@@ -502,6 +502,7 @@
 	gap: 12px;
 	margin-top: 20px;
 	padding: 12px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
 	border-radius: 10px;
 	background-color: var(--color-surface);
 	font-size: 14px;

@@ -435,14 +435,15 @@ INSERT INTO TOTAL_PURCHASE (
     payment_method,
     total_price,
     purchase_datetime,
-    status
+    status,
+    reference_code
 )
 VALUES
-    (1, 2, 'card', 905.00, DATE_SUB(@seed_now, INTERVAL 2 DAY), 'confirmed'),
-    (2, 2, 'gcash', 280.00, DATE_SUB(@seed_now, INTERVAL 1 DAY), 'confirmed'),
-    (3, 3, 'cash', 670.00, DATE_SUB(@seed_now, INTERVAL 6 HOUR), 'confirmed'),
-    (4, 4, 'card', 300.00, DATE_SUB(@seed_now, INTERVAL 2 HOUR), 'confirmed'),
-    (5, 2, 'gcash', 0.00, DATE_SUB(@seed_now, INTERVAL 1 HOUR), 'cancelled');
+    (1, 2, 'card', 905.00, DATE_SUB(@seed_now, INTERVAL 2 DAY), 'confirmed', 'W4-P001'),
+    (2, 2, 'gcash', 280.00, DATE_SUB(@seed_now, INTERVAL 1 DAY), 'confirmed', 'W4-P002'),
+    (3, 3, 'cash', 670.00, DATE_SUB(@seed_now, INTERVAL 6 HOUR), 'confirmed', 'W4-P003'),
+    (4, 4, 'card', 300.00, DATE_SUB(@seed_now, INTERVAL 2 HOUR), 'confirmed', 'W4-P004'),
+    (5, 2, 'gcash', 0.00, DATE_SUB(@seed_now, INTERVAL 1 HOUR), 'cancelled', 'W4-P005');
 
 -- Every ticket uses a seat in its screening's cinema.
 -- Each reference identifies a ticket; purchase_id groups tickets for checkout.
@@ -514,7 +515,8 @@ SET booked_seats = (
     SELECT COUNT(*)
     FROM TICKET AS t
     WHERE t.screening_id = sc.screening_id
-);
+)
+WHERE sc.screening_id IN (1, 2, 3, 4);
 
 COMMIT;
 

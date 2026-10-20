@@ -1,8 +1,8 @@
 // Navbar.jsx
 // '../../components/Navbar';
 
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import searchIcon from "../assets/images/icons/search-icon.png";
 import profileIcon from "../assets/images/icons/profile-icon.png";
 import "../styles/Navbar.css";
@@ -15,14 +15,28 @@ function isLoggedIn() {
 
 function Navbar() {
 	const navigate = useNavigate();
-	const [searchOpen, setSearchOpen] = useState(false);
-	const [searchValue, setSearchValue] = useState("");
+	const { pathname } = useLocation();
+	const [searchParams] = useSearchParams();
+
+	// Active movie search lives in the URL (/movies?title=...), so start open with it
+	const activeTitle = pathname === "/movies" ? searchParams.get("title") ?? "" : "";
+	const [searchOpen, setSearchOpen] = useState(Boolean(activeTitle));
+	const [searchValue, setSearchValue] = useState(activeTitle);
 	const searchInputRef = useRef(null);
 	const searchWrapperRef = useRef(null);
 
-	const closeSearch = () => {
+	const closeSearch = useCallback(() => {
 		setSearchOpen(false);
 		setSearchValue("");
+		// Drop an active search so the grid shows every movie again
+		if (activeTitle) navigate("/movies");
+	}, [activeTitle, navigate]);
+
+	// Enter runs the search on the movies grid
+	const handleSearchSubmit = (event) => {
+		event.preventDefault();
+		const title = searchValue.trim();
+		navigate(title ? `/movies?title=${encodeURIComponent(title)}` : "/movies");
 	};
 
 	const handleSearchToggle = () => {
@@ -53,7 +67,8 @@ function Navbar() {
 		const handleClickOutside = (event) => {
 			if (
 				searchWrapperRef.current &&
-				!searchWrapperRef.current.contains(event.target)
+				!searchWrapperRef.current.contains(event.target) &&
+				!searchValue.trim()
 			) {
 				closeSearch();
 			}
@@ -63,7 +78,7 @@ function Navbar() {
 		return () => {
 			document.removeEventListener("mousedown", handleClickOutside);
 		};
-	}, [searchOpen]);
+	}, [searchOpen, searchValue, closeSearch]);
 
 	return (
 		<nav className="navbar">
@@ -80,7 +95,7 @@ function Navbar() {
 			<div className="navbar-icons">
 				<div className="navbar-search-wrapper" ref={searchWrapperRef}>
 					{searchOpen ? (
-						<div className="navbar-search navbar-search--open">
+						<form className="navbar-search navbar-search--open" onSubmit={handleSearchSubmit}>
 							<button
 								type="button"
 								className="navbar-search-icon-btn"
@@ -93,7 +108,7 @@ function Navbar() {
 								ref={searchInputRef}
 								type="text"
 								className="navbar-search-input"
-								placeholder="Search"
+								placeholder="Search movies"
 								value={searchValue}
 								onChange={(event) => setSearchValue(event.target.value)}
 							/>
@@ -105,7 +120,7 @@ function Navbar() {
 							>
 								×
 							</button>
-						</div>
+						</form>
 					) : (
 						<button
 							type="button"

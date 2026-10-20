@@ -2,6 +2,7 @@
 // Public + admin movie logic (routes decide which is which).
 
 const pool = require("../config/database");
+const { parseStatusFilter } = require("../utils/statusFilter");
 
 const VALID_STATUSES = ["upcoming", "now-showing", "ended"];
 
@@ -18,11 +19,19 @@ const formatMovie = (row) => ({
   genres: row.genres ? row.genres.split(",") : [],
 });
 
-// GET /api/movies
+// GET /api/movies?status=now-showing,upcoming  (status is optional)
 const getAllMovies = async (req, res) => {
+  const { statuses, error } = parseStatusFilter(req.query.status);
+  if (error) {
+    return res.status(400).json({ success: false, message: error });
+  }
+
+  const where = statuses.length ? "WHERE m.status IN (?)" : "";
+
   try {
     const [rows] = await pool.query(
-      `${MOVIE_SELECT} GROUP BY m.movie_id ORDER BY m.movie_id`
+      `${MOVIE_SELECT} ${where} GROUP BY m.movie_id ORDER BY m.movie_id`,
+      statuses.length ? [statuses] : []
     );
     return res.status(200).json({ success: true, movies: rows.map(formatMovie) });
   } catch (error) {
@@ -46,7 +55,21 @@ const getMovieById = async (req, res) => {
     if (rows.length === 0) {
       return res.status(404).json({ success: false, message: "Movie not found." });
     }
-    return res.status(200).json({ success: true, movie: formatMovie(rows[0]) });
+
+    // Cast lives in a separate many-to-many table (CAST is a reserved word, hence the backticks).
+    const [castRows] = await pool.query(
+      `SELECT c.cast_name
+       FROM MOVIE_CAST mc
+       JOIN \`CAST\` c ON c.cast_id = mc.cast_id
+       WHERE mc.movie_id = ?
+       ORDER BY c.cast_id`,
+      [id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      movie: { ...formatMovie(rows[0]), cast: castRows.map((r) => r.cast_name) },
+    });
   } catch (error) {
     console.error("getMovieById error:", error);
     return res.status(500).json({ success: false, message: "Failed to fetch movie." });

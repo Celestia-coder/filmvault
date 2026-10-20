@@ -11,6 +11,7 @@
 // Train Your Dragon").
 
 const pool = require("../config/database");
+const { parseStatusFilter } = require("../utils/statusFilter");
 
 // Same base query/formatter as movieController.js, so search results have
 // the identical shape (genres collapsed into an array) as GET /api/movies.
@@ -26,11 +27,21 @@ const formatMovie = (row) => ({
   genres: row.genres ? row.genres.split(",") : [],
 });
 
-// GET /api/movies/search?title=&genre=&branch=
+// GET /api/movies/search?title=&genre=&branch=&status=
 const searchMovies = async (req, res) => {
   const { title, genre, branch } = req.query;
+  const { statuses, error: statusError } = parseStatusFilter(req.query.status);
+  if (statusError) {
+    return res.status(400).json({ success: false, message: statusError });
+  }
+
   const conditions = [];
   const params = [];
+
+  if (statuses.length) {
+    conditions.push("m.status IN (?)");
+    params.push(statuses);
+  }
 
   if (title) {
     conditions.push("LOWER(m.title) LIKE LOWER(?)");

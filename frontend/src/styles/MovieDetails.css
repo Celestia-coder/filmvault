@@ -245,8 +245,8 @@
 }
 
 .cast-actor {
-	font-size: 14px;
-	font-weight: 700;
+	font-size: 13px;
+	font-weight: 0;
 	color: var(--color-white);
 }
 
@@ -365,5 +365,103 @@
 
 	.movie-actions-hint {
 		order: 3;
+	}
+}
+/* ---------- Loading / not-found actions ---------- */
+
+.movie-not-found .movie-actions {
+	justify-content: center;
+}
+
+.movie-not-found.is-loading .status-dot {
+	animation: movie-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes movie-pulse {
+	50% {
+		opacity: 0.3;
+	}
+}
+
+/* ---------- Showtimes ---------- */
+
+.movie-details > .movie-section:last-child {
+	margin-top: 32px;
+}
+
+.showtimes-note {
+	font-size: 14px;
+	color: var(--color-text-muted);
+	margin: 0;
+}
+
+.showtime-branch {
+	margin-bottom: 22px;
+}
+
+.showtime-branch-name {
+	font-size: 16px;
+	font-weight: 700;
+	margin: 0 0 10px;
+}
+
+.showtime-day {
+	display: flex;
+	align-items: flex-start;
+	gap: 16px;
+	margin-bottom: 10px;
+}
+
+.showtime-date {
+	flex: 0 0 110px;
+	padding-top: 10px;
+	font-size: 13px;
+	color: var(--color-text-muted);
+}
+
+.showtime-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.showtime-chip {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: 8px 14px;
+	border-radius: 10px;
+	border: 1px solid var(--movie-border);
+	background: rgba(255, 255, 255, 0.03);
+	color: var(--color-white);
+	text-decoration: none;
+}
+
+a.showtime-chip:hover {
+	border-color: var(--color-red);
+}
+
+.showtime-chip.is-soldout {
+	opacity: 0.45;
+}
+
+.showtime-time {
+	font-size: 14px;
+	font-weight: 700;
+}
+
+.showtime-meta {
+	font-size: 11px;
+	color: var(--color-text-muted);
+}
+
+@media (max-width: 520px) {
+	.showtime-day {
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	.showtime-date {
+		padding-top: 0;
 	}
 }

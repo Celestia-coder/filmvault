@@ -100,12 +100,6 @@ function FeatureCard({ icon, title, desc }) {
   );
 }
 
-// Mock auth
-const MOCK_CLIENT_ACCOUNT = {
-  email: "juan@example.com",
-  password: "password123",
-};
-
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -122,15 +116,27 @@ function Login() {
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus(null);
     if (!validate()) return;
 
-    if (email === MOCK_CLIENT_ACCOUNT.email && password === MOCK_CLIENT_ACCOUNT.password) {
-      setStatus({ type: "success", message: "Login successful! Redirecting to your account..." });
-    } else {
-      setStatus({ type: "error", message: "Invalid email or password." });
+    try {
+      const res = await fetch("http://localhost:5000/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
+        setStatus({ type: "success", message: data.message || "Login successful!" });
+      } else {
+        setStatus({ type: "error", message: data.message || "Login failed." });
+      }
+    } catch (err) {
+      console.error("Login request failed:", err);
+      setStatus({ type: "error", message: "Unable to reach the server. Please try again." });
     }
   };
 

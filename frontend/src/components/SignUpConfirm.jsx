@@ -16,7 +16,7 @@ const RESEND_SECONDS = 60;
  *  onEdit      (stepNumber) => void — jump to Step 1 or 2 to fix a field
  *  onSuccess   (payload) => void   — all checks passed, advance to Step 4
  */
-export default function SignUpConfirm({ formData = {}, onBack, onEdit, onSuccess }) {
+export default function SignUpConfirm({ formData = {}, submitError, onBack, onEdit, onSuccess }) {
   const [code, setCode] = useState(() => Array(CODE_LENGTH).fill(""));
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [emailPromos, setEmailPromos] = useState(false);
@@ -336,6 +336,12 @@ export default function SignUpConfirm({ formData = {}, onBack, onEdit, onSuccess
             </p>
           )}
         </div>
+
+        {submitError && (
+          <p className="field-error" role="alert">
+            {submitError}
+          </p>
+        )}
 
         <div className="confirm__actions">
           <button type="button" className="btn btn--ghost" onClick={onBack}>

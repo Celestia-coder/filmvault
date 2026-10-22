@@ -655,3 +655,83 @@
 		margin-bottom: 6px;
 	}
 }
+
+/* Append to the bottom of ScheduleManagement.css */
+
+/* Search bar — same look as .movie-search in Movie Management */
+.schedule-search {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: 1 1 320px;
+	min-width: 240px;
+	height: 44px;
+	padding: 0 14px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	background-color: var(--color-surface);
+	color: var(--color-text-muted);
+}
+
+/* The focus highlight goes on the whole bar, not on the input inside it. */
+.schedule-search:focus-within {
+	border-color: var(--color-primary, #e50914);
+}
+
+.schedule-search .schedule-search-input,
+.schedule-search .schedule-search-input:focus,
+.schedule-search .schedule-search-input:focus-visible {
+	flex: 1;
+	min-width: 0;
+	width: auto;
+	height: 100%;
+	margin: 0;
+	padding: 0 !important;
+	border: 0 !important;
+	border-radius: 0 !important;
+	outline: none !important;
+	box-shadow: none !important;
+	background: transparent !important;
+	color: var(--color-text, #fff);
+	font: inherit;
+}
+
+.schedule-search .schedule-search-input::placeholder {
+	color: var(--color-text-muted);
+}
+
+/* In the filters row the wrapper grows, and the bar fills it. */
+.filter-field--search {
+	flex: 1 1 320px;
+	min-width: 240px;
+}
+
+.filter-field--search .schedule-search {
+	flex: none;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+/* Search box at the top of the "Add showtime" movie dropdown:
+   normal flow (not sticky), with a divider under it. */
+.dropdown-search-wrap {
+	position: relative;
+	list-style: none;
+	padding: 8px;
+	margin-bottom: 4px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.schedule-search--compact {
+	flex: none;
+	width: 100%;
+	min-width: 0;
+	height: 38px;
+	box-sizing: border-box;
+}
+
+.dropdown-empty {
+	padding: 12px 16px;
+	opacity: 0.6;
+	list-style: none;
+}

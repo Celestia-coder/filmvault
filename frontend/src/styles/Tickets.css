@@ -1,0 +1,306 @@
+/* ===== Tickets / My Bookings page ===== */
+
+.tickets-page {
+  --fv-bg: #141414;
+  --fv-card: #1e1e1e;
+  --fv-card-border: #2c2c2c;
+  --fv-red: #e50914;
+  --fv-red-hover: #ff1f2b;
+  --fv-text: #ffffff;
+  --fv-muted: #b3b3b3;
+
+  min-height: 100vh;
+  background: var(--fv-bg);
+  color: var(--fv-text);
+  /* Navbar is position:absolute and ~114px tall, so clear it */
+  padding: 150px 16px 80px;
+  font-family: "Poppins", system-ui, sans-serif;
+}
+
+/* ---- Header ---- */
+.tickets-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.tickets-header h1 {
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+
+.tickets-header p {
+  color: var(--fv-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+/* ---- Tabs ---- */
+.tickets-tabs {
+  display: flex;
+  max-width: 720px;
+  margin: 0 auto 28px;
+}
+
+.tickets-tab {
+  flex: 1;
+  background: none;
+  border: none;
+  border-bottom: 2px solid #3a3a3a;
+  color: var(--fv-text);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 10px 8px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.tickets-tab:hover {
+  color: var(--fv-red-hover);
+}
+
+.tickets-tab.is-active {
+  color: var(--fv-red);
+  border-bottom-color: var(--fv-red);
+}
+
+.tickets-tab:focus-visible {
+  outline: 2px solid var(--fv-red);
+  outline-offset: 2px;
+}
+
+/* ---- Search ---- */
+.tickets-search {
+  display: flex;
+  max-width: 460px;
+  margin: 0 auto 36px;
+}
+
+.tickets-search-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1.5px solid var(--fv-red);
+  border-right: none;
+  border-radius: 6px 0 0 6px;
+  padding: 0 12px;
+  color: var(--fv-red);
+  background: transparent;
+}
+
+.tickets-search-field input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--fv-text);
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 10px 0;
+}
+
+.tickets-search-field input::placeholder {
+  color: var(--fv-muted);
+}
+
+.tickets-search-field:focus-within {
+  box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.35);
+}
+
+.tickets-search-btn {
+  background: var(--fv-red);
+  color: #fff;
+  border: none;
+  border-radius: 0 6px 6px 0;
+  padding: 0 24px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.tickets-search-btn:hover {
+  background: var(--fv-red-hover);
+}
+
+.tickets-search-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ---- Bookings list ---- */
+.bookings-list {
+  list-style: none;
+  margin: 0 auto;
+  padding: 0;
+  max-width: 980px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.booking-card {
+  display: flex;
+  align-items: stretch;
+  gap: 18px;
+  background: var(--fv-card);
+  border: 1px solid var(--fv-card-border);
+  border-radius: 8px;
+  padding: 10px 18px 10px 10px;
+  animation: fv-fade-in 0.3s ease both;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.booking-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(229, 9, 20, 0.5);
+}
+
+.booking-poster {
+  width: 80px;
+  height: 120px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: #2a2a2a;
+}
+
+.booking-poster--placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--fv-muted);
+  font-size: 0.7rem;
+  text-align: center;
+  padding: 4px;
+}
+
+.booking-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.booking-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 2px 0 2px;
+}
+
+.booking-runtime,
+.booking-showtime,
+.booking-ref {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--fv-muted);
+}
+
+.booking-ref {
+  font-size: 0.72rem;
+  opacity: 0.75;
+  margin-bottom: 2px;
+}
+
+.booking-showtime {
+  color: var(--fv-text);
+}
+
+.booking-meta {
+  text-align: right;
+  font-size: 0.82rem;
+  color: var(--fv-muted);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.booking-meta p {
+  margin: 0;
+}
+
+.booking-price {
+  color: var(--fv-text);
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-bottom: 4px !important;
+}
+
+.bookings-empty {
+  max-width: 980px;
+  margin: 0 auto;
+  text-align: center;
+  color: var(--fv-muted);
+  padding: 48px 16px;
+  border: 1px dashed var(--fv-card-border);
+  border-radius: 8px;
+}
+
+/* ---- Utilities ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@keyframes fv-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 640px) {
+  .tickets-tab {
+    font-size: 0.8rem;
+  }
+
+  .booking-card {
+    flex-wrap: wrap;
+    padding: 10px;
+  }
+
+  .booking-poster {
+    width: 70px;
+    height: 105px;
+  }
+
+  .booking-meta {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    text-align: left;
+    border-top: 1px solid var(--fv-card-border);
+    padding-top: 8px;
+    gap: 4px 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .booking-card,
+  .tickets-tab,
+  .tickets-search-btn {
+    animation: none;
+    transition: none;
+  }
+  .booking-card:hover {
+    transform: none;
+  }
+}

@@ -1,6 +1,7 @@
 // Route: "/booking/:movieId/seats" — reached from ShowtimeSelection's
 // "Continue to Seats" button, which passes branch/date/showtime via
 // route state.
+
 import { useState, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
@@ -45,9 +46,6 @@ const IconLock = (props) => (
   </svg>
 );
 
-/* ---------------------------------------------------------------- */
-/* Data — hardcoded seat map             */
-/* ---------------------------------------------------------------- */
 const ROWS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const LEFT_SEATS = [1, 2, 3, 4, 5];
 const RIGHT_SEATS = [6, 7, 8, 9, 10];
@@ -65,9 +63,26 @@ function formatSidebarDate(date) {
   return `${DAY_NAMES[d.getDay()]}, ${MONTH_ABBR[d.getMonth()]} ${d.getDate()}`;
 }
 
-/* ---------------------------------------------------------------- */
-/* Page                                                              */
-/* ---------------------------------------------------------------- */
+function SeatButton({ seatId, number, status, isSelected, onToggle }) {
+  const isReserved = status === "reserved";
+
+  return (
+    <button
+      type="button"
+      className={
+        `seat-circle seat-circle--${status}` + (isSelected ? " is-selected" : "")
+      }
+      disabled={isReserved}
+      aria-pressed={isSelected}
+      aria-label={`Seat ${seatId}, ${isSelected ? "selected" : status}`}
+      title={`${seatId} · ${isReserved ? "Reserved" : "Available"}`}
+      onClick={() => onToggle(seatId)}
+    >
+      {number}
+    </button>
+  );
+}
+
 function SeatSelection() {
   const { movieId } = useParams();
   const navigate = useNavigate();
@@ -84,11 +99,9 @@ function SeatSelection() {
   const [selectedSeats, setSelectedSeats] = useState([]); 
 
   const handleDecreaseTickets = () => {
-    setTicketCount((prev) => {
-      const next = Math.max(MIN_TICKETS, prev - 1);
-      setSelectedSeats((seats) => seats.slice(0, next));
-      return next;
-    });
+    const next = Math.max(MIN_TICKETS, ticketCount - 1);
+    setTicketCount(next);
+    setSelectedSeats((seats) => seats.slice(0, next));
   };
 
   const handleIncreaseTickets = () => {
@@ -117,6 +130,7 @@ function SeatSelection() {
 
   const handleCheckout = () => {
     if (!canCheckout) return;
+
     navigate(`/booking/${movieId}/checkout`, {
       state: {
         movieId,
@@ -128,6 +142,20 @@ function SeatSelection() {
         selectedSeats: sortedSelectedSeats,
       },
     });
+  };
+
+  const renderSeat = (row, number) => {
+    const seatId = `${row}${number}`;
+    return (
+      <SeatButton
+        key={seatId}
+        seatId={seatId}
+        number={number}
+        status={RESERVED_SEATS.has(seatId) ? "reserved" : "available"}
+        isSelected={selectedSeats.includes(seatId)}
+        onToggle={toggleSeat}
+      />
+    );
   };
 
   return (
@@ -142,7 +170,7 @@ function SeatSelection() {
             <h1 className="seat-heading">Select Your Seats</h1>
             <p className="seat-subtext">Choose the seat you'd like to watch the movie.</p>
           </div>
-          <button type="button" className="btn-back-top" onClick={() => navigate(-1)}>
+          <button type="button" className="seat-btn-back" onClick={() => navigate(-1)}>
             ← Back
           </button>
         </div>
@@ -150,30 +178,35 @@ function SeatSelection() {
         <div className="seat-layout">
           <div className="seat-main">
             {/* Tickets */}
-            <div className="step-card">
-              <div className="step-header">
-                <span className="step-icon"><IconTicket /></span>
-                <p className="step-title">TICKETS</p>
-              </div>
-              <div className="ticket-stepper-row">
+            <section className="seat-panel" aria-label="Tickets">
+              <header className="seat-panel-head">
+                <span className="seat-panel-icon">
+                  <IconTicket width={20} height={20} />
+                </span>
+                <h3 className="seat-panel-title">TICKETS</h3>
+              </header>
+
+              <div className="seat-panel-body seat-ticket-row">
                 <div>
-                  <p className="ticket-label">Number of tickets</p>
-                  <p className="ticket-sublabel">Maximum {MAX_TICKETS} tickets per booking</p>
+                  <p className="seat-ticket-label">Number of tickets</p>
+                  <p className="seat-ticket-sublabel">
+                    Maximum {MAX_TICKETS} tickets per booking
+                  </p>
                 </div>
-                <div className="ticket-stepper">
+                <div className="seat-stepper">
                   <button
                     type="button"
-                    className="stepper-btn"
+                    className="seat-stepper-btn"
                     onClick={handleDecreaseTickets}
                     disabled={ticketCount <= MIN_TICKETS}
                     aria-label="Decrease tickets"
                   >
                     −
                   </button>
-                  <span className="stepper-value">{ticketCount}</span>
+                  <span className="seat-stepper-value">{ticketCount}</span>
                   <button
                     type="button"
-                    className="stepper-btn"
+                    className="seat-stepper-btn"
                     onClick={handleIncreaseTickets}
                     disabled={ticketCount >= MAX_TICKETS}
                     aria-label="Increase tickets"
@@ -182,161 +215,141 @@ function SeatSelection() {
                   </button>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* Seat map */}
-            <div className="step-card">
-              <div className="step-header">
-                <span className="step-icon"><IconTicket /></span>
-                <p className="step-title">SELECT SEATS</p>
-              </div>
-
-              <div className="seat-legend">
-                <span className="legend-item">
-                  <span className="legend-dot legend-available"></span> Available
+            <section className="seat-panel" aria-label="Seat map">
+              <header className="seat-panel-head">
+                <span className="seat-panel-icon">
+                  <IconTicket width={20} height={20} />
                 </span>
-                <span className="legend-item">
-                  <span className="legend-dot legend-reserved"></span> Reserved
-                </span>
-                <span className="legend-item">
-                  <span className="legend-dot legend-selected"></span> Selected
-                </span>
-              </div>
+                <h3 className="seat-panel-title">SELECT SEATS</h3>
+              </header>
 
-              <div className="screen-bar"></div>
-              <p className="screen-label">SCREEN</p>
+              <ul className="seat-legend">
+                <li>
+                  <span className="seat-circle seat-circle--available seat-legend-swatch" />
+                  Available
+                </li>
+                <li>
+                  <span className="seat-circle seat-circle--reserved seat-legend-swatch" />
+                  Reserved
+                </li>
+                <li>
+                  <span className="seat-circle seat-circle--available is-selected seat-legend-swatch" />
+                  Selected
+                </li>
+              </ul>
 
-              <div className="seat-grid">
-                {ROWS.map((row) => (
-                  <div className="seat-row" key={row}>
-                    <span className="row-label">{row}</span>
-
-                    <div className="seat-block">
-                      {LEFT_SEATS.map((num) => {
-                        const seatId = `${row}${num}`;
-                        const isReserved = RESERVED_SEATS.has(seatId);
-                        const isSelected = selectedSeats.includes(seatId);
-                        return (
-                          <button
-                            type="button"
-                            key={seatId}
-                            className={
-                              "seat-btn" +
-                              (isReserved ? " reserved" : "") +
-                              (isSelected ? " selected" : "")
-                            }
-                            disabled={isReserved}
-                            onClick={() => toggleSeat(seatId)}
-                            aria-label={`Seat ${seatId}`}
-                          >
-                            {num}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="seat-block">
-                      {RIGHT_SEATS.map((num) => {
-                        const seatId = `${row}${num}`;
-                        const isReserved = RESERVED_SEATS.has(seatId);
-                        const isSelected = selectedSeats.includes(seatId);
-                        return (
-                          <button
-                            type="button"
-                            key={seatId}
-                            className={
-                              "seat-btn" +
-                              (isReserved ? " reserved" : "") +
-                              (isSelected ? " selected" : "")
-                            }
-                            disabled={isReserved}
-                            onClick={() => toggleSeat(seatId)}
-                            aria-label={`Seat ${seatId}`}
-                          >
-                            {num}
-                          </button>
-                        );
-                      })}
-                    </div>
+              <div className="seat-map-scroll">
+                <div
+                  className="seat-map"
+                  style={{
+                    "--seat-per-row": LEFT_SEATS.length + RIGHT_SEATS.length,
+                    "--seat-left-cols": LEFT_SEATS.length,
+                    "--seat-right-cols": RIGHT_SEATS.length,
+                  }}
+                >
+                  <div className="seat-screen">
+                    <div className="seat-screen-bar" />
+                    <span>Screen</span>
                   </div>
-                ))}
+
+                  {ROWS.map((row) => (
+                    <div className="seat-row" key={row}>
+                      <span className="seat-row-label">{row}</span>
+
+                      <div className="seat-group seat-group--left">
+                        {LEFT_SEATS.map((num) => renderSeat(row, num))}
+                      </div>
+
+                      <div className="seat-group seat-group--right">
+                        {RIGHT_SEATS.map((num) => renderSeat(row, num))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            </section>
           </div>
 
           {/* Sidebar — Booking Summary */}
-          <div className="seat-sidebar">
-            <div className="sidebar-header">
-              <span className="sidebar-icon"><IconTicket /></span>
-              <p className="sidebar-title">Booking Summary</p>
-            </div>
-
-            <p className="sidebar-section-label">SHOWTIME</p>
-
-            <div className="summary-row">
-              <span className="summary-icon"><IconMapPin /></span>
-              <span className="summary-label">Branch</span>
-              <span className={"summary-value" + (branch ? "" : " unset")}>
-                {branch ? branch.name : "Not selected"}
+          <aside className="seat-panel seat-sidebar" aria-label="Booking summary">
+            <header className="seat-panel-head">
+              <span className="seat-panel-icon">
+                <IconTicket width={20} height={20} />
               </span>
+              <h3 className="seat-panel-title">Booking Summary</h3>
+            </header>
+
+            <div className="seat-panel-body">
+              <p className="seat-sidebar-label">SHOWTIME</p>
+
+              <div className="seat-summary-row">
+                <span className="seat-summary-icon"><IconMapPin /></span>
+                <span className="seat-summary-label">Branch</span>
+                <span className={"seat-summary-value" + (branch ? "" : " unset")}>
+                  {branch ? branch.name : "Not selected"}
+                </span>
+              </div>
+
+              <div className="seat-summary-row">
+                <span className="seat-summary-icon"><IconTicket /></span>
+                <span className="seat-summary-label">Cinema</span>
+                <span className={"seat-summary-value" + (showtime ? "" : " unset")}>
+                  {showtime ? showtime.hall : "Not selected"}
+                </span>
+              </div>
+
+              <div className="seat-summary-row">
+                <span className="seat-summary-icon"><IconCalendar /></span>
+                <span className="seat-summary-label">Date</span>
+                <span className={"seat-summary-value" + (date ? "" : " unset")}>
+                  {date ? formatSidebarDate(date) : "Not selected"}
+                </span>
+              </div>
+
+              <div className="seat-summary-row">
+                <span className="seat-summary-icon"><IconClock /></span>
+                <span className="seat-summary-label">Time</span>
+                <span className={"seat-summary-value" + (showtime ? "" : " unset")}>
+                  {showtime ? showtime.time : "Not selected"}
+                </span>
+              </div>
+
+              <div className="seat-summary-row">
+                <span className="seat-summary-icon"><IconTicket /></span>
+                <span className="seat-summary-label">Tickets</span>
+                <span className="seat-summary-value">{ticketCount}</span>
+              </div>
+
+              <p className="seat-sidebar-label">SELECTED SEATS</p>
+              <div className="seat-chips">
+                {sortedSelectedSeats.length === 0 ? (
+                  <span className="seat-chip seat-chip--empty">None selected</span>
+                ) : (
+                  sortedSelectedSeats.map((seatId) => (
+                    <span className="seat-chip" key={seatId}>{seatId}</span>
+                  ))
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="seat-checkout-btn"
+                disabled={!canCheckout}
+                onClick={handleCheckout}
+              >
+                <IconLock /> Proceed to Checkout
+              </button>
+
+              <p className="seat-checkout-hint">
+                {canCheckout
+                  ? "You're all set!"
+                  : `Select ${seatsRemaining} more seat${seatsRemaining === 1 ? "" : "s"} to continue`}
+              </p>
             </div>
-
-            <div className="summary-row">
-              <span className="summary-icon"><IconTicket /></span>
-              <span className="summary-label">Cinema</span>
-              <span className={"summary-value" + (showtime ? "" : " unset")}>
-                {showtime ? showtime.hall : "Not selected"}
-              </span>
-            </div>
-
-            <div className="summary-row">
-              <span className="summary-icon"><IconCalendar /></span>
-              <span className="summary-label">Date</span>
-              <span className={"summary-value" + (date ? "" : " unset")}>
-                {date ? formatSidebarDate(date) : "Not selected"}
-              </span>
-            </div>
-
-            <div className="summary-row">
-              <span className="summary-icon"><IconClock /></span>
-              <span className="summary-label">Time</span>
-              <span className={"summary-value" + (showtime ? "" : " unset")}>
-                {showtime ? showtime.time : "Not selected"}
-              </span>
-            </div>
-
-            <div className="summary-row">
-              <span className="summary-icon"><IconTicket /></span>
-              <span className="summary-label">Tickets</span>
-              <span className="summary-value">{ticketCount}</span>
-            </div>
-
-            <p className="sidebar-section-label">SELECTED SEATS</p>
-            <div className="selected-seats-chips">
-              {sortedSelectedSeats.length === 0 ? (
-                <span className="chip chip-empty">None selected</span>
-              ) : (
-                sortedSelectedSeats.map((seatId) => (
-                  <span className="chip" key={seatId}>{seatId}</span>
-                ))
-              )}
-            </div>
-
-            <button
-              type="button"
-              className="btn-checkout"
-              disabled={!canCheckout}
-              onClick={handleCheckout}
-            >
-              <IconLock /> Proceed to Checkout
-            </button>
-
-            <p className="checkout-hint">
-              {canCheckout
-                ? "You're all set!"
-                : `Select ${seatsRemaining} more seat${seatsRemaining === 1 ? "" : "s"} to continue`}
-            </p>
-          </div>
+          </aside>
         </div>
       </section>
 

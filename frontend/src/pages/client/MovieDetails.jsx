@@ -6,11 +6,6 @@ import heroBg from "../../assets/images/hero-bg.png";
 import { fetchMovie, STATUS_LABELS } from "../../api/movies.js";
 import "../../styles/MovieDetails.css";
 
-const API_URL = "http://localhost:5000";
-
-/* ---------------------------------------------------------------- */
-/* Icons                                                              */
-/* ---------------------------------------------------------------- */
 
 const IconClock = (props) => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -232,7 +227,7 @@ function MovieDetails() {
                     {movie.synopsis && (
                         <div className="movie-section">
                             <h2 className="section-label">Synopsis</h2>
-                            <p className="movie-synopsis">{movie.synopsis || "No synopsis available."}</p>
+                            <p className="movie-synopsis">{movie.synopsis}</p>
                         </div>
                     )}
 

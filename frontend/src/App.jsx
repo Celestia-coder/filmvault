@@ -18,6 +18,7 @@ import ScheduleManagement from "./pages/admin/ScheduleManagement.jsx";
 import MovieManagement from "./pages/admin/MovieManagement.jsx";
 import SeatSelectionManagement from "./pages/admin/SeatSelectionManagement";
 import ListOfBookings from "./pages/admin/ListOfBookings.jsx";
+import Checkout from "./pages/client/Checkout.jsx";
 
 function App() {
 	return (
@@ -32,7 +33,8 @@ function App() {
 			<Route path="/booking/:movieId" element={<ShowtimeSelection />} />
 			<Route path="/booking/:movieId/seats" element={<SeatSelection />} />
 			<Route path="/tickets" element={<Tickets />} />
-
+			<Route path="/checkout" element={<Checkout />} />
+			
 			{/* ADMIN SIDE */}
 			<Route path="/admin/login" element={<AdminLogin />} />
 			<Route path="/admin/dashboard" element={<Dashboard />} />

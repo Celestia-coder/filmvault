@@ -1,9 +1,11 @@
+
+
 import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
-import moviePoster from "../../assets/images/movie-poster.webp";
+import { fetchMovie, STATUS_LABELS } from "../../api/movies.js";
 import "../../styles/MovieDetails.css";
 
 const API_URL = "http://localhost:5000";
@@ -47,44 +49,7 @@ const IconTicket = (props) => (
 );
 
 /* ---------------------------------------------------------------- */
-/* Helpers                                                            */
-/* ---------------------------------------------------------------- */
-
-const RATING_LABELS = {
-    G: "General Audiences",
-    PG: "Parental Guidance",
-    "PG-13": "Parents Strongly Cautioned",
-    R: "Restricted",
-};
-
-const STATUS_LABELS = {
-    upcoming: "Coming Soon",
-    "now-showing": "Now Showing",
-    ended: "Ended",
-};
-
-// 135 -> "2h 15m"
-const formatRuntime = (mins) => {
-    if (!mins) return "TBA";
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return h ? `${h}h${m ? ` ${m}m` : ""}` : `${m}m`;
-};
-
-// "2026-07-30" -> "Jul 30, 2026" (parsed as UTC so it never shifts a day)
-const formatDate = (value) => {
-    if (!value) return "TBA";
-    const [y, m, d] = String(value).slice(0, 10).split("-").map(Number);
-    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        timeZone: "UTC",
-    });
-};
-
-/* ---------------------------------------------------------------- */
-/* Small subcomponent                                                 */
+/* Small subcomponents                                                */
 /* ---------------------------------------------------------------- */
 
 function MetaItem({ icon, label, value }) {
@@ -99,6 +64,46 @@ function MetaItem({ icon, label, value }) {
     );
 }
 
+// Same background / navbar / footer for every state of the page
+function PageShell({ children }) {
+    return (
+        <div className="movie-page">
+            <div className="movie-bg" style={{ backgroundImage: `url(${heroBg})` }}></div>
+
+            <section className="movie-hero">
+                <Navbar />
+                {children}
+            </section>
+
+            <Footer />
+        </div>
+    );
+}
+
+// Loading / error / not-found all share this centered block
+function StateMessage({ label, title, text, isLoading, children }) {
+    return (
+        <div className={`movie-not-found${isLoading ? " is-loading" : ""}`} role={isLoading ? "status" : undefined}>
+            <p className="movie-status">
+                <span className="status-dot" />
+                {label}
+            </p>
+            <h1 className="movie-title">{title}</h1>
+            {text && <p className="movie-synopsis">{text}</p>}
+            {children && <div className="movie-actions">{children}</div>}
+        </div>
+    );
+}
+
+function initialsOf(name) {
+    return name
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((word) => word[0])
+        .join("")
+        .toUpperCase();
+}
+
 /* ---------------------------------------------------------------- */
 /* Page                                                               */
 /* ---------------------------------------------------------------- */
@@ -107,187 +112,162 @@ function MovieDetails() {
     const { movieId } = useParams();
     const navigate = useNavigate();
 
-    const [movie, setMovie] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null); // "not-found" | "failed" | null
+    const [reloadKey, setReloadKey] = useState(0);
+    // { key, movie | error } — "key" ties a result to the request that produced
+    // it, so a previous movie's data never shows up while the next one loads.
+    const [movieResult, setMovieResult] = useState(null);
+
+    // Only positive whole numbers can be real IDs; skip the request for "abc", "0", etc.
+    const isValidId = /^[1-9]\d*$/.test(movieId);
+    const requestKey = `${movieId}:${reloadKey}`;
 
     useEffect(() => {
+        if (!isValidId) return undefined;
         const controller = new AbortController();
 
-        async function loadMovie() {
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await fetch(`${API_URL}/api/movies/${movieId}`, {
-                    signal: controller.signal,
-                });
+        fetchMovie(movieId, controller.signal)
+            .then((movie) => setMovieResult({ key: requestKey, movie }))
+            .catch((error) => {
+                if (error.name === "AbortError") return;
+                setMovieResult({ key: requestKey, error });
+            });
 
-                if (res.status === 404 || res.status === 400) {
-                    setMovie(null);
-                    setError("not-found");
-                    return;
-                }
-                if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-
-                const data = await res.json();
-                setMovie(data.movie);
-            } catch (err) {
-                if (err.name === "AbortError") return;
-                console.error("Failed to load movie:", err);
-                setMovie(null);
-                setError("failed");
-            } finally {
-                if (!controller.signal.aborted) setLoading(false);
-            }
-        }
-
-        loadMovie();
         return () => controller.abort();
-    }, [movieId]);
+    }, [movieId, isValidId, requestKey]);
 
-    // Loading / not found / server error
-    if (loading || error) {
-        const label = loading ? "Loading" : error === "not-found" ? "Not Found" : "Error";
-        const heading = loading
-            ? "Loading movie..."
-            : error === "not-found"
-                ? "We couldn't find that movie"
-                : "Something went wrong";
-        const message = loading
-            ? ""
-            : error === "not-found"
-                ? `There's no movie with ID "${movieId}" in the catalog yet.`
-                : "We couldn't reach the server. Please try again in a moment.";
+    const backButton = (
+        <button type="button" className="btn-back" onClick={() => navigate(-1)}>
+            ← Back
+        </button>
+    );
 
+    const notFound = (
+        <StateMessage
+            label="Not Found"
+            title="We couldn't find that movie"
+            text={`There's no movie with ID "${movieId}" in the catalog.`}
+        >
+            {backButton}
+            <Link to="/movies" className="btn-buy-tickets">
+                Browse movies
+            </Link>
+        </StateMessage>
+    );
+
+    if (!isValidId) return <PageShell>{notFound}</PageShell>;
+
+    const current = movieResult?.key === requestKey ? movieResult : null;
+
+    if (!current) {
         return (
-            <div className="movie-page">
-                <div className="movie-bg" style={{ backgroundImage: `url(${heroBg})` }}></div>
-
-                <section className="movie-hero">
-                    <Navbar />
-
-                    <div className="movie-not-found">
-                        <p className="movie-status">
-                            <span className="status-dot" />
-                            {label}
-                        </p>
-                        <h1 className="movie-title">{heading}</h1>
-                        {message && <p className="movie-synopsis">{message}</p>}
-                        {!loading && (
-                            <button type="button" className="btn-back" onClick={() => navigate(-1)}>
-                                ← Back
-                            </button>
-                        )}
-                    </div>
-                </section>
-
-                <Footer />
-            </div>
+            <PageShell>
+                <StateMessage label="Loading" title="Loading movie…" isLoading />
+            </PageShell>
         );
     }
 
-    // Loaded
+    if (current.error) {
+        // 400/404 = no such movie; anything else (500, network) is a real error worth retrying
+        if (current.error.status === 400 || current.error.status === 404) {
+            return <PageShell>{notFound}</PageShell>;
+        }
+        return (
+            <PageShell>
+                <StateMessage label="Error" title="Couldn't load this movie" text={current.error.message}>
+                    <button type="button" className="btn-buy-tickets" onClick={() => setReloadKey((n) => n + 1)}>
+                        Try again
+                    </button>
+                    {backButton}
+                </StateMessage>
+            </PageShell>
+        );
+    }
+
+    const { movie } = current;
+
     return (
-        <div className="movie-page">
-            <div className="movie-bg" style={{ backgroundImage: `url(${heroBg})` }}></div>
+        <PageShell>
+            <div className="movie-layout">
+                <div className="movie-poster-wrap">
+                    <img
+                        src={movie.poster}
+                        alt={`${movie.title} poster`}
+                        className="movie-poster"
+                    />
+                </div>
 
-            <section className="movie-hero">
-                <Navbar />
+                <div className="movie-details">
+                    <p className="movie-status">
+                        <span className="status-dot" />
+                        {STATUS_LABELS[movie.status] ?? movie.status}
+                    </p>
 
-                <div className="movie-layout">
-                    <div className="movie-poster-wrap">
-                        <img
-                            src={movie.poster || moviePoster}
-                            alt={`${movie.title} poster`}
-                            className="movie-poster"
-                            onError={(e) => {
-                                e.currentTarget.onerror = null;
-                                e.currentTarget.src = moviePoster;
-                            }}
-                        />
+                    <h1 className="movie-title">{movie.title}</h1>
+
+                    <div className="genre-tags">
+                        {movie.genres.map((genre) => (
+                            <span className="genre-tag" key={genre}>
+                                {genre}
+                            </span>
+                        ))}
                     </div>
 
-                    <div className="movie-details">
-                        <p className="movie-status">
-                            <span className="status-dot" />
-                            {STATUS_LABELS[movie.status] || movie.status}
-                        </p>
+                    <div className="movie-meta-grid">
+                        <MetaItem icon={<IconClock />} label="Runtime" value={movie.runtime} />
+                        <MetaItem icon={<IconCalendar />} label="Release Date" value={movie.releaseDate} />
+                        <MetaItem icon={<IconFilm />} label="Director" value={movie.director} />
 
-                        <h1 className="movie-title">{movie.title}</h1>
-
-                        <div className="genre-tags">
-                            {movie.genres.map((genre) => (
-                                <span className="genre-tag" key={genre}>
-                                    {genre}
+                        <div className="meta-item">
+                            <span className="meta-icon">
+                                <IconShield />
+                            </span>
+                            <span className="meta-text">
+                                <span className="meta-label">Restriction</span>
+                                <span className="meta-value restriction-value">
+                                    <span className="restriction-badge">{movie.restriction.code}</span>
+                                    {movie.restriction.label}
                                 </span>
-                            ))}
+                            </span>
                         </div>
+                    </div>
 
-                        <div className="movie-meta-grid">
-                            <MetaItem icon={<IconClock />} label="Runtime" value={formatRuntime(movie.duration)} />
-                            <MetaItem icon={<IconCalendar />} label="Release Date" value={formatDate(movie.release_date)} />
-                            <MetaItem icon={<IconFilm />} label="Director" value={movie.director || "TBA"} />
-
-                            {movie.age_rating && (
-                                <div className="meta-item">
-                                    <span className="meta-icon">
-                                        <IconShield />
-                                    </span>
-                                    <span className="meta-text">
-                                        <span className="meta-label">Restriction</span>
-                                        <span className="meta-value restriction-value">
-                                            <span className="restriction-badge">{movie.age_rating}</span>
-                                            {RATING_LABELS[movie.age_rating] || ""}
-                                        </span>
-                                    </span>
-                                </div>
-                            )}
-                        </div>
-
+                    {movie.synopsis && (
                         <div className="movie-section">
                             <h2 className="section-label">Synopsis</h2>
                             <p className="movie-synopsis">{movie.synopsis || "No synopsis available."}</p>
                         </div>
+                    )}
 
-                        {/* The API doesn't return cast yet, so this stays hidden until it does */}
-                        {movie.cast?.length > 0 && (
-                            <div className="movie-section">
-                                <h2 className="section-label">Cast</h2>
-                                <div className="cast-list">
-                                    {movie.cast.map((member) => (
-                                        <div className="cast-member" key={member.actor}>
-                                            <span className="cast-avatar">{member.initials}</span>
-                                            <span className="cast-info">
-                                                <span className="cast-actor">{member.actor}</span>
-                                                <span className="cast-character">{member.character}</span>
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
+                    {movie.cast.length > 0 && (
+                        <div className="movie-section">
+                            <h2 className="section-label">Cast</h2>
+                            <div className="cast-list">
+                                {movie.cast.map((name) => (
+                                    <div className="cast-member" key={name}>
+                                        <span className="cast-avatar">{initialsOf(name)}</span>
+                                        <span className="cast-info">
+                                            <span className="cast-actor">{name}</span>
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                        <div className="movie-actions">
-                            {/* Placeholder destination — no booking flow built yet */}
-                            <Link to={`/booking/${movie.movie_id}`} className="btn-buy-tickets">
+                    <div className="movie-actions">
+                        {/* Tickets only make sense for movies that are showing */}
+                        {movie.status === "now-showing" && (
+                            <Link to={`/booking/${movie.id}`} className="btn-buy-tickets">
                                 <IconTicket />
                                 Buy Tickets
                             </Link>
+                        )}
 
-                            <button type="button" className="btn-back" onClick={() => navigate(-1)}>
-                                ← Back
-                            </button>
-
-                            <p className="movie-actions-hint">
-                                Select a branch, date, and showtime below to continue.
-                            </p>
-                        </div>
+                        {backButton}
                     </div>
                 </div>
-            </section>
-
-            <Footer />
-        </div>
+            </div>
+        </PageShell>
     );
 }
 

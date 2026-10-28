@@ -8,6 +8,8 @@ const authRoutes = require("./routes/authRoutes");
 const movieRoutes = require("./routes/movieRoutes");
 const showtimeRoutes = require("./routes/showtimeRoutes");
 const searchRoutes = require("./routes/searchRoutes");
+const bookingRoutes = require("./routes/bookingRoutes");
+const seatRoutes = require("./routes/seatRoutes");
 
 const app = express();
 
@@ -35,6 +37,12 @@ app.use("/api", movieRoutes);
 
 // Showtime routes: public (/api/showtimes, /api/movies/:id/showtimes) and admin (/api/admin/showtimes)
 app.use("/api", showtimeRoutes);
+
+// Admin booking routes: /api/admin/bookings
+app.use("/api", bookingRoutes);
+
+// Admin seat routes: seat map + Seat Inspector block/release
+app.use("/api", seatRoutes);
 
 const PORT = process.env.PORT || 5000;
 

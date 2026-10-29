@@ -32,6 +32,7 @@ const IconCheckCircle = (p) => (<Icon size={40} strokeWidth="1.8" {...p}><circle
 /* Static data                                                      */
 /* ---------------------------------------------------------------- */
 const DISCOUNT_RATE = 0.2; // PWD + Senior Citizen
+const BOOKING_FEE_PER_TICKET = 30; // ₱30 per ticket — never discounted
 
 const TICKET_TYPES = {
   regular: { label: "Regular", discounted: false },
@@ -173,8 +174,9 @@ function Checkout() {
   const ticketsTotal = seats.reduce((sum, s) => sum + priceFor(ticketTypes[s]), 0);
   const fullPriceTotal = seats.length * basePrice;
   const discountTotal = fullPriceTotal - ticketsTotal;
-  const subtotal = fullPriceTotal + foodTotal; // before discounts
-  const total = subtotal - discountTotal; // no booking fee
+  const subtotal = fullPriceTotal + foodTotal; // tickets at full price + food, before discounts
+  const bookingFee = seats.length * BOOKING_FEE_PER_TICKET; // ₱30 per ticket, not discounted
+  const total = subtotal - discountTotal + bookingFee;
 
   const emailValid = EMAIL_REGEX.test(email.trim());
   const idOk = !hasDiscountedTicket || Boolean(idFile);
@@ -223,6 +225,7 @@ function Checkout() {
       food: foodItems.map(({ id, qty, price }) => ({ id, qty, price })),
       discountId: hasDiscountedTicket ? idFile?.name : null,
       paymentMethod,
+      bookingFee,
       total,
     };
     console.log("Checkout payload:", payload);
@@ -237,7 +240,7 @@ function Checkout() {
         <Navbar />
 
         <div className="checkout-header">
-          <div>
+          <div className="checkout-heading-block">
             <h1 className="checkout-heading">Checkout</h1>
             <p className="checkout-subtext">
               Review your booking, choose ticket types, and complete your payment securely.
@@ -582,6 +585,10 @@ function Checkout() {
                   <strong className="co-text-green">
                     {discountTotal > 0 ? `-${peso(discountTotal)}` : peso(0)}
                   </strong>
+                </div>
+                <div className="co-total-row">
+                  <span>Booking fee</span>
+                  <strong>{peso(bookingFee)}</strong>
                 </div>
                 <div className="co-grand">
                   <div>

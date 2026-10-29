@@ -1,8 +1,9 @@
 @import "./variables.css";
 
 :root {
-  --co-card-bg: rgba(20, 20, 20, 0.88);
+  --co-card-bg: var(--color-bg-dark2);
   --co-border: rgba(255, 255, 255, 0.08);
+  --co-divider: rgba(255, 255, 255, 0.12);
   --co-input-bg: rgba(255, 255, 255, 0.04);
   --co-red-dark: #a4161a;
   --co-red-tint: rgba(238, 17, 43, 0.14);
@@ -33,7 +34,7 @@
   background: linear-gradient(
     to bottom,
     rgba(25, 25, 25, 0.4) 0%,
-    rgba(25, 25, 25, 0.7) 55%,
+    rgba(25, 25, 25, 0.6) 55%,
     var(--color-bg-dark) 100%
   );
 }
@@ -48,84 +49,92 @@
   padding-bottom: 80px;
 }
 
-/* ---------- Header ---------- */
+/* ---------- Header (same as Select Your Seats) ---------- */
 .checkout-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
   width: 100%;
   max-width: 1160px;
   margin: 0 auto;
   padding: 150px 24px 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.checkout-heading-block {
+  border-left: 3px solid var(--color-red);
+  padding-left: 14px;
 }
 
 .checkout-heading {
-  font-size: 2.25rem;
-  font-weight: 700;
-  margin: 0 0 6px;
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  font-weight: 800;
+  margin: 0;
 }
 
 .checkout-subtext {
   color: var(--color-text-muted);
-  font-size: 0.9rem;
-  margin: 0;
+  font-size: 14px;
+  margin: 4px 0 0;
 }
 
 .co-btn-back {
-  padding: 12px 28px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--co-border);
   color: var(--color-white);
-  font-family: inherit;
+  font-weight: 600;
   font-size: 14px;
+  font-family: inherit;
   cursor: pointer;
+  white-space: nowrap;
   flex-shrink: 0;
 }
 
 .co-btn-back:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
 }
 
-/* ---------- Layout ---------- */
+/* ---------- Layout (same width, side padding and gap as seat page) ---------- */
 .checkout-layout {
   display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 32px;
   align-items: start;
   width: 100%;
   max-width: 1160px;
-  margin: 28px auto 0;
-  padding: 0 24px;
+  margin: 0 auto;
+  padding: 24px 24px 0;
 }
 
 .checkout-main {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 24px;
   min-width: 0;
 }
 
 .checkout-sidebar {
   position: static;
+  min-width: 0;
 }
 
 /* ---------- Cards ---------- */
 .co-card {
+  min-width: 0;
   background: var(--co-card-bg);
   border: 1px solid var(--co-border);
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
-  backdrop-filter: blur(12px);
 }
 
 .co-card-header {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 22px 26px;
-  border-bottom: 1px solid var(--co-border);
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--co-divider);
 }
 
 .co-card-title {
@@ -141,7 +150,7 @@
 }
 
 .co-card-body {
-  padding: 24px 26px;
+  padding: 24px;
 }
 
 .co-step-number {
@@ -465,7 +474,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  padding: 22px 24px 24px;
+  padding: 24px;
 }
 
 .co-pay-option {
@@ -547,7 +556,7 @@
 .co-summary-movie {
   display: flex;
   gap: 16px;
-  padding: 20px 22px;
+  padding: 20px 24px;
 }
 
 .co-summary-poster {
@@ -595,8 +604,8 @@
 }
 
 .co-summary-section {
-  padding: 18px 22px;
-  border-top: 1px solid var(--co-border);
+  padding: 18px 24px;
+  border-top: 1px solid var(--co-divider);
 }
 
 .co-eyebrow {
@@ -877,18 +886,18 @@
   background: #343434;
 }
 
-/* ---------- Responsive ---------- */
+/* ---------- Responsive (same breakpoints as the seat page) ---------- */
 @media (max-width: 980px) {
   .checkout-layout {
     grid-template-columns: 1fr;
   }
-}
 
-@media (max-width: 600px) {
   .checkout-header {
     flex-direction: column;
   }
+}
 
+@media (max-width: 600px) {
   .co-form-row {
     flex-direction: column;
   }

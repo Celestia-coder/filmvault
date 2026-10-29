@@ -46,7 +46,7 @@
 
 .seat-page-header {
   width: 100%;
-  max-width: 1320px;
+  max-width: 1160px;
   margin: 0 auto;
   padding: 150px 24px 0;
   display: flex;
@@ -91,9 +91,9 @@
 .seat-layout {
   display: flex;
   align-items: flex-start;
-  gap: 32px;
+  gap: 24px;;
   width: 100%;
-  max-width: 1320px;
+  max-width: 1160px;
   margin: 0 auto;
   padding: 24px 24px 0;
 }
@@ -350,8 +350,8 @@
 .seat-sidebar {
   width: 360px;
   flex-shrink: 0;
-  position: sticky;
-  top: 24px;
+  position: static;
+  top: 100px;
 }
 
 .seat-sidebar-label {
@@ -371,7 +371,7 @@
   align-items: center;
   gap: 10px;
   padding: 8px 0;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .seat-summary-icon {

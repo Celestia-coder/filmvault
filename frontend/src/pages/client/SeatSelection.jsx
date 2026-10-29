@@ -1,6 +1,4 @@
 // Route: "/booking/:movieId/seats" — reached from ShowtimeSelection's
-// "Continue to Seats" button, which passes branch/date/showtime via
-// route state.
 
 import { useState, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router";
@@ -8,7 +6,6 @@ import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
 import "../../styles/SeatSelection.css";
-
 
 const IconMapPin = (props) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -46,6 +43,12 @@ const IconLock = (props) => (
   </svg>
 );
 
+/* ---------------------------------------------------------------- */
+/* Data — hardcoded seat map, matches the Figma layout              */
+/* ---------------------------------------------------------------- */
+// TODO: reserved seats are hardcoded for now since there's no backend
+// yet — once real showtime/seat data exists, this should come from
+// whatever seat-availability endpoint gets built.
 const ROWS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 const LEFT_SEATS = [1, 2, 3, 4, 5];
 const RIGHT_SEATS = [6, 7, 8, 9, 10];
@@ -83,6 +86,9 @@ function SeatButton({ seatId, number, status, isSelected, onToggle }) {
   );
 }
 
+/* ---------------------------------------------------------------- */
+/* Page                                                             */
+/* ---------------------------------------------------------------- */
 function SeatSelection() {
   const { movieId } = useParams();
   const navigate = useNavigate();
@@ -93,14 +99,17 @@ function SeatSelection() {
     branch = null,
     date = null,
     showtime = null,
+    ticketCount: initialTicketCount,
+    seats: initialSeats,
   } = location.state || {};
 
-  const [ticketCount, setTicketCount] = useState(2);
-  const [selectedSeats, setSelectedSeats] = useState([]); 
+  const [ticketCount, setTicketCount] = useState(initialTicketCount ?? 2);
+  const [selectedSeats, setSelectedSeats] = useState(initialSeats ?? []); // e.g. ["H7", "H8"]
 
   const handleDecreaseTickets = () => {
     const next = Math.max(MIN_TICKETS, ticketCount - 1);
     setTicketCount(next);
+    // Trim excess selected seats so selection never exceeds the new count.
     setSelectedSeats((seats) => seats.slice(0, next));
   };
 
@@ -130,8 +139,7 @@ function SeatSelection() {
 
   const handleCheckout = () => {
     if (!canCheckout) return;
-
-    navigate(`/booking/${movieId}/checkout`, {
+    navigate("/checkout", {
       state: {
         movieId,
         movieTitle,
@@ -139,7 +147,7 @@ function SeatSelection() {
         date,
         showtime,
         ticketCount,
-        selectedSeats: sortedSelectedSeats,
+        seats: sortedSelectedSeats,
       },
     });
   };
@@ -170,7 +178,7 @@ function SeatSelection() {
             <h1 className="seat-heading">Select Your Seats</h1>
             <p className="seat-subtext">Choose the seat you'd like to watch the movie.</p>
           </div>
-          <button type="button" className="seat-btn-back" onClick={() => navigate(-1)}>
+          <button type="button" className="seat-btn-back" onClick={() => navigate(`/booking/${movieId}`)}>
             ← Back
           </button>
         </div>

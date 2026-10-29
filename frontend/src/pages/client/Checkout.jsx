@@ -27,6 +27,8 @@ const IconLock = (p) => (<Icon {...p}><rect x="3" y="11" width="18" height="11" 
 const IconShield = (p) => (<Icon {...p}><path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6l-8-4Z" /></Icon>);
 const IconChevronDown = (p) => (<Icon size={14} {...p}><path d="m6 9 6 6 6-6" /></Icon>);
 const IconCheckCircle = (p) => (<Icon size={40} strokeWidth="1.8" {...p}><circle cx="12" cy="12" r="10" /><path d="m8 12.5 3 3 5-6" /></Icon>);
+const IconCamera = (p) => (<Icon {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z" /><circle cx="12" cy="13" r="4" /></Icon>);
+const IconInfo = (p) => (<Icon {...p}><circle cx="12" cy="12" r="10" /><path d="M12 16v-5M12 8h.01" /></Icon>);
 
 /* ---------------------------------------------------------------- */
 /* Static data                                                      */
@@ -89,6 +91,112 @@ const formatTimer = (secs) =>
   `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
 
 /* ---------------------------------------------------------------- */
+/* Simulated ID scan (DEMO ONLY)                                    */
+/* ---------------------------------------------------------------- */
+// Opens the camera and plays a fake "scanning" animation. It does NOT
+// read or validate the ID — swap this for a real provider's SDK
+// (Stripe Identity, Veriff, Sumsub, ...) if real verification is ever needed.
+function IdScanModal({ seat, typeLabel, onVerified, onClose }) {
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+  const [status, setStatus] = useState("starting"); // starting | ready | scanning | done | error
+  const [errorMsg, setErrorMsg] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const startCamera = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setErrorMsg("Camera isn't available here. Open the site on localhost or HTTPS.");
+        setStatus("error");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        setStatus("ready");
+      } catch {
+        setErrorMsg("Camera access was blocked. Allow camera permission and try again.");
+        setStatus("error");
+      }
+    };
+
+    startCamera();
+
+    // Always release the camera when the modal closes.
+    return () => {
+      cancelled = true;
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  // Fake 3-second scan.
+  useEffect(() => {
+    if (status !== "scanning") return undefined;
+    const id = setTimeout(() => setStatus("done"), 3000);
+    return () => clearTimeout(id);
+  }, [status]);
+
+  return (
+    <div className="co-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="co-scan-title">
+      <div className="co-scan-modal">
+        <p className="co-scan-title" id="co-scan-title">Verify ID · Seat {seat}</p>
+        <p className="co-scan-sub">
+          {typeLabel} ID · Hold your ID inside the frame
+        </p>
+
+        <div className={"co-scan-view" + (status === "scanning" ? " scanning" : "")}>
+          <video ref={videoRef} className="co-scan-video" autoPlay playsInline muted />
+          {(status === "ready" || status === "scanning") && <span className="co-scan-frame" />}
+          {status === "scanning" && <span className="co-scan-line" />}
+          {status === "starting" && <p className="co-scan-overlay-text">Starting camera…</p>}
+          {status === "error" && <p className="co-scan-overlay-text">{errorMsg}</p>}
+          {status === "done" && (
+            <div className="co-scan-overlay-text co-scan-done">
+              <IconCheckCircle />
+              <span>Scan complete</span>
+            </div>
+          )}
+        </div>
+
+        <p className="co-scan-demo">Demo mode — this scan is simulated and doesn't check your ID.</p>
+
+        <div className="co-scan-actions">
+          {status !== "done" && (
+            <button type="button" className="co-scan-btn" onClick={onClose}>
+              Cancel
+            </button>
+          )}
+          {status === "ready" && (
+            <button type="button" className="co-scan-btn co-scan-btn--primary" onClick={() => setStatus("scanning")}>
+              Start scan
+            </button>
+          )}
+          {status === "scanning" && (
+            <button type="button" className="co-scan-btn co-scan-btn--primary" disabled>
+              Scanning…
+            </button>
+          )}
+          {status === "done" && (
+            <button type="button" className="co-scan-btn co-scan-btn--primary" onClick={onVerified}>
+              Done
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
 /* Page                                                             */
 /* ---------------------------------------------------------------- */
 function Checkout() {
@@ -121,12 +229,16 @@ function Checkout() {
   );
   const [food, setFood] = useState(INITIAL_FOOD);
   const [paymentMethod, setPaymentMethod] = useState("");
-  const [idFile, setIdFile] = useState(null);
-  const [idError, setIdError] = useState("");
-  const [dragging, setDragging] = useState(false);
+  // Discounted-ticket ID details — one entry per seat, keyed by seat id (e.g. "A1")
+  const [idFiles, setIdFiles] = useState({}); // { A1: File }
+  const [idErrors, setIdErrors] = useState({}); // { A1: "message" }
+  const [idHolders, setIdHolders] = useState({}); // { A1: { name, number } }
+  const [idVerified, setIdVerified] = useState({}); // { A1: true } — simulated scan only
+  const [draggingSeat, setDraggingSeat] = useState(null);
+  const [scanSeat, setScanSeat] = useState(null); // seat whose scan modal is open
   const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
   const [paid, setPaid] = useState(false);
-  const fileInputRef = useRef(null);
+  const fileInputRefs = useRef({});
 
   const goToSeats = () =>
     navigate(`/booking/${movieId}/seats`, {
@@ -158,7 +270,8 @@ function Checkout() {
   const priceFor = (type) =>
     TICKET_TYPES[type].discounted ? Math.round(basePrice * (1 - DISCOUNT_RATE)) : basePrice;
 
-  const hasDiscountedTicket = seats.some((s) => TICKET_TYPES[ticketTypes[s]].discounted);
+  const discountedSeats = seats.filter((s) => TICKET_TYPES[ticketTypes[s]].discounted);
+  const hasDiscountedTicket = discountedSeats.length > 0;
 
   const ticketSummary = useMemo(() => {
     const groups = {};
@@ -179,36 +292,74 @@ function Checkout() {
   const total = subtotal - discountTotal + bookingFee;
 
   const emailValid = EMAIL_REGEX.test(email.trim());
-  const idOk = !hasDiscountedTicket || Boolean(idFile);
+  // Every discounted seat needs its own upload, holder name and ID number.
+  // The camera scan is a demo extra, so it is NOT required to pay.
+  const idOk = discountedSeats.every(
+    (seat) =>
+      Boolean(idFiles[seat]) &&
+      Boolean(idHolders[seat]?.name?.trim()) &&
+      Boolean(idHolders[seat]?.number?.trim())
+  );
   const canPay = emailValid && idOk && Boolean(paymentMethod) && seats.length > 0 && !paid;
 
   /* ---- handlers ---- */
-  const handleTicketType = (seat) => (e) =>
-    setTicketTypes((prev) => ({ ...prev, [seat]: e.target.value }));
+  // Removes one seat's entry from a { seat: value } state object.
+  const dropSeat = (seat) => (prev) => {
+    const next = { ...prev };
+    delete next[seat];
+    return next;
+  };
+
+  const clearSeatId = (seat) => {
+    setIdFiles(dropSeat(seat));
+    setIdErrors(dropSeat(seat));
+    setIdHolders(dropSeat(seat));
+    setIdVerified(dropSeat(seat));
+  };
+
+  const handleTicketType = (seat) => (e) => {
+    const type = e.target.value;
+    setTicketTypes((prev) => ({ ...prev, [seat]: type }));
+    // Switched back to Regular: that seat no longer needs (or submits) an ID.
+    if (!TICKET_TYPES[type].discounted) clearSeatId(seat);
+  };
+
+  const handleHolderChange = (seat, field) => (e) => {
+    const value = e.target.value;
+    setIdHolders((prev) => ({
+      ...prev,
+      [seat]: { name: "", number: "", ...prev[seat], [field]: value },
+    }));
+    setIdVerified(dropSeat(seat)); // details changed, so the demo scan no longer applies
+  };
 
   const changeQty = (id, delta) =>
     setFood((prev) =>
       prev.map((f) => (f.id === id ? { ...f, qty: Math.max(0, Math.min(10, f.qty + delta)) } : f))
     );
 
-  const handleFile = (file) => {
+  const setSeatError = (seat, message) =>
+    setIdErrors((prev) => ({ ...prev, [seat]: message }));
+
+  const handleFile = (seat, file) => {
     if (!file) return;
     if (!/\.(jpe?g|png|pdf)$/i.test(file.name)) {
-      setIdError("Only JPG, PNG or PDF files are allowed.");
+      setSeatError(seat, "Only JPG, PNG or PDF files are allowed.");
       return;
     }
     if (file.size > MAX_FILE_SIZE) {
-      setIdError("File is too large. Max 5 MB.");
+      setSeatError(seat, "File is too large. Max 5 MB.");
       return;
     }
-    setIdError("");
-    setIdFile(file);
+    setSeatError(seat, "");
+    setIdFiles((prev) => ({ ...prev, [seat]: file }));
+    setIdVerified(dropSeat(seat)); // new file, so the demo scan no longer applies
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = (seat) => (e) => {
     e.preventDefault();
-    setDragging(false);
-    handleFile(e.dataTransfer.files?.[0]);
+    setDraggingSeat(null);
+    handleFile(seat, e.dataTransfer.files?.[0]);
   };
 
   const handlePay = () => {
@@ -223,7 +374,17 @@ function Checkout() {
       showtime,
       tickets: seats.map((seat) => ({ seat, type: ticketTypes[seat], price: priceFor(ticketTypes[seat]) })),
       food: foodItems.map(({ id, qty, price }) => ({ id, qty, price })),
-      discountId: hasDiscountedTicket ? idFile?.name : null,
+      discountIds: Object.fromEntries(
+        discountedSeats.map((seat) => [
+          seat,
+          {
+            holderName: idHolders[seat].name.trim(),
+            idNumber: idHolders[seat].number.trim(),
+            fileName: idFiles[seat].name,
+            demoScanVerified: Boolean(idVerified[seat]), // simulated, not a real check
+          },
+        ])
+      ),
       paymentMethod,
       bookingFee,
       total,
@@ -325,79 +486,142 @@ function Checkout() {
                   const type = ticketTypes[seat];
                   const discounted = TICKET_TYPES[type].discounted;
                   const row = seat.charAt(0);
+                  const idFile = idFiles[seat];
+                  const holder = idHolders[seat] || { name: "", number: "" };
                   return (
-                    <div className="co-seat-row" key={seat}>
-                      <div className="co-seat-badge">
-                        <span className="co-seat-badge-code">{seat}</span>
-                        <span className="co-seat-badge-label">SEAT</span>
+                    <div className="co-ticket" key={seat}>
+                      {/* Ticket row: seat, price, ticket type */}
+                      <div className="co-seat-row">
+                        <div className="co-seat-badge">
+                          <span className="co-seat-badge-code">{seat}</span>
+                          <span className="co-seat-badge-label">SEAT</span>
+                        </div>
+                        <div className="co-seat-info">
+                          <span className="co-seat-name">Seat {seat} · Row {row}</span>
+                          <span className={"co-seat-sub" + (discounted ? " discounted" : "")}>
+                            {discounted ? (
+                              <>
+                                <strong>20% off</strong> · {peso(priceFor(type))} · ID required
+                              </>
+                            ) : (
+                              peso(basePrice)
+                            )}
+                          </span>
+                        </div>
+                        <div className="co-select-wrap">
+                          <select
+                            className="co-select"
+                            value={type}
+                            onChange={handleTicketType(seat)}
+                            aria-label={`Ticket type for seat ${seat}`}
+                          >
+                            {Object.entries(TICKET_TYPES).map(([key, t]) => (
+                              <option key={key} value={key}>
+                                {t.label} — {peso(priceFor(key))}
+                              </option>
+                            ))}
+                          </select>
+                          <IconChevronDown className="co-select-caret" />
+                        </div>
                       </div>
-                      <div className="co-seat-info">
-                        <span className="co-seat-name">Seat {seat} · Row {row}</span>
-                        <span className={"co-seat-sub" + (discounted ? " discounted" : "")}>
-                          {discounted ? (
-                            <>
-                              <strong>20% off</strong> · {peso(priceFor(type))} · ID required
-                            </>
-                          ) : (
-                            peso(basePrice)
-                          )}
-                        </span>
-                      </div>
-                      <div className="co-select-wrap">
-                        <select
-                          className="co-select"
-                          value={type}
-                          onChange={handleTicketType(seat)}
-                          aria-label={`Ticket type for seat ${seat}`}
-                        >
-                          {Object.entries(TICKET_TYPES).map(([key, t]) => (
-                            <option key={key} value={key}>
-                              {t.label} — {peso(priceFor(key))}
-                            </option>
-                          ))}
-                        </select>
-                        <IconChevronDown className="co-select-caret" />
-                      </div>
+
+                      {/* ID verification for THIS ticket only */}
+                      {discounted && (
+                        <div className="co-id-panel">
+                          <p className="co-id-title">
+                            <IconWarning /> ID Verification Required · Seat {seat}
+                          </p>
+                          <p className="co-id-text">
+                            Provide a valid government- or institution-issued {TICKET_TYPES[type].label} ID.
+                            The ID holder must be the person using this ticket.
+                          </p>
+
+                          <div className="co-id-fields">
+                            <div className="co-field">
+                              <label className="co-label" htmlFor={`co-id-name-${seat}`}>
+                                Name on ID <span className="co-required">*</span>
+                              </label>
+                              <input
+                                id={`co-id-name-${seat}`}
+                                type="text"
+                                className="co-input"
+                                placeholder="Juan Dela Cruz"
+                                autoComplete="off"
+                                value={holder.name}
+                                onChange={handleHolderChange(seat, "name")}
+                              />
+                            </div>
+                            <div className="co-field">
+                              <label className="co-label" htmlFor={`co-id-number-${seat}`}>
+                                ID Number <span className="co-required">*</span>
+                              </label>
+                              <input
+                                id={`co-id-number-${seat}`}
+                                type="text"
+                                className="co-input"
+                                placeholder="Number on your ID"
+                                autoComplete="off"
+                                value={holder.number}
+                                onChange={handleHolderChange(seat, "number")}
+                              />
+                            </div>
+                          </div>
+
+                          <input
+                            ref={(el) => (fileInputRefs.current[seat] = el)}
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.pdf"
+                            hidden
+                            onChange={(e) => handleFile(seat, e.target.files?.[0])}
+                          />
+                          <button
+                            type="button"
+                            className={
+                              "co-id-drop" +
+                              (draggingSeat === seat ? " dragging" : "") +
+                              (idFile ? " uploaded" : "")
+                            }
+                            onClick={() => fileInputRefs.current[seat]?.click()}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              setDraggingSeat(seat);
+                            }}
+                            onDragLeave={() => setDraggingSeat(null)}
+                            onDrop={handleDrop(seat)}
+                          >
+                            <IconUpload size={24} />
+                            <span className="co-id-drop-title">
+                              {idFile ? `✓ ${idFile.name}` : "Click to upload or drag & drop"}
+                            </span>
+                            <span className="co-id-drop-desc">JPG, PNG or PDF · max 5 MB</span>
+                          </button>
+                          {idErrors[seat] && <p className="co-error">{idErrors[seat]}</p>}
+
+                          <div className="co-id-actions">
+                            <button
+                              type="button"
+                              className={"co-scan-open" + (idVerified[seat] ? " done" : "")}
+                              onClick={() => setScanSeat(seat)}
+                              title={idVerified[seat] ? "Click to scan again" : undefined}
+                            >
+                              <IconCamera /> {idVerified[seat] ? "✓ ID scanned (demo)" : "Scan ID with camera"}
+                            </button>
+                            {!idVerified[seat] && <span className="co-id-optional">Optional · demo only</span>}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
 
                 {hasDiscountedTicket && (
-                  <div className="co-note co-note--amber">
-                    <p className="co-id-title">
-                      <IconWarning /> ID Verification Required
-                    </p>
-                    <p className="co-id-text">
-                      You selected a discounted ticket type (Senior Citizen or PWD). Please upload a
-                      valid government- or institution-issued ID for verification at the cinema.
-                    </p>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".jpg,.jpeg,.png,.pdf"
-                      hidden
-                      onChange={(e) => handleFile(e.target.files?.[0])}
-                    />
-                    <button
-                      type="button"
-                      className={
-                        "co-id-drop" + (dragging ? " dragging" : "") + (idFile ? " uploaded" : "")
-                      }
-                      onClick={() => fileInputRef.current?.click()}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setDragging(true);
-                      }}
-                      onDragLeave={() => setDragging(false)}
-                      onDrop={handleDrop}
-                    >
-                      <IconUpload size={24} />
-                      <span className="co-id-drop-title">
-                        {idFile ? `✓ ${idFile.name}` : "Click to upload or drag & drop"}
-                      </span>
-                      <span className="co-id-drop-desc">JPG, PNG or PDF · max 5 MB</span>
-                    </button>
-                    {idError && <p className="co-error">{idError}</p>}
+                  <div className="co-note co-note--info">
+                    <IconInfo />
+                    <span>
+                      <strong>ID check at the cinema.</strong> Discounted tickets are verified at the
+                      entrance. If the ID doesn't match the ticket holder, the difference is payable at
+                      the counter.
+                    </span>
                   </div>
                 )}
               </div>
@@ -621,6 +845,19 @@ function Checkout() {
       </section>
 
       <Footer />
+
+      {/* ============ ID SCAN (DEMO) POP-UP ============ */}
+      {scanSeat && (
+        <IdScanModal
+          seat={scanSeat}
+          typeLabel={TICKET_TYPES[ticketTypes[scanSeat]]?.label ?? "Discount"}
+          onClose={() => setScanSeat(null)}
+          onVerified={() => {
+            setIdVerified((prev) => ({ ...prev, [scanSeat]: true }));
+            setScanSeat(null);
+          }}
+        />
+      )}
 
       {/* ============ PAYMENT SUCCESSFUL POP-UP ============ */}
       {paid && (

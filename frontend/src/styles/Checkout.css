@@ -98,26 +98,28 @@
 
 /* ---------- Layout (same width, side padding and gap as seat page) ---------- */
 .checkout-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 400px; 
-  gap: 24px;
-  align-items: start;
-  width: 100%;
-  max-width: 1160px;
-  margin: 0 auto;
-  padding: 24px 24px 0;
+	display: flex;
+	align-items: flex-start;
+	gap: 32px;
+	width: 100%;
+	max-width: 1160px; /* must match .seat-layout */
+	margin: 0 auto;
+	padding: 24px 24px 0;
 }
 
 .checkout-main {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  min-width: 0;
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
 }
 
 .checkout-sidebar {
+  width: 360px;
+  flex-shrink: 0;
   position: static;
-  min-width: 0;
+  top: 100px;
 }
 
 /* ---------- Cards ---------- */
@@ -181,7 +183,7 @@
 
 .co-label {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   margin-bottom: 8px;
 }
 
@@ -331,7 +333,7 @@
 }
 
 .co-seat-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
 }
 
@@ -609,7 +611,7 @@
 }
 
 .co-eyebrow {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -622,7 +624,7 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  font-size: 13px;
+  font-size: 14px;
   padding: 6px 0;
 }
 
@@ -665,18 +667,18 @@
 }
 
 .co-line-name {
-  font-size: 13px;
+  font-size: 14px;
   margin: 0;
 }
 
 .co-line-sub {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--color-text-muted);
   margin: 2px 0 0;
 }
 
 .co-line-price {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   margin: 0;
   white-space: nowrap;

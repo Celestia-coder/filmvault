@@ -178,7 +178,7 @@ function SeatSelection() {
             <h1 className="seat-heading">Select Your Seats</h1>
             <p className="seat-subtext">Choose the seat you'd like to watch the movie.</p>
           </div>
-          <button type="button" className="seat-btn-back" onClick={() => navigate(-1)}>
+          <button type="button" className="seat-btn-back" onClick={() => navigate(`/booking/${movieId}`)}>
             ← Back
           </button>
         </div>

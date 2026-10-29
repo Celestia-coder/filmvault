@@ -46,7 +46,7 @@
 
 .seat-page-header {
   width: 100%;
-  max-width: 1320px;
+  max-width: 1160px;
   margin: 0 auto;
   padding: 150px 24px 0;
   display: flex;
@@ -91,9 +91,9 @@
 .seat-layout {
   display: flex;
   align-items: flex-start;
-  gap: 32px;
+  gap: 24px;;
   width: 100%;
-  max-width: 1320px;
+  max-width: 1160px;
   margin: 0 auto;
   padding: 24px 24px 0;
 }
@@ -348,10 +348,10 @@
 
 /* ---------- Sidebar (Booking Summary) ---------- */
 .seat-sidebar {
-  width: 360px;
+  width: 400px;
   flex-shrink: 0;
-  position: sticky;
-  top: 24px;
+  position: static;
+  top: 100px;
 }
 
 .seat-sidebar-label {

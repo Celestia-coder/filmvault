@@ -99,8 +99,8 @@
 /* ---------- Layout (same width, side padding and gap as seat page) ---------- */
 .checkout-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 32px;
+  grid-template-columns: minmax(0, 1fr) 400px; 
+  gap: 24px;
   align-items: start;
   width: 100%;
   max-width: 1160px;

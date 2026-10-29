@@ -14,7 +14,7 @@
 .admin-main {
 	flex: 1;
 	min-width: 0;
-	padding: 0 32px 40px;
+	padding: 0 32px 28px;
 }
 
 .admin-header {
@@ -90,7 +90,7 @@
 	gap: 12px;
 }
 
-.filter-field {
+.bookings-filter-field {
 	display: flex;
 	flex-direction: column;
 	gap: 6px;
@@ -116,30 +116,37 @@
 	margin-top: 20px;
 }
 
-.summary-card {
+.bookings-stat {
 	padding: 14px 18px;
 	border: 1px solid rgba(255, 255, 255, 0.15);
 	border-radius: 10px;
 	background-color: var(--color-surface);
 }
 
-.summary-label {
-	font-size: 14px;
-	font-weight: 600;
-	color: var(--color-text-muted);
+.bookings-stat-top {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	color: var(--color-white);
 }
 
-.summary-value {
-	margin-top: 6px;
+.bookings-stat-label {
+	font-size: 14px;
+	font-weight: 400;
+}
+
+.bookings-stat-value {
+	margin-top: 10px;
 	font-size: 26px;
 	font-weight: 700;
 }
 
-.summary-value--confirmed {
+.bookings-stat-value--confirmed {
 	color: var(--color-green);
 }
 
-.summary-value--cancelled {
+.bookings-stat-value--cancelled {
 	color: var(--color-red);
 }
 
@@ -214,7 +221,7 @@
 	color: var(--color-white);
 	font-family: var(--font-main);
 	font-size: 13px;
-	font-weight: 600;
+	font-weight: 400;
 	cursor: pointer;
 }
 
@@ -306,7 +313,7 @@
 	cursor: not-allowed;
 }
 
-.bookings-empty {
+.bookings-no-results {
 	margin-top: 14px;
 	padding: 32px;
 	text-align: center;
@@ -320,14 +327,11 @@
 .bookings-table-wrap {
 	margin-top: 14px;
 	overflow-x: auto;
-	border: 1px solid rgba(255, 255, 255, 0.12);
-	border-radius: 10px;
 }
 
 .bookings-table {
 	width: 100%;
 	border-collapse: collapse;
-	background-color: var(--color-surface);
 }
 
 .bookings-table th,
@@ -346,7 +350,7 @@
 
 .bookings-table th {
 	font-size: 11px;
-	font-weight: 700;
+	font-weight: 500;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 	color: var(--color-text-muted);
@@ -361,28 +365,15 @@
 }
 
 .booking-reference {
-	color: var(--color-red);
+	color: var(--color-yellow);
+}
+
+.booking-name {
+	font-weight: 500;
+}
+
+.booking-seats {
 	font-weight: 600;
-}
-
-.booking-customer {
-	display: flex;
-	align-items: center;
-	gap: 10px;
-}
-
-.booking-avatar {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 32px;
-	height: 32px;
-	flex-shrink: 0;
-	border-radius: 50%;
-	background-color: rgba(238, 17, 43, 0.16);
-	color: var(--color-red);
-	font-size: 12px;
-	font-weight: 700;
 }
 
 .booking-primary {
@@ -397,7 +388,7 @@
 
 /* Keep the table from overflowing on laptop widths: long emails elide
    (the full address is in the detail view) and seat lists can wrap. */
-.booking-customer .booking-secondary {
+.booking-email {
 	max-width: 170px;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -410,7 +401,7 @@
 }
 
 .booking-amount {
-	font-weight: 700;
+	font-weight: 600;
 }
 
 .booking-view-btn {
@@ -430,32 +421,48 @@
 	background-color: rgba(255, 255, 255, 0.08);
 }
 
-.status-pill {
-	display: inline-block;
-	padding: 4px 12px;
-	border-radius: 999px;
+/* Badge text uses lighter tints of the status colors so it stays readable
+   on the dark tinted background; the dot uses the same color as the text. */
+.booking-status {
+	--status-confirmed-light: #4ade80;
+	--status-pending-light: #fbbf24;
+	--status-cancelled-light: #ff6b6b;
+
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	border-radius: 6px;
 	font-size: 12px;
-	font-weight: 700;
+	font-weight: 600;
 }
 
-.status-pill--confirmed {
-	background-color: rgba(31, 169, 113, 0.18);
-	color: var(--color-green);
+.booking-status-dot {
+	width: 7px;
+	height: 7px;
+	flex-shrink: 0;
+	border-radius: 50%;
+	background-color: currentColor;
 }
 
-.status-pill--pending {
-	background-color: rgba(245, 166, 35, 0.18);
-	color: var(--color-yellow);
+.booking-status--confirmed {
+	background-color: rgba(31, 169, 113, 0.15);
+	color: var(--status-confirmed-light);
 }
 
-.status-pill--cancelled {
-	background-color: rgba(238, 17, 43, 0.18);
-	color: var(--color-red);
+.booking-status--pending {
+	background-color: rgba(245, 166, 35, 0.15);
+	color: var(--status-pending-light);
+}
+
+.booking-status--cancelled {
+	background-color: rgba(238, 17, 43, 0.15);
+	color: var(--status-cancelled-light);
 }
 
 /* ---------- Booking detail modal ---------- */
 
-.modal-overlay {
+.booking-modal-overlay {
 	position: fixed;
 	inset: 0;
 	display: flex;
@@ -466,7 +473,7 @@
 	z-index: 100;
 }
 
-.modal-card {
+.booking-modal {
 	width: 100%;
 	max-width: 460px;
 	max-height: calc(100vh - 40px);
@@ -477,13 +484,13 @@
 	background-color: var(--color-surface);
 }
 
-.modal-card h2 {
+.booking-modal h2 {
 	margin-top: 4px;
 	font-size: 20px;
 	font-weight: 700;
 }
 
-.modal-subtitle {
+.booking-modal-subtitle {
 	margin-top: 2px;
 	font-size: 13px;
 	color: var(--color-text-muted);
@@ -536,14 +543,14 @@
 	font-size: 14px;
 }
 
-.modal-actions {
+.booking-modal-actions {
 	display: flex;
 	justify-content: flex-end;
 	gap: 12px;
 	margin-top: 26px;
 }
 
-.modal-btn {
+.booking-modal-btn {
 	padding: 10px 20px;
 	border-radius: 8px;
 	font-family: var(--font-main);
@@ -552,13 +559,13 @@
 	cursor: pointer;
 }
 
-.modal-btn--ghost {
+.booking-modal-btn--ghost {
 	border: 1px solid rgba(255, 255, 255, 0.2);
 	background-color: transparent;
 	color: var(--color-white);
 }
 
-.modal-btn--ghost:hover {
+.booking-modal-btn--ghost:hover {
 	background-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -572,13 +579,8 @@
 		padding: 12px 8px;
 	}
 
-	.booking-customer .booking-secondary {
+	.booking-email {
 		max-width: 130px;
-	}
-
-	/* The initials circle is decoration; the name beside it carries the info. */
-	.booking-avatar {
-		display: none;
 	}
 }
 
@@ -662,12 +664,8 @@
 		max-width: none;
 	}
 
-	.booking-customer .booking-secondary {
+	.booking-email {
 		max-width: none;
-	}
-
-	.booking-avatar {
-		display: inline-flex;
 	}
 
 	/* Multi-line cells: stack the label above the content. */

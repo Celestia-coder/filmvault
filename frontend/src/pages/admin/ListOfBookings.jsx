@@ -21,6 +21,9 @@ import posterDevilWearsPrada from "../../assets/images/dashboard/devil-wears-pra
 
 const PAGE_SIZE = 10;
 
+// The admin manages a single branch, so every cinema listed here is in it.
+const BRANCH_NAME = "Vista Mall Taguig";
+
 // Same catalog and ticket prices as the admin dashboard.
 const MOVIES = [
 	{ id: "white-chicks", title: "White Chicks", price: 550, poster: posterWhiteChicks },
@@ -31,31 +34,31 @@ const MOVIES = [
 ];
 
 const SHOWTIMES = [
-	{ movieId: "devil-wears-prada-2", datetime: "2026-06-05T10:00", cinema: "Cinema 1", branch: "Vista Mall Taguig" },
-	{ movieId: "toy-story-5", datetime: "2026-06-05T13:00", cinema: "Cinema 2", branch: "Vista Mall Taguig" },
-	{ movieId: "mean-girls", datetime: "2026-06-06T10:30", cinema: "Cinema 1", branch: "Market! Market!" },
-	{ movieId: "disclosure-day", datetime: "2026-06-06T15:00", cinema: "Cinema 3", branch: "Market! Market!" },
-	{ movieId: "white-chicks", datetime: "2026-06-06T19:30", cinema: "Cinema 2", branch: "Venice McKinley" },
-	{ movieId: "toy-story-5", datetime: "2026-06-07T12:00", cinema: "Cinema 1", branch: "Venice McKinley" },
-	{ movieId: "devil-wears-prada-2", datetime: "2026-06-07T18:30", cinema: "Cinema 3", branch: "Vista Mall Taguig" },
-	{ movieId: "mean-girls", datetime: "2026-06-08T16:00", cinema: "Cinema 2", branch: "Market! Market!" },
+	{ movieId: "devil-wears-prada-2", datetime: "2026-06-05T10:00", cinema: "Cinema 1" },
+	{ movieId: "toy-story-5", datetime: "2026-06-05T13:00", cinema: "Cinema 2" },
+	{ movieId: "mean-girls", datetime: "2026-06-06T10:30", cinema: "Cinema 1" },
+	{ movieId: "disclosure-day", datetime: "2026-06-06T15:00", cinema: "Cinema 3" },
+	{ movieId: "white-chicks", datetime: "2026-06-06T19:30", cinema: "Cinema 2" },
+	{ movieId: "toy-story-5", datetime: "2026-06-07T12:00", cinema: "Cinema 1" },
+	{ movieId: "devil-wears-prada-2", datetime: "2026-06-07T18:30", cinema: "Cinema 3" },
+	{ movieId: "mean-girls", datetime: "2026-06-08T16:00", cinema: "Cinema 2" },
 ];
 
 const FIRST_NAMES = ["Ralph", "Jose", "Trisha", "Juan", "Christine", "Gabriel", "Juliana", "Ben", "Maria", "Angelo", "Patricia", "Miguel", "Andrea", "Carlo", "Bea"];
 const LAST_NAMES = ["Tomas", "Reyes", "Esguerra", "Rivera", "Dela Cruz", "Santos", "Bernabe", "Domingo", "Garcia", "Mendoza", "Villanueva", "Ramos", "Aquino", "Castillo", "Navarro"];
 const SEAT_ROWS = "ABCDEFGHJ";
 const PAYMENT_METHODS = ["GCash", "Credit Card", "Maya"];
-const CANCELLED_AT = new Set([6, 17, 29, 38, 51]);
+const CANCELLED_AT = new Set([6, 17, 29, 38, 51, 55]);
 const PENDING_AT = new Set([9, 23, 44]);
 
 function findMovie(movieId) {
 	return MOVIES.find((movie) => movie.id === movieId);
 }
 
-// 55 placeholder bookings built from the seed lists above, so there's
+// 56 placeholder bookings built from the seed lists above, so there's
 // enough data to paginate without hand-writing every row. Deterministic:
 // the same input always produces the same rows.
-const BOOKINGS = Array.from({ length: 55 }, (_, index) => {
+const BOOKINGS = Array.from({ length: 56 }, (_, index) => {
 	const firstName = FIRST_NAMES[index % FIRST_NAMES.length];
 	const lastName = LAST_NAMES[(index * 7 + Math.floor(index / FIRST_NAMES.length)) % LAST_NAMES.length];
 	const showtime = SHOWTIMES[(index * 3) % SHOWTIMES.length];
@@ -79,7 +82,6 @@ const BOOKINGS = Array.from({ length: 55 }, (_, index) => {
 		movieId: movie.id,
 		datetime: showtime.datetime,
 		cinema: showtime.cinema,
-		branch: showtime.branch,
 		seats,
 		amount: seats.length * movie.price,
 		status,
@@ -112,11 +114,6 @@ function formatPeso(amount) {
 	return `₱${amount.toLocaleString("en-US")}`;
 }
 
-function getInitials(name) {
-	const parts = name.split(" ");
-	return `${parts[0][0]}${parts[parts.length - 1][0]}`;
-}
-
 // Every distinct showtime date in the data, oldest first.
 const DATE_FILTER_OPTIONS = [
 	{ value: "all", label: "All Dates" },
@@ -144,8 +141,27 @@ const IconChevronRight = () => (
 	</svg>
 );
 
+const IconCheckCircle = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+		<circle cx="12" cy="12" r="9" />
+		<path d="M8 12.5l2.5 2.5L16 9.5" />
+	</svg>
+);
+
+const IconXCircle = () => (
+	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+		<circle cx="12" cy="12" r="9" />
+		<path d="M9 9l6 6M15 9l-6 6" />
+	</svg>
+);
+
 function StatusPill({ status }) {
-	return <span className={`status-pill status-pill--${status.toLowerCase()}`}>{status}</span>;
+	return (
+		<span className={`booking-status booking-status--${status.toLowerCase()}`}>
+			<span className="booking-status-dot" aria-hidden="true" />
+			{status}
+		</span>
+	);
 }
 
 function ListOfBookings() {
@@ -233,7 +249,7 @@ function ListOfBookings() {
 					</div>
 
 					<div className="bookings-filters">
-						<div className="filter-field">
+						<div className="bookings-filter-field">
 							<span>Movie</span>
 							<Dropdown
 								options={MOVIE_FILTER_OPTIONS}
@@ -242,7 +258,7 @@ function ListOfBookings() {
 								ariaLabel="Filter by movie"
 							/>
 						</div>
-						<div className="filter-field">
+						<div className="bookings-filter-field">
 							<span>Date</span>
 							<Dropdown
 								options={DATE_FILTER_OPTIONS}
@@ -255,13 +271,19 @@ function ListOfBookings() {
 				</section>
 
 				<section className="bookings-summary" aria-label="Summary">
-					<article className="summary-card">
-						<p className="summary-label">Confirmed</p>
-						<p className="summary-value summary-value--confirmed">{confirmedTotal}</p>
+					<article className="bookings-stat">
+						<div className="bookings-stat-top">
+							<p className="bookings-stat-label">Confirmed</p>
+							<IconCheckCircle />
+						</div>
+						<p className="bookings-stat-value bookings-stat-value--confirmed">{confirmedTotal}</p>
 					</article>
-					<article className="summary-card">
-						<p className="summary-label">Cancelled</p>
-						<p className="summary-value summary-value--cancelled">{cancelledTotal}</p>
+					<article className="bookings-stat">
+						<div className="bookings-stat-top">
+							<p className="bookings-stat-label">Cancelled</p>
+							<IconXCircle />
+						</div>
+						<p className="bookings-stat-value bookings-stat-value--cancelled">{cancelledTotal}</p>
 					</article>
 				</section>
 
@@ -338,7 +360,7 @@ function ListOfBookings() {
 					</div>
 
 					{pageRows.length === 0 ? (
-						<p className="bookings-empty">No bookings match these filters.</p>
+						<p className="bookings-no-results">No bookings match these filters.</p>
 					) : (
 						<div className="bookings-table-wrap">
 							<table className="bookings-table">
@@ -363,25 +385,20 @@ function ListOfBookings() {
 												{booking.reference}
 											</td>
 											<td data-label="Customer">
-												<div className="booking-customer">
-													<span className="booking-avatar" aria-hidden="true">
-														{getInitials(booking.customer.name)}
-													</span>
-													<div>
-														<p className="booking-primary">{booking.customer.name}</p>
-														<p className="booking-secondary">{booking.customer.email}</p>
-													</div>
-												</div>
+												<p className="booking-name">{booking.customer.name}</p>
+												<p className="booking-secondary booking-email">{booking.customer.email}</p>
 											</td>
 											<td data-label="Movie & Showtime">
-												<p className="booking-primary">{findMovie(booking.movieId).title}</p>
+												<p>{findMovie(booking.movieId).title}</p>
 												<p className="booking-secondary">{formatDatetime(booking.datetime)}</p>
 											</td>
 											<td data-label="Cinema">
-												<p className="booking-primary">{booking.cinema}</p>
-												<p className="booking-secondary">{booking.branch}</p>
+												<p>{booking.cinema}</p>
+												<p className="booking-secondary">{BRANCH_NAME}</p>
 											</td>
-											<td data-label="Seats">{booking.seats.join(", ")}</td>
+											<td data-label="Seats" className="booking-seats">
+												{booking.seats.join(", ")}
+											</td>
 											<td data-label="Amount" className="booking-amount">
 												{formatPeso(booking.amount)}
 											</td>
@@ -409,7 +426,7 @@ function ListOfBookings() {
 
 			{selectedBooking && (
 				<div
-					className="modal-overlay"
+					className="booking-modal-overlay"
 					role="dialog"
 					aria-modal="true"
 					aria-labelledby="booking-detail-title"
@@ -418,12 +435,12 @@ function ListOfBookings() {
 						if (event.target === event.currentTarget) setSelectedId(null);
 					}}
 				>
-					<div className="modal-card">
+					<div className="booking-modal">
 						<div className="booking-detail-header">
 							<div>
 								<p className="booking-reference">{selectedBooking.reference}</p>
 								<h2 id="booking-detail-title">{selectedBooking.customer.name}</h2>
-								<p className="modal-subtitle">{selectedBooking.customer.email}</p>
+								<p className="booking-modal-subtitle">{selectedBooking.customer.email}</p>
 							</div>
 							<StatusPill status={selectedBooking.status} />
 						</div>
@@ -440,7 +457,7 @@ function ListOfBookings() {
 							<div>
 								<dt>Cinema</dt>
 								<dd>
-									{selectedBooking.cinema} · {selectedBooking.branch}
+									{selectedBooking.cinema} · {BRANCH_NAME}
 								</dd>
 							</div>
 							<div>
@@ -467,8 +484,8 @@ function ListOfBookings() {
 							</div>
 						</dl>
 
-						<div className="modal-actions">
-							<button type="button" className="modal-btn modal-btn--ghost" onClick={() => setSelectedId(null)}>
+						<div className="booking-modal-actions">
+							<button type="button" className="booking-modal-btn booking-modal-btn--ghost" onClick={() => setSelectedId(null)}>
 								Close
 							</button>
 						</div>

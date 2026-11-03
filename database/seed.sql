@@ -362,13 +362,13 @@ INSERT INTO SCREENING
 (movie_id, cinema_id, show_date, show_time, total_seats, booked_seats, status)
 VALUES
 -- Insidious: Out of the Further
-(2, 1, '2026-09-18', '10:00:00', 10, 0, 'scheduled'),
+(2, 1, '2026-12-25', '10:00:00', 10, 0, 'scheduled'),
 
 -- Resident Evil
-(6, 1, '2026-09-18', '13:00:00', 10, 0, 'scheduled'),
+(6, 1, '2026-12-25', '13:00:00', 10, 0, 'scheduled'),
 
 -- Saving Cherry
-(8, 1, '2026-09-18', '16:00:00', 10, 0, 'scheduled'),
+(8, 1, '2026-12-30', '16:00:00', 10, 0, 'scheduled'),
 
 -- Life After You
-(9, 1, '2026-09-18', '19:00:00', 10, 0, 'scheduled');
+(9, 1, '2026-12-30', '19:00:00', 10, 0, 'scheduled');

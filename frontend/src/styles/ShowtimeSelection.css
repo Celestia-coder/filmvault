@@ -4,7 +4,7 @@
    and MoviePage.css. */
 :root {
 	--showtime-border: rgba(255, 255, 255, 0.08);
-	--showtime-card-bg: rgba(255, 255, 255, 0.03);
+	--showtime-card-bg: var(--color-bg-dark2);
 	--showtime-sidebar-bg: rgba(15, 15, 15, 0.82);
 }
 
@@ -53,7 +53,7 @@
    keeps content from rendering underneath it. */
 .showtime-page-header {
 	width: 100%;
-	max-width: 1320px;
+	max-width: 1160px;
 	margin: 0 auto;
 	padding: 150px 24px 0;
 	display: flex;
@@ -81,9 +81,9 @@
 .showtime-layout {
 	display: flex;
 	align-items: flex-start;
-	gap: 32px;
+	gap: 24px;
 	width: 100%;
-	max-width: 1320px;
+	max-width: 1160px;
 	margin: 0 auto;
 	padding: 24px 24px 0;
 }
@@ -101,7 +101,7 @@
 .step-card {
 	background: var(--showtime-card-bg);
 	border: 1px solid var(--showtime-border);
-	border-radius: 16px;
+	border-radius: 12px; 
 	padding: 24px;
 }
 
@@ -457,12 +457,11 @@
 .showtime-sidebar {
 	width: 360px;
 	flex-shrink: 0;
-	background: var(--showtime-sidebar-bg);
+	background: var(--color-bg-dark2);
 	border: 1px solid var(--showtime-border);
-	border-radius: 16px;
+	border-radius: 12px;
 	padding: 24px;
-	position: sticky;
-	top: 24px;
+	position: static;
 }
 
 .sidebar-eyebrow {
@@ -475,60 +474,53 @@
 }
 
 .sidebar-movie-title {
-	font-size: 20px;
-	font-weight: 800;
-	padding-bottom: 18px;
+	font-size: 16px;
+	font-weight: 700;
+	padding-bottom: 14px;
 	margin-bottom: 4px;
 	border-bottom: 1px solid var(--showtime-border);
 }
 
-.summary-row {
+.showtime-sidebar .summary-row {
 	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 0;
+}
+
+.showtime-sidebar .summary-icon {
+	display: flex;
+	flex-shrink: 0;
+	color: var(--color-red);
+}
+
+.showtime-sidebar .summary-text {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
 	align-items: center;
 	gap: 12px;
-	padding: 14px 0;
-	border-bottom: 1px solid var(--showtime-border);
 }
 
-.summary-row:last-of-type {
-	border-bottom: none;
-}
-
-.summary-icon {
-	width: 32px;
-	height: 32px;
-	border-radius: 8px;
-	background: rgba(238, 17, 43, 0.12);
-	color: var(--color-red);
-	display: flex;
-	align-items: center;
-	justify-content: center;
+.showtime-sidebar .summary-label {
+	font-size: 14px;
+	font-weight: 400;
+	line-height: 1.4;
+	color: var(--color-text-muted);
 	flex-shrink: 0;
 }
 
-.summary-text {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	min-width: 0;
-}
-
-.summary-label {
-	font-size: 11px;
-	font-weight: 700;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	color: var(--color-text-muted);
-}
-
-.summary-value {
+.showtime-sidebar .summary-value {
 	font-size: 14px;
 	font-weight: 700;
+	line-height: 1.4;
 	color: var(--color-white);
-	margin-top: 2px;
+	text-align: right;
 }
 
-.summary-value.unset {
+.showtime-sidebar .summary-value.unset {
 	color: var(--color-text-muted);
 	font-weight: 600;
 }

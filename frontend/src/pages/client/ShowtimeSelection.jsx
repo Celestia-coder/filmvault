@@ -1,13 +1,19 @@
 // ShowtimeSelection.jsx — Owner: [Your Name]
 // Route: "/booking/:movieId" — this is where MoviePage's "Buy Tickets"
 // link (/booking/${movie.id}) leads.
+//
+// Data: the movie comes from GET /api/movies/:id and its showtimes from
+// GET /api/movies/:id/showtimes (via api/movies.js). Branches and the
+// per-hall time slots are built from those showtimes, so nothing is hardcoded.
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
+import { fetchMovie, fetchShowtimes, formatTime } from "../../api/movies.js";
 import "../../styles/ShowtimeSelection.css";
+import "../../styles/BookingStates.css";
 
 /* ---------------------------------------------------------------- */
 /* Icons — small inline SVGs, same approach as the other pages       */
@@ -67,49 +73,16 @@ const IconInfo = (props) => (
 );
 
 /* ---------------------------------------------------------------- */
-/* Data — hardcoded for now                                          */
+/* Constants                                                          */
 /* ---------------------------------------------------------------- */
 
-// TODO: this duplicates title-only data also hardcoded in MoviePage.jsx.
-// Once there's a real movies API, both pages should read from that
-// instead of each keeping their own copy.
-const MOVIE_TITLES = {
-    1: "How To Train Your Dragon",
-    2: "Starlight Voyage",
-    3: "The Last Bloom",
-};
+// All FilmVault branches are in Taguig City (project scope), and the schema has
+// no city column, so this is a constant rather than API data.
+const BRANCH_CITY = "Taguig City";
 
-const BRANCHES = [
-    { id: "vista-mall-taguig", name: "Vista Mall Taguig", city: "Taguig City", hours: "Open until 12:00 AM" },
-    { id: "market-market", name: "Market! Market!", city: "Taguig City", hours: "Open until 12:00 AM" },
-    { id: "venice-mckinley", name: "Venice McKinley", city: "Taguig City", hours: "Open until 12:00 AM" },
-];
-
-// TODO: in a real app this would depend on the selected branch + date —
-// hardcoded here since there's no backend yet.
-const SCREENINGS = [
-    {
-        format: "Digital 2D",
-        price: 350,
-        hall: "Cinema 4",
-        times: [
-            { time: "1:30 PM", soldOut: false },
-            { time: "4:15 PM", soldOut: false },
-            { time: "7:30 PM", soldOut: false },
-            { time: "10:15 PM", soldOut: false },
-        ],
-    },
-    {
-        format: "Digital 2D",
-        price: 350,
-        hall: "Cinema 1",
-        times: [
-            { time: "2:00 PM", soldOut: false },
-            { time: "5:30 PM", soldOut: false },
-            { time: "9:00 PM", soldOut: true },
-        ],
-    },
-];
+// The schema has no screening format. The project scope is regular halls only,
+// so every showtime shows the same label.
+const FORMAT_LABEL = "Digital 2D";
 
 const DAY_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -142,6 +115,35 @@ function formatSidebarDate(date) {
     return `${DAY_NAMES[date.getDay()]}, ${MONTH_ABBR[date.getMonth()]} ${date.getDate()}`;
 }
 
+// The API sends dates as "YYYY-MM-DD", so match on the same string (built from
+// local date parts, which avoids any timezone shift).
+function toDateKey(date) {
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${date.getFullYear()}-${month}-${day}`;
+}
+
+// A showtime that already started today shouldn't be bookable.
+function hasStarted(showtime) {
+    return new Date(`${showtime.date}T${showtime.time}`) < new Date();
+}
+
+/* ---------------------------------------------------------------- */
+/* Small state box — loading / empty / error / not found              */
+/* ---------------------------------------------------------------- */
+
+function StateBox({ tone = "info", title, children }) {
+    return (
+        <div
+            className={`showtime-state showtime-state--${tone}`}
+            role={tone === "error" ? "alert" : "status"}
+        >
+            <p className="showtime-state-title">{title}</p>
+            {children}
+        </div>
+    );
+}
+
 /* ---------------------------------------------------------------- */
 /* Page                                                               */
 /* ---------------------------------------------------------------- */
@@ -149,7 +151,40 @@ function formatSidebarDate(date) {
 function ShowtimeSelection() {
     const { movieId } = useParams();
     const navigate = useNavigate();
-    const movieTitle = MOVIE_TITLES[movieId] || "Selected Movie";
+
+    const [movie, setMovie] = useState(null);
+    const [showtimes, setShowtimes] = useState([]);
+    const [loadState, setLoadState] = useState("loading"); // loading | ready | error | not-found
+    const [errorMessage, setErrorMessage] = useState("");
+    const [reloadKey, setReloadKey] = useState(0);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        setLoadState("loading");
+
+        Promise.all([
+            fetchMovie(movieId, controller.signal),
+            fetchShowtimes(movieId, controller.signal),
+        ])
+            .then(([loadedMovie, loadedShowtimes]) => {
+                setMovie(loadedMovie);
+                setShowtimes(loadedShowtimes);
+                setLoadState("ready");
+            })
+            .catch((error) => {
+                if (error.name === "AbortError") return;
+                if (error.status === 404) {
+                    setLoadState("not-found");
+                    return;
+                }
+                setErrorMessage(error.message);
+                setLoadState("error");
+            });
+
+        return () => controller.abort();
+    }, [movieId, reloadKey]);
+
+    const movieTitle = movie?.title ?? "Selected Movie";
 
     const availableDays = useMemo(() => buildAvailableDays(), []);
     const [page, setPage] = useState(0); // 0 = days 1-7, 1 = days 8-14
@@ -159,8 +194,63 @@ function ShowtimeSelection() {
     const [selectedDate, setSelectedDate] = useState(null);
     const [selectedShowtime, setSelectedShowtime] = useState(null);
 
+    // Only showtimes that are open for booking and haven't started yet.
+    const bookable = useMemo(
+        () => showtimes.filter((s) => s.status === "scheduled" && !hasStarted(s)),
+        [showtimes]
+    );
+
+    // Branches come from the showtimes themselves: a branch with no bookable
+    // showtime for this movie isn't offered.
+    const branches = useMemo(() => {
+        const byId = new Map();
+        bookable.forEach((s) => {
+            const entry = byId.get(s.branchId) ?? {
+                id: s.branchId,
+                name: s.branchName,
+                city: BRANCH_CITY,
+                count: 0,
+            };
+            entry.count += 1;
+            byId.set(s.branchId, entry);
+        });
+        return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+    }, [bookable]);
+
+    // Time slots for the chosen branch + date, grouped by cinema hall.
+    const screenings = useMemo(() => {
+        if (!selectedBranch || !selectedDate) return [];
+        const dateKey = toDateKey(selectedDate);
+        const groups = new Map();
+
+        bookable
+            .filter((s) => s.branchId === selectedBranch.id && s.date === dateKey)
+            .forEach((s) => {
+                const group = groups.get(s.cinemaId) ?? {
+                    cinemaId: s.cinemaId,
+                    cinemaNum: s.cinemaNum,
+                    hall: `Cinema ${s.cinemaNum}`,
+                    times: [],
+                };
+                group.times.push({
+                    id: s.id,
+                    time: formatTime(s.time),
+                    sortKey: s.time,
+                    soldOut: s.seatsAvailable <= 0,
+                });
+                groups.set(s.cinemaId, group);
+            });
+
+        return [...groups.values()]
+            .sort((a, b) => a.cinemaNum - b.cinemaNum)
+            .map((group) => ({
+                ...group,
+                times: group.times.sort((a, b) => a.sortKey.localeCompare(b.sortKey)),
+            }));
+    }, [bookable, selectedBranch, selectedDate]);
+
     // Changing branch or date invalidates whatever showtime was picked —
-    // availability would differ per branch/date once this is real data.
+    // availability differs per branch/date.
     const handleSelectBranch = (branch) => {
         setSelectedBranch(branch);
         setSelectedShowtime(null);
@@ -174,29 +264,222 @@ function ShowtimeSelection() {
     const handleSelectShowtime = (screening, slot) => {
         if (slot.soldOut) return;
         setSelectedShowtime({
+            id: slot.id,
             time: slot.time,
-            format: screening.format,
+            format: FORMAT_LABEL,
             hall: screening.hall,
-            price: screening.price,
+            price: movie?.price ?? 0,
         });
     };
 
-    const canContinue = Boolean(selectedBranch && selectedDate && selectedShowtime);
+    const canContinue = Boolean(
+        loadState === "ready" && selectedBranch && selectedDate && selectedShowtime
+    );
 
     const handleContinue = () => {
         if (!canContinue) return;
-        // TODO: seat selection isn't built yet — this is a placeholder
-        // destination. Passing the picks forward via route state so
-        // whatever gets built next doesn't have to re-derive them.
+        // Everything the next pages need rides along in route state:
+        // SeatSelection loads the seat map with showtime.id, and Checkout reads
+        // the movie/branch/date/showtime details for its summary.
         navigate(`/booking/${movieId}/seats`, {
             state: {
                 movieId,
                 movieTitle,
-                branch: selectedBranch,
+                genres: movie?.genres ?? [],
+                rating: movie?.rating,
+                poster: movie?.poster ?? null,
+                branch: { id: selectedBranch.id, name: selectedBranch.name },
                 date: selectedDate,
                 showtime: selectedShowtime,
+                showtimeId: selectedShowtime.id,
             },
         });
+    };
+
+    const renderMain = () => {
+        if (loadState === "loading") {
+            return <StateBox title="Loading showtimes…">Hang on while we check what's playing.</StateBox>;
+        }
+
+        if (loadState === "not-found") {
+            return (
+                <StateBox tone="error" title="We couldn't find that movie.">
+                    <button type="button" className="btn-back-top" onClick={() => navigate("/")}>
+                        ← Back to movies
+                    </button>
+                </StateBox>
+            );
+        }
+
+        if (loadState === "error") {
+            return (
+                <StateBox tone="error" title="Couldn't load showtimes.">
+                    <p>{errorMessage}</p>
+                    <button type="button" className="btn-back-top" onClick={() => setReloadKey((k) => k + 1)}>
+                        Try again
+                    </button>
+                </StateBox>
+            );
+        }
+
+        if (bookable.length === 0) {
+            return (
+                <StateBox title="No showtimes available.">
+                    <p>There are no upcoming showtimes for {movieTitle} yet. Please check back later.</p>
+                </StateBox>
+            );
+        }
+
+        return (
+            <>
+                {/* Step 1 — Cinema branch */}
+                <div className="step-card">
+                    <div className="step-header">
+                        <span className="step-number">1</span>
+                        <div>
+                            <p className="step-title">Select Cinema Branch</p>
+                            <p className="step-subtitle">Where would you like to watch?</p>
+                        </div>
+                    </div>
+
+                    <div className="branch-list">
+                        {branches.map((branch) => (
+                            <button
+                                type="button"
+                                key={branch.id}
+                                className={"branch-option" + (selectedBranch?.id === branch.id ? " selected" : "")}
+                                onClick={() => handleSelectBranch(branch)}
+                            >
+                                <span className="branch-option-left">
+                                    <span className="branch-icon">
+                                        <IconMapPin />
+                                    </span>
+                                    <span className="branch-text">
+                                        <span className="branch-name">{branch.name}</span>
+                                        <span className="branch-city">{branch.city}</span>
+                                    </span>
+                                </span>
+                                <span className="branch-option-right">
+                                    <span className="branch-hours">
+                                        {branch.count} showtime{branch.count === 1 ? "" : "s"}
+                                    </span>
+                                    <span className="radio-dot" />
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Step 2 — Date */}
+                <div className="step-card">
+                    <div className="step-header">
+                        <span className="step-number">2</span>
+                        <div>
+                            <p className="step-title">Select Date</p>
+                            <p className="step-subtitle">Showtimes available for the next 14 days</p>
+                        </div>
+                    </div>
+
+                    <div className="calendar-header">
+                        <span className="calendar-month">
+                            {MONTH_FULL[visibleDays[0].getMonth()]} {visibleDays[0].getFullYear()}
+                        </span>
+                        <div className="calendar-nav">
+                            <button
+                                type="button"
+                                className="calendar-nav-btn"
+                                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                                disabled={page === 0}
+                                aria-label="Previous days"
+                            >
+                                <IconChevronLeft />
+                            </button>
+                            <button
+                                type="button"
+                                className="calendar-nav-btn"
+                                onClick={() => setPage((p) => Math.min(1, p + 1))}
+                                disabled={page === 1}
+                                aria-label="Next days"
+                            >
+                                <IconChevronRight />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="calendar-strip">
+                        {visibleDays.map((day) => {
+                            const isToday = day.getTime() === availableDays[0].getTime();
+                            const isSelected = selectedDate && day.getTime() === selectedDate.getTime();
+
+                            return (
+                                <button
+                                    type="button"
+                                    key={day.getTime()}
+                                    className={"calendar-day" + (isSelected ? " selected" : "")}
+                                    onClick={() => handleSelectDate(day)}
+                                >
+                                    <span className="calendar-day-name">{DAY_NAMES[day.getDay()]}</span>
+                                    <span className="calendar-day-number">{day.getDate()}</span>
+                                    {isToday && <span className="calendar-day-today">TODAY</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Step 3 — Showtime */}
+                <div className="step-card">
+                    <div className="step-header">
+                        <span className="step-number">3</span>
+                        <div>
+                            <p className="step-title">Select Showtime</p>
+                            <p className="step-subtitle">Format and hall shown per screening</p>
+                        </div>
+                    </div>
+
+                    {!selectedBranch || !selectedDate ? (
+                        <p className="showtime-hint">Choose a branch and a date to see the showtimes.</p>
+                    ) : screenings.length === 0 ? (
+                        <p className="showtime-hint">
+                            No showtimes at {selectedBranch.name} on {formatSidebarDate(selectedDate)}. Try another date.
+                        </p>
+                    ) : (
+                        screenings.map((screening) => (
+                            <div className="screening-group" key={screening.cinemaId}>
+                                <div className="screening-header">
+                                    <div className="screening-header-left">
+                                        <span className="format-badge">{FORMAT_LABEL}</span>
+                                        <span className="screening-price">₱{movie?.price ?? 0} / seat</span>
+                                    </div>
+                                    <span className="screening-hall">{screening.hall}</span>
+                                </div>
+
+                                <div className="time-slots">
+                                    {screening.times.map((slot) => {
+                                        const isSelected = selectedShowtime && selectedShowtime.id === slot.id;
+
+                                        return (
+                                            <button
+                                                type="button"
+                                                key={slot.id}
+                                                className={"time-slot" + (isSelected ? " selected" : "")}
+                                                disabled={slot.soldOut}
+                                                onClick={() => handleSelectShowtime(screening, slot)}
+                                            >
+                                                <span className="time-slot-time">{slot.time}</span>
+                                                <span className="time-slot-status">
+                                                    {slot.soldOut ? "Sold out" : "Available"}
+                                                </span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </>
+        );
     };
 
     return (
@@ -218,147 +501,7 @@ function ShowtimeSelection() {
                 </div>
 
                 <div className="showtime-layout">
-                    <div className="showtime-main">
-                        {/* Step 1 — Cinema branch */}
-                        <div className="step-card">
-                            <div className="step-header">
-                                <span className="step-number">1</span>
-                                <div>
-                                    <p className="step-title">Select Cinema Branch</p>
-                                    <p className="step-subtitle">Where would you like to watch?</p>
-                                </div>
-                            </div>
-
-                            <div className="branch-list">
-                                {BRANCHES.map((branch) => (
-                                    <button
-                                        type="button"
-                                        key={branch.id}
-                                        className={"branch-option" + (selectedBranch?.id === branch.id ? " selected" : "")}
-                                        onClick={() => handleSelectBranch(branch)}
-                                    >
-                                        <span className="branch-option-left">
-                                            <span className="branch-icon">
-                                                <IconMapPin />
-                                            </span>
-                                            <span className="branch-text">
-                                                <span className="branch-name">{branch.name}</span>
-                                                <span className="branch-city">{branch.city}</span>
-                                            </span>
-                                        </span>
-                                        <span className="branch-option-right">
-                                            <span className="branch-hours">{branch.hours}</span>
-                                            <span className="radio-dot" />
-                                        </span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Step 2 — Date */}
-                        <div className="step-card">
-                            <div className="step-header">
-                                <span className="step-number">2</span>
-                                <div>
-                                    <p className="step-title">Select Date</p>
-                                    <p className="step-subtitle">Showtimes available for the next 14 days</p>
-                                </div>
-                            </div>
-
-                            <div className="calendar-header">
-                                <span className="calendar-month">
-                                    {MONTH_FULL[visibleDays[0].getMonth()]} {visibleDays[0].getFullYear()}
-                                </span>
-                                <div className="calendar-nav">
-                                    <button
-                                        type="button"
-                                        className="calendar-nav-btn"
-                                        onClick={() => setPage((p) => Math.max(0, p - 1))}
-                                        disabled={page === 0}
-                                        aria-label="Previous days"
-                                    >
-                                        <IconChevronLeft />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="calendar-nav-btn"
-                                        onClick={() => setPage((p) => Math.min(1, p + 1))}
-                                        disabled={page === 1}
-                                        aria-label="Next days"
-                                    >
-                                        <IconChevronRight />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="calendar-strip">
-                                {visibleDays.map((day) => {
-                                    const isToday = day.getTime() === availableDays[0].getTime();
-                                    const isSelected = selectedDate && day.getTime() === selectedDate.getTime();
-
-                                    return (
-                                        <button
-                                            type="button"
-                                            key={day.getTime()}
-                                            className={"calendar-day" + (isSelected ? " selected" : "")}
-                                            onClick={() => handleSelectDate(day)}
-                                        >
-                                            <span className="calendar-day-name">{DAY_NAMES[day.getDay()]}</span>
-                                            <span className="calendar-day-number">{day.getDate()}</span>
-                                            {isToday && <span className="calendar-day-today">TODAY</span>}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Step 3 — Showtime */}
-                        <div className="step-card">
-                            <div className="step-header">
-                                <span className="step-number">3</span>
-                                <div>
-                                    <p className="step-title">Select Showtime</p>
-                                    <p className="step-subtitle">Format and hall shown per screening</p>
-                                </div>
-                            </div>
-
-                            {SCREENINGS.map((screening) => (
-                                <div className="screening-group" key={screening.hall}>
-                                    <div className="screening-header">
-                                        <div className="screening-header-left">
-                                            <span className="format-badge">{screening.format}</span>
-                                            <span className="screening-price">₱{screening.price} / seat</span>
-                                        </div>
-                                        <span className="screening-hall">{screening.hall}</span>
-                                    </div>
-
-                                    <div className="time-slots">
-                                        {screening.times.map((slot) => {
-                                            const isSelected =
-                                                selectedShowtime &&
-                                                selectedShowtime.time === slot.time &&
-                                                selectedShowtime.hall === screening.hall;
-
-                                            return (
-                                                <button
-                                                    type="button"
-                                                    key={slot.time}
-                                                    className={"time-slot" + (isSelected ? " selected" : "")}
-                                                    disabled={slot.soldOut}
-                                                    onClick={() => handleSelectShowtime(screening, slot)}
-                                                >
-                                                    <span className="time-slot-time">{slot.time}</span>
-                                                    <span className="time-slot-status">
-                                                        {slot.soldOut ? "Sold out" : "Available"}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <div className="showtime-main">{renderMain()}</div>
 
                     {/* Sidebar */}
                     <div className="showtime-sidebar">

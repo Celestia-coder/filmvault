@@ -1,13 +1,21 @@
+// SeatSelection.jsx
 // Route: "/booking/:movieId/seats" — reached from ShowtimeSelection's
-// "Continue to Seats" button, which passes branch/date/showtime via
-// route state.
-import { useState, useMemo } from "react";
-import { useParams, useNavigate, useLocation } from "react-router";
+// "Continue to Seats" button, which passes the picks in route state.
+//
+// Data: the seat map comes from GET /api/showtimes/:id/seats, and "Proceed to
+// Checkout" holds the chosen seats with POST /api/showtimes/:id/seats/hold
+// (via api/seats.js). Seats are held for 10 minutes; Checkout gets the exact
+// expiry in route state so its countdown matches the server.
+
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useParams, useNavigate, useLocation, Link } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
+import { fetchSeatMap, holdSeats } from "../../api/seats.js";
+import { getUser } from "../../api/session.js";
 import "../../styles/SeatSelection.css";
-
+import "../../styles/BookingStates.css";
 
 const IconMapPin = (props) => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -45,17 +53,15 @@ const IconLock = (props) => (
   </svg>
 );
 
-/* ---------------------------------------------------------------- */
-/* Data — hardcoded seat map             */
-/* ---------------------------------------------------------------- */
-const ROWS = ["A", "B", "C", "D", "E", "F", "G", "H"];
-const LEFT_SEATS = [1, 2, 3, 4, 5];
-const RIGHT_SEATS = [6, 7, 8, 9, 10];
-
-const RESERVED_SEATS = new Set(["A3", "A4", "D6", "D7", "D8", "D9", "D10"]);
-
 const MIN_TICKETS = 1;
 const MAX_TICKETS = 8;
+
+const STATUS_TEXT = {
+  available: "Available",
+  held: "Held by someone else",
+  booked: "Booked",
+  blocked: "Not available",
+};
 
 function formatSidebarDate(date) {
   if (!date) return null;
@@ -65,30 +71,139 @@ function formatSidebarDate(date) {
   return `${DAY_NAMES[d.getDay()]}, ${MONTH_ABBR[d.getMonth()]} ${d.getDate()}`;
 }
 
+// "A3" / "A3 and A4" / "A3, A4 and A5"
+function joinLabels(labels) {
+  if (labels.length <= 1) return labels.join("");
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
+// A seat can be picked if it's free, or if the current user already holds it
+// (for example when they come back from Checkout).
+const isSelectable = (seat) => seat.status === "available" || seat.heldByYou;
+
+function StateBox({ tone = "info", title, children }) {
+  return (
+    <div className={`seat-state seat-state--${tone}`} role={tone === "error" ? "alert" : "status"}>
+      <p className="seat-state-title">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function SeatButton({ seat, isSelected, onToggle }) {
+  const unavailable = !isSelectable(seat);
+  // Held, booked and blocked seats all look "reserved" (the existing style).
+  const visualStatus = unavailable ? "reserved" : "available";
+  const statusText = isSelected ? "Selected" : seat.heldByYou ? "Held for you" : STATUS_TEXT[seat.status];
+
+  return (
+    <button
+      type="button"
+      className={`seat-circle seat-circle--${visualStatus}` + (isSelected ? " is-selected" : "")}
+      disabled={unavailable}
+      aria-pressed={isSelected}
+      aria-label={`Seat ${seat.label}, ${statusText}`}
+      title={`${seat.label} · ${statusText}`}
+      onClick={() => onToggle(seat.id)}
+    >
+      {seat.number}
+    </button>
+  );
+}
+
 /* ---------------------------------------------------------------- */
-/* Page                                                              */
+/* Page                                                             */
 /* ---------------------------------------------------------------- */
 function SeatSelection() {
   const { movieId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
 
+  const bookingState = location.state || {};
   const {
     movieTitle = "Selected Movie",
     branch = null,
     date = null,
     showtime = null,
-  } = location.state || {};
+    ticketCount: initialTicketCount,
+    seats: initialSeats,
+  } = bookingState;
+  const showtimeId = showtime?.id ?? bookingState.showtimeId ?? null;
 
-  const [ticketCount, setTicketCount] = useState(2);
-  const [selectedSeats, setSelectedSeats] = useState([]); 
+  const [ticketCount, setTicketCount] = useState(initialTicketCount ?? 2);
+  const [selectedIds, setSelectedIds] = useState([]); // seat ids, e.g. [41, 42]
+
+  const [seatMap, setSeatMap] = useState(null); // { cinema, seats }
+  const [loadState, setLoadState] = useState(showtimeId ? "loading" : "no-showtime");
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const [holding, setHolding] = useState(false);
+  const [holdError, setHoldError] = useState("");
+  const [needsLogin, setNeedsLogin] = useState(false);
+
+  // Seats picked earlier (e.g. coming back from Checkout), as labels like "H7".
+  const initialSeatsRef = useRef(initialSeats);
+
+  const loadSeats = useCallback(
+    async (signal) => {
+      const map = await fetchSeatMap(showtimeId, { userId: getUser()?.userId, signal });
+      setSeatMap(map);
+      return map;
+    },
+    [showtimeId]
+  );
+
+  useEffect(() => {
+    if (!showtimeId) return undefined;
+    const controller = new AbortController();
+    setLoadState("loading");
+
+    loadSeats(controller.signal)
+      .then((map) => {
+        const wanted = new Set(initialSeatsRef.current ?? []);
+        if (wanted.size > 0) {
+          setSelectedIds(map.seats.filter((s) => wanted.has(s.label) && isSelectable(s)).map((s) => s.id));
+        }
+        setLoadState("ready");
+      })
+      .catch((error) => {
+        if (error.name === "AbortError") return;
+        setLoadError(error.message);
+        setLoadState(error.status === 404 ? "not-found" : "error");
+      });
+
+    return () => controller.abort();
+  }, [showtimeId, loadSeats, reloadKey]);
+
+  const seatsById = useMemo(
+    () => new Map((seatMap?.seats ?? []).map((seat) => [seat.id, seat])),
+    [seatMap]
+  );
+
+  // Seat map rows: grouped by row letter, each split into a left and right
+  // block at the aisle. The API doesn't send an aisle yet (aisleAfter is null),
+  // so the map is split down the middle.
+  const rows = useMemo(() => {
+    const byRow = new Map();
+    (seatMap?.seats ?? []).forEach((seat) => {
+      if (!byRow.has(seat.row)) byRow.set(seat.row, []);
+      byRow.get(seat.row).push(seat);
+    });
+    return [...byRow.entries()].map(([row, seats]) => ({
+      row,
+      seats: seats.sort((a, b) => a.number - b.number),
+    }));
+  }, [seatMap]);
+
+  const seatsPerRow = seatMap?.cinema?.seatsPerRow ?? 0;
+  const leftCount = seatMap?.cinema?.aisleAfter ?? Math.ceil(seatsPerRow / 2);
 
   const handleDecreaseTickets = () => {
-    setTicketCount((prev) => {
-      const next = Math.max(MIN_TICKETS, prev - 1);
-      setSelectedSeats((seats) => seats.slice(0, next));
-      return next;
-    });
+    const next = Math.max(MIN_TICKETS, ticketCount - 1);
+    setTicketCount(next);
+    // Trim excess selected seats so selection never exceeds the new count.
+    setSelectedIds((ids) => ids.slice(0, next));
   };
 
   const handleIncreaseTickets = () => {
@@ -96,38 +211,172 @@ function SeatSelection() {
   };
 
   const toggleSeat = (seatId) => {
-    if (RESERVED_SEATS.has(seatId)) return;
+    const seat = seatsById.get(seatId);
+    if (!seat || !isSelectable(seat)) return;
+    setHoldError("");
 
-    setSelectedSeats((prev) => {
+    setSelectedIds((prev) => {
       if (prev.includes(seatId)) {
-        return prev.filter((s) => s !== seatId);
+        return prev.filter((id) => id !== seatId);
       }
       if (prev.length >= ticketCount) return prev;
       return [...prev, seatId];
     });
   };
 
-  const seatsRemaining = ticketCount - selectedSeats.length;
-  const canCheckout = seatsRemaining === 0;
-
-  const sortedSelectedSeats = useMemo(
-    () => [...selectedSeats].sort(),
-    [selectedSeats]
+  const selectedSeats = useMemo(
+    () =>
+      selectedIds
+        .map((id) => seatsById.get(id))
+        .filter(Boolean)
+        .sort((a, b) => a.rowNum - b.rowNum || a.number - b.number),
+    [selectedIds, seatsById]
   );
 
-  const handleCheckout = () => {
+  const seatsRemaining = ticketCount - selectedSeats.length;
+  const canCheckout = loadState === "ready" && seatsRemaining === 0 && !holding;
+
+  const handleCheckout = async () => {
     if (!canCheckout) return;
-    navigate(`/booking/${movieId}/checkout`, {
-      state: {
-        movieId,
-        movieTitle,
-        branch,
-        date,
-        showtime,
-        ticketCount,
-        selectedSeats: sortedSelectedSeats,
-      },
-    });
+
+    const user = getUser();
+    if (!user?.userId) {
+      setNeedsLogin(true);
+      setHoldError("Please log in to hold your seats.");
+      return;
+    }
+
+    setNeedsLogin(false);
+    setHoldError("");
+    setHolding(true);
+
+    const seatIds = selectedSeats.map((seat) => seat.id);
+    const labels = selectedSeats.map((seat) => seat.label);
+
+    try {
+      const hold = await holdSeats(showtimeId, { userId: user.userId, seatIds });
+
+      navigate("/checkout", {
+        state: {
+          ...bookingState,
+          movieId,
+          movieTitle,
+          branch,
+          date,
+          showtime,
+          showtimeId,
+          ticketCount,
+          seats: labels, // labels like "H7" for display
+          seatIds, // ids for the booking request
+          holdSeconds: hold.expiresInSeconds,
+          holdExpiresAt: Date.now() + hold.expiresInSeconds * 1000,
+        },
+      });
+    } catch (error) {
+      if (error.status === 409 && Array.isArray(error.data?.failedSeats)) {
+        // Someone got there first: say which seats, drop them from the
+        // selection, and refresh the map so they show as taken.
+        const failedIds = new Set(error.data.failedSeats.map((f) => f.seatId));
+        const failedLabels = selectedSeats.filter((s) => failedIds.has(s.id)).map((s) => s.label);
+        setSelectedIds((ids) => ids.filter((id) => !failedIds.has(id)));
+        setHoldError(
+          `${joinLabels(failedLabels)} ${failedLabels.length === 1 ? "was" : "were"} just taken by someone else. ` +
+            "We've refreshed the seat map, so please pick another seat."
+        );
+        try {
+          await loadSeats();
+        } catch {
+          // keep showing the old map; the error banner above still explains what happened
+        }
+      } else {
+        setHoldError(error.message);
+      }
+    } finally {
+      setHolding(false);
+    }
+  };
+
+  const renderSeat = (seat) => (
+    <SeatButton
+      key={seat.id}
+      seat={seat}
+      isSelected={selectedIds.includes(seat.id)}
+      onToggle={toggleSeat}
+    />
+  );
+
+  const renderSeatMap = () => {
+    if (loadState === "loading") {
+      return <StateBox title="Loading seat map…">One moment while we check which seats are free.</StateBox>;
+    }
+    if (loadState === "no-showtime") {
+      return (
+        <StateBox tone="error" title="We lost track of your showtime.">
+          <p>Please go back and pick a showtime again.</p>
+          <button type="button" className="seat-btn-back" onClick={() => navigate(`/booking/${movieId}`)}>
+            ← Pick a showtime
+          </button>
+        </StateBox>
+      );
+    }
+    if (loadState === "not-found") {
+      return (
+        <StateBox tone="error" title="That showtime no longer exists.">
+          <button type="button" className="seat-btn-back" onClick={() => navigate(`/booking/${movieId}`)}>
+            ← Pick another showtime
+          </button>
+        </StateBox>
+      );
+    }
+    if (loadState === "error") {
+      return (
+        <StateBox tone="error" title="Couldn't load the seat map.">
+          <p>{loadError}</p>
+          <button type="button" className="seat-btn-back" onClick={() => setReloadKey((k) => k + 1)}>
+            Try again
+          </button>
+        </StateBox>
+      );
+    }
+    if (rows.length === 0) {
+      return (
+        <StateBox title="No seats to show.">
+          <p>This cinema doesn't have a seat layout set up yet.</p>
+        </StateBox>
+      );
+    }
+
+    return (
+      <div className="seat-map-scroll">
+        <div
+          className="seat-map"
+          style={{
+            "--seat-per-row": seatsPerRow,
+            "--seat-left-cols": leftCount,
+            "--seat-right-cols": seatsPerRow - leftCount,
+          }}
+        >
+          <div className="seat-screen">
+            <div className="seat-screen-bar" />
+            <span>Screen</span>
+          </div>
+
+          {rows.map(({ row, seats }) => (
+            <div className="seat-row" key={row}>
+              <span className="seat-row-label">{row}</span>
+
+              <div className="seat-group seat-group--left">
+                {seats.filter((seat) => seat.number <= leftCount).map(renderSeat)}
+              </div>
+
+              <div className="seat-group seat-group--right">
+                {seats.filter((seat) => seat.number > leftCount).map(renderSeat)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -142,7 +391,7 @@ function SeatSelection() {
             <h1 className="seat-heading">Select Your Seats</h1>
             <p className="seat-subtext">Choose the seat you'd like to watch the movie.</p>
           </div>
-          <button type="button" className="btn-back-top" onClick={() => navigate(-1)}>
+          <button type="button" className="seat-btn-back" onClick={() => navigate(`/booking/${movieId}`)}>
             ← Back
           </button>
         </div>
@@ -150,30 +399,35 @@ function SeatSelection() {
         <div className="seat-layout">
           <div className="seat-main">
             {/* Tickets */}
-            <div className="step-card">
-              <div className="step-header">
-                <span className="step-icon"><IconTicket /></span>
-                <p className="step-title">TICKETS</p>
-              </div>
-              <div className="ticket-stepper-row">
+            <section className="seat-panel" aria-label="Tickets">
+              <header className="seat-panel-head">
+                <span className="seat-panel-icon">
+                  <IconTicket width={20} height={20} />
+                </span>
+                <h3 className="seat-panel-title">TICKETS</h3>
+              </header>
+
+              <div className="seat-panel-body seat-ticket-row">
                 <div>
-                  <p className="ticket-label">Number of tickets</p>
-                  <p className="ticket-sublabel">Maximum {MAX_TICKETS} tickets per booking</p>
+                  <p className="seat-ticket-label">Number of tickets</p>
+                  <p className="seat-ticket-sublabel">
+                    Maximum {MAX_TICKETS} tickets per booking
+                  </p>
                 </div>
-                <div className="ticket-stepper">
+                <div className="seat-stepper">
                   <button
                     type="button"
-                    className="stepper-btn"
+                    className="seat-stepper-btn"
                     onClick={handleDecreaseTickets}
                     disabled={ticketCount <= MIN_TICKETS}
                     aria-label="Decrease tickets"
                   >
                     −
                   </button>
-                  <span className="stepper-value">{ticketCount}</span>
+                  <span className="seat-stepper-value">{ticketCount}</span>
                   <button
                     type="button"
-                    className="stepper-btn"
+                    className="seat-stepper-btn"
                     onClick={handleIncreaseTickets}
                     disabled={ticketCount >= MAX_TICKETS}
                     aria-label="Increase tickets"
@@ -182,161 +436,125 @@ function SeatSelection() {
                   </button>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* Seat map */}
-            <div className="step-card">
-              <div className="step-header">
-                <span className="step-icon"><IconTicket /></span>
-                <p className="step-title">SELECT SEATS</p>
-              </div>
-
-              <div className="seat-legend">
-                <span className="legend-item">
-                  <span className="legend-dot legend-available"></span> Available
+            <section className="seat-panel" aria-label="Seat map">
+              <header className="seat-panel-head">
+                <span className="seat-panel-icon">
+                  <IconTicket width={20} height={20} />
                 </span>
-                <span className="legend-item">
-                  <span className="legend-dot legend-reserved"></span> Reserved
-                </span>
-                <span className="legend-item">
-                  <span className="legend-dot legend-selected"></span> Selected
-                </span>
-              </div>
+                <h3 className="seat-panel-title">SELECT SEATS</h3>
+              </header>
 
-              <div className="screen-bar"></div>
-              <p className="screen-label">SCREEN</p>
+              <ul className="seat-legend">
+                <li>
+                  <span className="seat-circle seat-circle--available seat-legend-swatch" />
+                  Available
+                </li>
+                <li>
+                  <span className="seat-circle seat-circle--reserved seat-legend-swatch" />
+                  Unavailable
+                </li>
+                <li>
+                  <span className="seat-circle seat-circle--available is-selected seat-legend-swatch" />
+                  Selected
+                </li>
+              </ul>
 
-              <div className="seat-grid">
-                {ROWS.map((row) => (
-                  <div className="seat-row" key={row}>
-                    <span className="row-label">{row}</span>
-
-                    <div className="seat-block">
-                      {LEFT_SEATS.map((num) => {
-                        const seatId = `${row}${num}`;
-                        const isReserved = RESERVED_SEATS.has(seatId);
-                        const isSelected = selectedSeats.includes(seatId);
-                        return (
-                          <button
-                            type="button"
-                            key={seatId}
-                            className={
-                              "seat-btn" +
-                              (isReserved ? " reserved" : "") +
-                              (isSelected ? " selected" : "")
-                            }
-                            disabled={isReserved}
-                            onClick={() => toggleSeat(seatId)}
-                            aria-label={`Seat ${seatId}`}
-                          >
-                            {num}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div className="seat-block">
-                      {RIGHT_SEATS.map((num) => {
-                        const seatId = `${row}${num}`;
-                        const isReserved = RESERVED_SEATS.has(seatId);
-                        const isSelected = selectedSeats.includes(seatId);
-                        return (
-                          <button
-                            type="button"
-                            key={seatId}
-                            className={
-                              "seat-btn" +
-                              (isReserved ? " reserved" : "") +
-                              (isSelected ? " selected" : "")
-                            }
-                            disabled={isReserved}
-                            onClick={() => toggleSeat(seatId)}
-                            aria-label={`Seat ${seatId}`}
-                          >
-                            {num}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+              {renderSeatMap()}
+            </section>
           </div>
 
           {/* Sidebar — Booking Summary */}
-          <div className="seat-sidebar">
-            <div className="sidebar-header">
-              <span className="sidebar-icon"><IconTicket /></span>
-              <p className="sidebar-title">Booking Summary</p>
-            </div>
-
-            <p className="sidebar-section-label">SHOWTIME</p>
-
-            <div className="summary-row">
-              <span className="summary-icon"><IconMapPin /></span>
-              <span className="summary-label">Branch</span>
-              <span className={"summary-value" + (branch ? "" : " unset")}>
-                {branch ? branch.name : "Not selected"}
+          <aside className="seat-panel seat-sidebar" aria-label="Booking summary">
+            <header className="seat-panel-head">
+              <span className="seat-panel-icon">
+                <IconTicket width={20} height={20} />
               </span>
-            </div>
+              <h3 className="seat-panel-title">Booking Summary</h3>
+            </header>
 
-            <div className="summary-row">
-              <span className="summary-icon"><IconTicket /></span>
-              <span className="summary-label">Cinema</span>
-              <span className={"summary-value" + (showtime ? "" : " unset")}>
-                {showtime ? showtime.hall : "Not selected"}
-              </span>
-            </div>
+            <div className="seat-panel-body">
+              <p className="seat-sidebar-label">SHOWTIME</p>
 
-            <div className="summary-row">
-              <span className="summary-icon"><IconCalendar /></span>
-              <span className="summary-label">Date</span>
-              <span className={"summary-value" + (date ? "" : " unset")}>
-                {date ? formatSidebarDate(date) : "Not selected"}
-              </span>
-            </div>
+              <div className="seat-summary-row">
+                <span className="seat-summary-icon"><IconMapPin /></span>
+                <span className="seat-summary-label">Branch</span>
+                <span className={"seat-summary-value" + (branch ? "" : " unset")}>
+                  {branch ? branch.name : "Not selected"}
+                </span>
+              </div>
 
-            <div className="summary-row">
-              <span className="summary-icon"><IconClock /></span>
-              <span className="summary-label">Time</span>
-              <span className={"summary-value" + (showtime ? "" : " unset")}>
-                {showtime ? showtime.time : "Not selected"}
-              </span>
-            </div>
+              <div className="seat-summary-row">
+                <span className="seat-summary-icon"><IconTicket /></span>
+                <span className="seat-summary-label">Cinema</span>
+                <span className={"seat-summary-value" + (showtime ? "" : " unset")}>
+                  {showtime ? showtime.hall : "Not selected"}
+                </span>
+              </div>
 
-            <div className="summary-row">
-              <span className="summary-icon"><IconTicket /></span>
-              <span className="summary-label">Tickets</span>
-              <span className="summary-value">{ticketCount}</span>
-            </div>
+              <div className="seat-summary-row">
+                <span className="seat-summary-icon"><IconCalendar /></span>
+                <span className="seat-summary-label">Date</span>
+                <span className={"seat-summary-value" + (date ? "" : " unset")}>
+                  {date ? formatSidebarDate(date) : "Not selected"}
+                </span>
+              </div>
 
-            <p className="sidebar-section-label">SELECTED SEATS</p>
-            <div className="selected-seats-chips">
-              {sortedSelectedSeats.length === 0 ? (
-                <span className="chip chip-empty">None selected</span>
-              ) : (
-                sortedSelectedSeats.map((seatId) => (
-                  <span className="chip" key={seatId}>{seatId}</span>
-                ))
+              <div className="seat-summary-row">
+                <span className="seat-summary-icon"><IconClock /></span>
+                <span className="seat-summary-label">Time</span>
+                <span className={"seat-summary-value" + (showtime ? "" : " unset")}>
+                  {showtime ? showtime.time : "Not selected"}
+                </span>
+              </div>
+
+              <div className="seat-summary-row">
+                <span className="seat-summary-icon"><IconTicket /></span>
+                <span className="seat-summary-label">Tickets</span>
+                <span className="seat-summary-value">{ticketCount}</span>
+              </div>
+
+              <p className="seat-sidebar-label">SELECTED SEATS</p>
+              <div className="seat-chips">
+                {selectedSeats.length === 0 ? (
+                  <span className="seat-chip seat-chip--empty">None selected</span>
+                ) : (
+                  selectedSeats.map((seat) => (
+                    <span className="seat-chip" key={seat.id}>{seat.label}</span>
+                  ))
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="seat-checkout-btn"
+                disabled={!canCheckout}
+                onClick={handleCheckout}
+              >
+                <IconLock /> {holding ? "Holding your seats…" : "Proceed to Checkout"}
+              </button>
+
+              {holdError && (
+                <p className="seat-hold-error" role="alert">
+                  {holdError}
+                  {needsLogin && (
+                    <>
+                      {" "}
+                      <Link to="/login">Log in</Link>
+                    </>
+                  )}
+                </p>
               )}
+
+              <p className="seat-checkout-hint">
+                {canCheckout || holding
+                  ? "You're all set!"
+                  : `Select ${seatsRemaining} more seat${seatsRemaining === 1 ? "" : "s"} to continue`}
+              </p>
             </div>
-
-            <button
-              type="button"
-              className="btn-checkout"
-              disabled={!canCheckout}
-              onClick={handleCheckout}
-            >
-              <IconLock /> Proceed to Checkout
-            </button>
-
-            <p className="checkout-hint">
-              {canCheckout
-                ? "You're all set!"
-                : `Select ${seatsRemaining} more seat${seatsRemaining === 1 ? "" : "s"} to continue`}
-            </p>
-          </div>
+          </aside>
         </div>
       </section>
 

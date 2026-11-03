@@ -10,6 +10,7 @@ const showtimeRoutes = require("./routes/showtimeRoutes");
 const searchRoutes = require("./routes/searchRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const seatRoutes = require("./routes/seatRoutes");
+const seatHoldRoutes = require("./routes/seatHoldRoutes");
 
 const app = express();
 
@@ -43,6 +44,9 @@ app.use("/api", bookingRoutes);
 
 // Admin seat routes: seat map + Seat Inspector block/release
 app.use("/api", seatRoutes);
+
+// Customer seat routes: seat map for a showtime + temporary seat holds
+app.use("/api", seatHoldRoutes);
 
 const PORT = process.env.PORT || 5000;
 

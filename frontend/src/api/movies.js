@@ -38,31 +38,40 @@ const RATING_LABELS = {
 /* ------------------------------ errors + fetch ----------------------------- */
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, data = null) {
     super(message);
     this.name = "ApiError";
     this.status = status; // 0 = network failure, otherwise the HTTP status
+    this.data = data; // the parsed JSON body of an error response, if any
   }
 }
 
-async function request(path, { signal, params } = {}) {
+// GET by default. Pass { method: "POST", body: {...} } to send JSON.
+// Exported so other api/ files (seats.js, ...) reuse the same error handling.
+export async function request(path, { signal, params, method = "GET", body } = {}) {
   const query = new URLSearchParams(
     Object.entries(params ?? {}).filter(([, value]) => value)
   ).toString();
 
+  const init = { method, signal };
+  if (body !== undefined) {
+    init.headers = { "Content-Type": "application/json" };
+    init.body = JSON.stringify(body);
+  }
+
   let response;
   try {
-    response = await fetch(`${API_BASE}${path}${query ? `?${query}` : ""}`, { signal });
+    response = await fetch(`${API_BASE}${path}${query ? `?${query}` : ""}`, init);
   } catch (error) {
     if (error.name === "AbortError") throw error;
     throw new ApiError("Can't reach the server. Check your connection and try again.", 0);
   }
 
-  const body = await response.json().catch(() => null);
-  if (!response.ok || body?.success === false) {
-    throw new ApiError(body?.message || "Something went wrong.", response.status);
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data?.success === false) {
+    throw new ApiError(data?.message || "Something went wrong.", response.status, data);
   }
-  return body;
+  return data;
 }
 
 /* --------------------------------- mappers --------------------------------- */
@@ -132,7 +141,9 @@ function mapMovie(raw) {
 function mapShowtime(raw) {
   return {
     id: raw.showtime_id,
+    branchId: raw.branch_id,
     branchName: raw.branch_name,
+    cinemaId: raw.cinema_id,
     cinemaNum: raw.cinema_num,
     date: raw.show_date,
     time: raw.show_time,

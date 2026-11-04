@@ -142,17 +142,17 @@
   max-width: 980px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px; /* was 20px */
 }
 
 .booking-card {
   display: flex;
   align-items: stretch;
-  gap: 18px;
+  gap: 14px; /* was 18px */
   background: var(--fv-card);
   border: 1px solid var(--fv-card-border);
   border-radius: 8px;
-  padding: 10px 18px 10px 10px;
+  padding: 8px 16px 8px 8px; /* was 10px 18px 10px 10px */
   animation: fv-fade-in 0.3s ease both;
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
@@ -163,8 +163,8 @@
 }
 
 .booking-poster {
-  width: 80px;
-  height: 120px;
+  width: 60px; /* was 80px */
+  height: 90px; /* was 120px */
   object-fit: cover;
   object-position: top;
   border-radius: 4px;
@@ -218,12 +218,14 @@
 
 .booking-meta {
   text-align: right;
-  font-size: 0.82rem;
+  font-size: 0.8rem; /* was 0.82rem */
   color: var(--fv-muted);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  align-items: flex-end; /* new: keeps the button on the right */
+  gap: 1px; /* was 2px */
+  line-height: 1.3; /* new */
 }
 
 .booking-meta p {
@@ -232,9 +234,36 @@
 
 .booking-price {
   color: var(--fv-text);
-  font-size: 1.15rem;
+  font-size: 1.05rem; /* was 1.15rem */
   font-weight: 700;
-  margin-bottom: 4px !important;
+  margin-bottom: 2px !important; /* was 4px */
+}
+
+/* ---- E-ticket download button ---- */
+.booking-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 12px;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--fv-text);
+  background: transparent;
+  border: 1px solid var(--fv-red);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.booking-download-btn:hover {
+  background: var(--fv-red);
+}
+
+.booking-download-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 .bookings-empty {
@@ -276,8 +305,8 @@
   }
 
   .booking-poster {
-    width: 70px;
-    height: 105px;
+    width: 56px; /* was 70px */
+    height: 84px; /* was 105px */
   }
 
   .booking-meta {
@@ -290,6 +319,11 @@
     border-top: 1px solid var(--fv-card-border);
     padding-top: 8px;
     gap: 4px 12px;
+    line-height: 1.3;
+  }
+
+  .booking-download-btn {
+    margin-top: 0; /* meta is a row on mobile */
   }
 }
 

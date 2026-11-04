@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, Film } from "lucide-react";
+import { Search, Film, Download } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import "../../styles/Tickets.css";
@@ -104,6 +104,58 @@ function formatPrice(amount) {
   return `₱${amount.toFixed(2)}`;
 }
 
+/* ---------- E-ticket download ---------- */
+
+// Generates a simple e-ticket image and downloads it.
+// Replace with the real endpoint later (e.g. GET /api/bookings/:id/ticket).
+function downloadETicket(booking) {
+  const { referenceNo, title, runtimeMins, showDateTime, ticketCount, seats, totalPrice } =
+    booking;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 800;
+  canvas.height = 380;
+  const ctx = canvas.getContext("2d");
+
+  // background + red header bar
+  ctx.fillStyle = "#1a1a1a";
+  ctx.fillRect(0, 0, 800, 380);
+  ctx.fillStyle = "#e50914";
+  ctx.fillRect(0, 0, 800, 70);
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 28px Poppins, Arial, sans-serif";
+  ctx.fillText("FilmVault E-Ticket", 30, 45);
+
+  // movie details
+  ctx.font = "bold 32px Poppins, Arial, sans-serif";
+  ctx.fillText(title, 30, 125);
+
+  ctx.font = "18px Poppins, Arial, sans-serif";
+  ctx.fillStyle = "#bbb";
+  ctx.fillText(formatRuntime(runtimeMins), 30, 155);
+
+  ctx.fillStyle = "#fff";
+  ctx.fillText(formatShowtime(showDateTime), 30, 200);
+  ctx.fillText(`Seat(s): ${seats.join(", ")}`, 30, 235);
+  ctx.fillText(`Total Ticket(s): ${ticketCount}`, 30, 270);
+  ctx.fillText(`Total: ${formatPrice(totalPrice)}`, 30, 305);
+
+  // reference number
+  ctx.fillStyle = "#bbb";
+  ctx.font = "16px monospace";
+  ctx.fillText(`Ref No: ${referenceNo}`, 30, 350);
+
+  canvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${referenceNo}-e-ticket.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, "image/png");
+}
+
 /* ---------- Poster with fallback ---------- */
 
 function Poster({ src, title }) {
@@ -132,7 +184,7 @@ function Poster({ src, title }) {
 /* ---------- Booking card ---------- */
 
 function BookingCard({ booking }) {
-  const { title, poster, runtimeMins, showDateTime, totalPrice, ticketCount, seats } =
+  const { title, poster, runtimeMins, showDateTime, totalPrice, ticketCount, seats, status } =
     booking;
 
   return (
@@ -153,6 +205,17 @@ function BookingCard({ booking }) {
         <p className="booking-price">{formatPrice(totalPrice)}</p>
         <p>Total Ticket(s): {ticketCount}</p>
         <p>Seat Number: {seats.join(", ")}</p>
+        {/* E-ticket download: active bookings only (remove the check to show on both tabs) */}
+        {status === "active" && (
+          <button
+            type="button"
+            className="booking-download-btn"
+            onClick={() => downloadETicket(booking)}
+          >
+            <Download size={14} aria-hidden="true" />
+            E-Ticket
+          </button>
+        )}
       </div>
     </li>
   );
@@ -185,84 +248,92 @@ export default function Tickets() {
     // Arrow-key navigation between tabs (accessibility)
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     const idx = TABS.findIndex((t) => t.key === activeTab);
-    const next = e.key === "ArrowRight" ? (idx + 1) % TABS.length : (idx - 1 + TABS.length) % TABS.length;
+    const next =
+      e.key === "ArrowRight"
+        ? (idx + 1) % TABS.length
+        : (idx - 1 + TABS.length) % TABS.length;
     setActiveTab(TABS[next].key);
     document.getElementById(`tab-${TABS[next].key}`)?.focus();
   };
 
   return (
     <>
-    <Navbar />
-    <main className="tickets-page">
-      <header className="tickets-header">
-        <h1>My Bookings</h1>
-        <p>Track your active tickets and past bookings.</p>
-      </header>
+      <Navbar />
+      <main className="tickets-page">
+        <header className="tickets-header">
+          <h1>My Bookings</h1>
+          <p>Track your active tickets and past bookings.</p>
+        </header>
 
-      {/* Function 1: tab switch */}
-      <div className="tickets-tabs" role="tablist" aria-label="Booking type" onKeyDown={handleKeyDownTabs}>
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            id={`tab-${tab.key}`}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.key}
-            aria-controls="bookings-panel"
-            tabIndex={activeTab === tab.key ? 0 : -1}
-            className={`tickets-tab ${activeTab === tab.key ? "is-active" : ""}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Function 2: search */}
-      <form className="tickets-search" role="search" onSubmit={handleSubmit}>
-        <label htmlFor="booking-search" className="sr-only">
-          Search bookings by reference number or movie name
-        </label>
-        <div className="tickets-search-field">
-          <Search size={16} aria-hidden="true" />
-          <input
-            id="booking-search"
-            type="search"
-            placeholder="Type reference number, movie name..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+        {/* Function 1: tab switch */}
+        <div
+          className="tickets-tabs"
+          role="tablist"
+          aria-label="Booking type"
+          onKeyDown={handleKeyDownTabs}
+        >
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              id={`tab-${tab.key}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.key}
+              aria-controls="bookings-panel"
+              tabIndex={activeTab === tab.key ? 0 : -1}
+              className={`tickets-tab ${activeTab === tab.key ? "is-active" : ""}`}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-        <button type="submit" className="tickets-search-btn">
-          Search
-        </button>
-      </form>
 
-      {/* Function 3: bookings list */}
-      <section
-        id="bookings-panel"
-        role="tabpanel"
-        aria-labelledby={`tab-${activeTab}`}
-        aria-live="polite"
-      >
-        {filteredBookings.length > 0 ? (
-          <ul className="bookings-list">
-            {filteredBookings.map((b) => (
-              <BookingCard key={b.id} booking={b} />
-            ))}
-          </ul>
-        ) : (
-          <div className="bookings-empty">
-            {query
-              ? `No bookings match "${query}".`
-              : activeTab === "active"
-              ? "You have no active reservations."
-              : "You have no past reservations yet."}
+        {/* Function 2: search */}
+        <form className="tickets-search" role="search" onSubmit={handleSubmit}>
+          <label htmlFor="booking-search" className="sr-only">
+            Search bookings by reference number or movie name
+          </label>
+          <div className="tickets-search-field">
+            <Search size={16} aria-hidden="true" />
+            <input
+              id="booking-search"
+              type="search"
+              placeholder="Type reference number, movie name..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
           </div>
-        )}
-      </section>
-    </main>
-    <Footer />
+          <button type="submit" className="tickets-search-btn">
+            Search
+          </button>
+        </form>
+
+        {/* Function 3: bookings list */}
+        <section
+          id="bookings-panel"
+          role="tabpanel"
+          aria-labelledby={`tab-${activeTab}`}
+          aria-live="polite"
+        >
+          {filteredBookings.length > 0 ? (
+            <ul className="bookings-list">
+              {filteredBookings.map((b) => (
+                <BookingCard key={b.id} booking={b} />
+              ))}
+            </ul>
+          ) : (
+            <div className="bookings-empty">
+              {query
+                ? `No bookings match "${query}".`
+                : activeTab === "active"
+                ? "You have no active reservations."
+                : "You have no past reservations yet."}
+            </div>
+          )}
+        </section>
+      </main>
+      <Footer />
     </>
   );
 }

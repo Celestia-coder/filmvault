@@ -1,7 +1,6 @@
 // MovieManagement.jsx — Admin movie management
 // Route: "/admin/movies"
 
-
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import "../../styles/MovieManagement.css";
@@ -9,12 +8,6 @@ import "../../styles/MovieManagement.css";
 import AdminSidebar from "../../components/AdminSidebar";
 
 import navMovie from "../../assets/images/dashboard/nav-movie.svg";
-
-import posterWhiteChicks from "../../assets/images/dashboard/white-chicks.png";
-import posterMeanGirls from "../../assets/images/dashboard/mean-girls.png";
-import posterDisclosureDay from "../../assets/images/dashboard/disclosure-day.png";
-import posterToyStory from "../../assets/images/dashboard/toy-story-5.png";
-import posterDevilWearsPrada from "../../assets/images/dashboard/devil-wears-prada-2.png";
 
 // Fixed lists — genres are shown as toggle chips and language as a
 // dropdown since both are constrained sets in the real database, not
@@ -31,102 +24,6 @@ const GENRE_OPTIONS = [
 	"Family",
 ];
 const LANGUAGE_OPTIONS = ["English", "Filipino", "Korean", "Japanese"];
-
-// Placeholder catalog until the backend exists. Statuses: "now-showing",
-// "upcoming", "ended".
-const INITIAL_MOVIES = [
-	{
-		id: 1,
-		title: "The Devil Wears Prada 2",
-		synopsis:
-			"Twenty years later, Andy Sachs returns to Runway as Miranda Priestly fights to keep her empire alive — this time against her former assistant Emily Charlton, now a powerful rival with the money to save or sink the magazine.",
-		director: "David Frankel",
-		releaseDate: "2026-05-01",
-		rating: "PG",
-		durationMinutes: 110,
-		language: "English",
-		genres: ["Comedy", "Drama"],
-		price: 350,
-		status: "now-showing",
-		trailerUrl: "https://youtube.com/watch?v=...",
-		poster: posterDevilWearsPrada,
-	},
-	{
-		id: 2,
-		title: "The Loved One",
-		synopsis: "",
-		director: "Irene Emma Villamor",
-		releaseDate: "",
-		rating: "R-13",
-		durationMinutes: 98,
-		language: "Filipino",
-		genres: ["Romance", "Drama"],
-		price: 300,
-		status: "now-showing",
-		trailerUrl: "",
-		poster: posterMeanGirls,
-	},
-	{
-		id: 3,
-		title: "Un/Happy For You",
-		synopsis: "",
-		director: "Petersen Vargas",
-		releaseDate: "",
-		rating: "R-13",
-		durationMinutes: 105,
-		language: "Filipino",
-		genres: ["Romance", "Drama"],
-		price: 300,
-		status: "now-showing",
-		trailerUrl: "",
-		poster: posterDisclosureDay,
-	},
-	{
-		id: 4,
-		title: "Disclosure Day",
-		synopsis: "",
-		director: "David Frankel",
-		releaseDate: "",
-		rating: "PG",
-		durationMinutes: 110,
-		language: "English",
-		genres: ["Comedy", "Drama"],
-		price: 350,
-		status: "now-showing",
-		trailerUrl: "",
-		poster: posterDisclosureDay,
-	},
-	{
-		id: 5,
-		title: "Toy Story 5",
-		synopsis: "",
-		director: "David Frankel",
-		releaseDate: "",
-		rating: "PG",
-		durationMinutes: 110,
-		language: "English",
-		genres: ["Comedy", "Drama"],
-		price: 390,
-		status: "upcoming",
-		trailerUrl: "",
-		poster: posterToyStory,
-	},
-	{
-		id: 6,
-		title: "Mean Girls",
-		synopsis: "",
-		director: "David Frankel",
-		releaseDate: "",
-		rating: "PG",
-		durationMinutes: 110,
-		language: "English",
-		genres: ["Comedy", "Drama"],
-		price: 350,
-		status: "ended",
-		trailerUrl: "",
-		poster: posterMeanGirls,
-	},
-];
 
 const STATUS_LABELS = {
 	"now-showing": "Now Showing",
@@ -160,6 +57,31 @@ const EMPTY_FORM = {
 	price: "",
 	trailerUrl: "",
 };
+
+// Base URL for the backend API. Change this if your local server runs on
+// a different port, or swap it for an environment variable later.
+const API_URL = "http://localhost:5000";
+
+// Backend returns raw DB column names (movie_id, base_price, age_rating,
+// duration, release_date, trailer_url); this maps them to the camelCase
+// shape this component already uses everywhere else.
+function normalizeMovie(row) {
+	return {
+		id: row.movie_id,
+		title: row.title,
+		synopsis: row.synopsis ?? "",
+		director: row.director,
+		releaseDate: row.release_date ?? "",
+		rating: row.age_rating ?? "PG",
+		durationMinutes: row.duration,
+		language: row.language ?? LANGUAGE_OPTIONS[0],
+		genres: row.genres ?? [],
+		price: row.base_price,
+		status: row.status,
+		trailerUrl: row.trailer_url ?? "",
+		poster: row.poster,
+	};
+}
 
 const IconSearch = () => (
 	<svg
@@ -434,7 +356,8 @@ function toggleGenre(list, genre) {
 }
 
 function MovieManagement() {
-	const [movies, setMovies] = useState(INITIAL_MOVIES);
+	const [movies, setMovies] = useState([]);
+	const [loadError, setLoadError] = useState("");
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState("all");
 	const [genreFilter, setGenreFilter] = useState("all");
@@ -452,6 +375,26 @@ function MovieManagement() {
 	const posterInputRef = useRef(null);
 
 	const [deletingId, setDeletingId] = useState(null);
+
+	// Fetch real movies from the backend on mount.
+	const fetchMovies = async () => {
+		try {
+			const res = await fetch(`${API_URL}/api/movies`);
+			const data = await res.json();
+			if (!data.success) {
+				throw new Error(data.message || "Failed to load movies.");
+			}
+			setMovies(data.movies.map(normalizeMovie));
+			setLoadError("");
+		} catch (err) {
+			console.error("fetchMovies error:", err);
+			setLoadError("Could not load movies from the server.");
+		}
+	};
+
+	useEffect(() => {
+		fetchMovies();
+	}, []);
 
 	const genreOptions = useMemo(() => {
 		const unique = new Set();
@@ -547,7 +490,13 @@ function MovieManagement() {
 		setPosterError("");
 	};
 
-	const handleFormSubmit = (event) => {
+	// NOTE: poster is currently sent to the backend as whatever string is in
+	// posterPreview. If the admin just uploaded a file, that's a local blob
+	// URL (URL.createObjectURL) which only exists in THIS browser tab — it
+	// will not resolve for other users or persist correctly in the database.
+	// Real image upload (e.g. multer + file storage, or an external image
+	// host) is a separate backend task that still needs to be built.
+	const handleFormSubmit = async (event) => {
 		event.preventDefault();
 
 		if (!form.posterPreview) {
@@ -570,37 +519,68 @@ function MovieManagement() {
 		)
 			return;
 
-		const shared = {
+		const payload = {
 			title: form.title,
 			synopsis: form.synopsis,
 			director: form.director,
 			releaseDate: form.releaseDate,
 			genres: form.genres,
 			language: form.language,
-			rating: form.rating,
-			durationMinutes: Number(form.durationMinutes),
+			ageRating: form.rating,
+			duration: Number(form.durationMinutes),
 			status: form.status,
 			price: Number(form.price),
 			trailerUrl: form.trailerUrl,
 			poster: form.posterPreview,
 		};
 
-		if (formMode === "add") {
-			setMovies((prev) => [...prev, { id: Date.now(), ...shared }]);
-		} else {
-			setMovies((prev) =>
-				prev.map((movie) =>
-					movie.id === editingId ? { ...movie, ...shared } : movie,
-				),
-			);
-		}
+		try {
+			const url =
+				formMode === "add"
+					? `${API_URL}/api/admin/movies`
+					: `${API_URL}/api/admin/movies/${editingId}`;
+			const method = formMode === "add" ? "POST" : "PUT";
 
-		closeForm();
+			const res = await fetch(url, {
+				method,
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+			});
+			const data = await res.json();
+
+			if (!data.success) {
+				alert(data.message || "Failed to save movie.");
+				return;
+			}
+
+			await fetchMovies(); // refresh from server so state matches the DB
+			closeForm();
+		} catch (err) {
+			console.error("handleFormSubmit error:", err);
+			alert("Something went wrong while saving the movie.");
+		}
 	};
 
-	const handleDeleteConfirm = () => {
-		setMovies((prev) => prev.filter((movie) => movie.id !== deletingId));
-		setDeletingId(null);
+	const handleDeleteConfirm = async () => {
+		try {
+			const res = await fetch(
+				`${API_URL}/api/admin/movies/${deletingId}`,
+				{ method: "DELETE" },
+			);
+			const data = await res.json();
+
+			if (!data.success) {
+				alert(data.message || "Failed to delete movie.");
+				return;
+			}
+
+			await fetchMovies();
+		} catch (err) {
+			console.error("handleDeleteConfirm error:", err);
+			alert("Something went wrong while deleting the movie.");
+		} finally {
+			setDeletingId(null);
+		}
 	};
 
 	const deletingMovie =
@@ -624,6 +604,8 @@ function MovieManagement() {
 						Log Out
 					</Link>
 				</header>
+
+				{loadError && <p className="movie-empty">{loadError}</p>}
 
 				{view === "list" ? (
 					<>

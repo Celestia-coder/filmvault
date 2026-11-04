@@ -1,5 +1,4 @@
-
-
+import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
@@ -7,6 +6,11 @@ import heroBg from "../../assets/images/hero-bg.png";
 import moviePoster from "../../assets/images/movie-poster.webp";
 import "../../styles/MovieDetails.css";
 
+const API_URL = "http://localhost:5000";
+
+/* ---------------------------------------------------------------- */
+/* Icons                                                              */
+/* ---------------------------------------------------------------- */
 
 const IconClock = (props) => (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -42,59 +46,42 @@ const IconTicket = (props) => (
     </svg>
 );
 
-const MOVIES = [
-    {
-        id: "1",
-        title: "How To Train Your Dragon",
-        poster: moviePoster,
-        genres: ["Adventure", "Fantasy", "Family", "Action"],
-        runtime: "2h 5m",
-        releaseDate: "Jun 13, 2025",
-        director: "Dean DeBlois",
-        restriction: { code: "PG", label: "Parental Guidance" },
-        synopsis:
-            "On the rugged isle of Berk, a young Viking named Hiccup defies generations of tradition when he befriends Toothless, a feared Night Fury dragon. Their unlikely bond challenges everything his people believe — and forges a path that could end the war between Vikings and dragons forever.",
-        cast: [
-            { initials: "MT", actor: "Mason Thames", character: "Hiccup" },
-            { initials: "NP", actor: "Nico Parker", character: "Astrid" },
-            { initials: "GB", actor: "Gerard Butler", character: "Stoick" },
-            { initials: "NF", actor: "Nick Frost", character: "Gobber" },
-        ],
-    },
-    {
-        id: "2",
-        title: "Starlight Voyage",
-        poster: moviePoster,
-        genres: ["Sci-Fi", "Adventure"],
-        runtime: "1h 58m",
-        releaseDate: "Jul 4, 2025",
-        director: "Elena Cruz",
-        restriction: { code: "PG-13", label: "Parents Strongly Cautioned" },
-        synopsis:
-            "When a young engineer picks up a signal from beyond the solar system, she has to convince a skeptical crew to chase it across the galaxy before a rival nation gets there first.",
-        cast: [
-            { initials: "MC", actor: "Maya Chen", character: "Dr. Alex Rivera" },
-            { initials: "JO", actor: "Jonah Okafor", character: "Captain Reyes" },
-            { initials: "SL", actor: "Sofia Lindqvist", character: "Nadia" },
-        ],
-    },
-    {
-        id: "3",
-        title: "The Last Bloom",
-        poster: moviePoster,
-        genres: ["Drama", "Family"],
-        runtime: "1h 47m",
-        releaseDate: "Aug 22, 2025",
-        director: "Thomas Reyes",
-        restriction: { code: "G", label: "General Audiences" },
-        synopsis:
-            "A florist returning to her hometown after years away has to reconnect with her estranged sister to save their late mother's shop before the season's last bloom fades.",
-        cast: [
-            { initials: "AW", actor: "Amara Whitfield", character: "Iris" },
-            { initials: "DK", actor: "Daniel Kessler", character: "Owen" },
-        ],
-    },
-];
+/* ---------------------------------------------------------------- */
+/* Helpers                                                            */
+/* ---------------------------------------------------------------- */
+
+const RATING_LABELS = {
+    G: "General Audiences",
+    PG: "Parental Guidance",
+    "PG-13": "Parents Strongly Cautioned",
+    R: "Restricted",
+};
+
+const STATUS_LABELS = {
+    upcoming: "Coming Soon",
+    "now-showing": "Now Showing",
+    ended: "Ended",
+};
+
+// 135 -> "2h 15m"
+const formatRuntime = (mins) => {
+    if (!mins) return "TBA";
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return h ? `${h}h${m ? ` ${m}m` : ""}` : `${m}m`;
+};
+
+// "2026-07-30" -> "Jul 30, 2026" (parsed as UTC so it never shifts a day)
+const formatDate = (value) => {
+    if (!value) return "TBA";
+    const [y, m, d] = String(value).slice(0, 10).split("-").map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        timeZone: "UTC",
+    });
+};
 
 /* ---------------------------------------------------------------- */
 /* Small subcomponent                                                 */
@@ -120,9 +107,58 @@ function MovieDetails() {
     const { movieId } = useParams();
     const navigate = useNavigate();
 
-    const movie = MOVIES.find((m) => m.id === movieId);
+    const [movie, setMovie] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null); // "not-found" | "failed" | null
 
-    if (!movie) {
+    useEffect(() => {
+        const controller = new AbortController();
+
+        async function loadMovie() {
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await fetch(`${API_URL}/api/movies/${movieId}`, {
+                    signal: controller.signal,
+                });
+
+                if (res.status === 404 || res.status === 400) {
+                    setMovie(null);
+                    setError("not-found");
+                    return;
+                }
+                if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+
+                const data = await res.json();
+                setMovie(data.movie);
+            } catch (err) {
+                if (err.name === "AbortError") return;
+                console.error("Failed to load movie:", err);
+                setMovie(null);
+                setError("failed");
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
+            }
+        }
+
+        loadMovie();
+        return () => controller.abort();
+    }, [movieId]);
+
+    // Loading / not found / server error
+    if (loading || error) {
+        const label = loading ? "Loading" : error === "not-found" ? "Not Found" : "Error";
+        const heading = loading
+            ? "Loading movie..."
+            : error === "not-found"
+                ? "We couldn't find that movie"
+                : "Something went wrong";
+        const message = loading
+            ? ""
+            : error === "not-found"
+                ? `There's no movie with ID "${movieId}" in the catalog yet.`
+                : "We couldn't reach the server. Please try again in a moment.";
+
         return (
             <div className="movie-page">
                 <div className="movie-bg" style={{ backgroundImage: `url(${heroBg})` }}></div>
@@ -133,15 +169,15 @@ function MovieDetails() {
                     <div className="movie-not-found">
                         <p className="movie-status">
                             <span className="status-dot" />
-                            Not Found
+                            {label}
                         </p>
-                        <h1 className="movie-title">We couldn't find that movie</h1>
-                        <p className="movie-synopsis">
-                            There's no movie with ID "{movieId}" in the catalog yet.
-                        </p>
-                        <button type="button" className="btn-back" onClick={() => navigate(-1)}>
-                            ← Back
-                        </button>
+                        <h1 className="movie-title">{heading}</h1>
+                        {message && <p className="movie-synopsis">{message}</p>}
+                        {!loading && (
+                            <button type="button" className="btn-back" onClick={() => navigate(-1)}>
+                                ← Back
+                            </button>
+                        )}
                     </div>
                 </section>
 
@@ -150,6 +186,7 @@ function MovieDetails() {
         );
     }
 
+    // Loaded
     return (
         <div className="movie-page">
             <div className="movie-bg" style={{ backgroundImage: `url(${heroBg})` }}></div>
@@ -160,16 +197,20 @@ function MovieDetails() {
                 <div className="movie-layout">
                     <div className="movie-poster-wrap">
                         <img
-                            src={movie.poster}
+                            src={movie.poster || moviePoster}
                             alt={`${movie.title} poster`}
                             className="movie-poster"
+                            onError={(e) => {
+                                e.currentTarget.onerror = null;
+                                e.currentTarget.src = moviePoster;
+                            }}
                         />
                     </div>
 
                     <div className="movie-details">
                         <p className="movie-status">
                             <span className="status-dot" />
-                            Now Showing
+                            {STATUS_LABELS[movie.status] || movie.status}
                         </p>
 
                         <h1 className="movie-title">{movie.title}</h1>
@@ -183,47 +224,52 @@ function MovieDetails() {
                         </div>
 
                         <div className="movie-meta-grid">
-                            <MetaItem icon={<IconClock />} label="Runtime" value={movie.runtime} />
-                            <MetaItem icon={<IconCalendar />} label="Release Date" value={movie.releaseDate} />
-                            <MetaItem icon={<IconFilm />} label="Director" value={movie.director} />
+                            <MetaItem icon={<IconClock />} label="Runtime" value={formatRuntime(movie.duration)} />
+                            <MetaItem icon={<IconCalendar />} label="Release Date" value={formatDate(movie.release_date)} />
+                            <MetaItem icon={<IconFilm />} label="Director" value={movie.director || "TBA"} />
 
-                            <div className="meta-item">
-                                <span className="meta-icon">
-                                    <IconShield />
-                                </span>
-                                <span className="meta-text">
-                                    <span className="meta-label">Restriction</span>
-                                    <span className="meta-value restriction-value">
-                                        <span className="restriction-badge">{movie.restriction.code}</span>
-                                        {movie.restriction.label}
+                            {movie.age_rating && (
+                                <div className="meta-item">
+                                    <span className="meta-icon">
+                                        <IconShield />
                                     </span>
-                                </span>
-                            </div>
+                                    <span className="meta-text">
+                                        <span className="meta-label">Restriction</span>
+                                        <span className="meta-value restriction-value">
+                                            <span className="restriction-badge">{movie.age_rating}</span>
+                                            {RATING_LABELS[movie.age_rating] || ""}
+                                        </span>
+                                    </span>
+                                </div>
+                            )}
                         </div>
 
                         <div className="movie-section">
                             <h2 className="section-label">Synopsis</h2>
-                            <p className="movie-synopsis">{movie.synopsis}</p>
+                            <p className="movie-synopsis">{movie.synopsis || "No synopsis available."}</p>
                         </div>
 
-                        <div className="movie-section">
-                            <h2 className="section-label">Cast</h2>
-                            <div className="cast-list">
-                                {movie.cast.map((member) => (
-                                    <div className="cast-member" key={member.actor}>
-                                        <span className="cast-avatar">{member.initials}</span>
-                                        <span className="cast-info">
-                                            <span className="cast-actor">{member.actor}</span>
-                                            <span className="cast-character">{member.character}</span>
-                                        </span>
-                                    </div>
-                                ))}
+                        {/* The API doesn't return cast yet, so this stays hidden until it does */}
+                        {movie.cast?.length > 0 && (
+                            <div className="movie-section">
+                                <h2 className="section-label">Cast</h2>
+                                <div className="cast-list">
+                                    {movie.cast.map((member) => (
+                                        <div className="cast-member" key={member.actor}>
+                                            <span className="cast-avatar">{member.initials}</span>
+                                            <span className="cast-info">
+                                                <span className="cast-actor">{member.actor}</span>
+                                                <span className="cast-character">{member.character}</span>
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <div className="movie-actions">
                             {/* Placeholder destination — no booking flow built yet */}
-                            <Link to={`/booking/${movie.id}`} className="btn-buy-tickets">
+                            <Link to={`/booking/${movie.movie_id}`} className="btn-buy-tickets">
                                 <IconTicket />
                                 Buy Tickets
                             </Link>

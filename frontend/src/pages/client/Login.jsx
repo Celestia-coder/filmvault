@@ -1,9 +1,11 @@
 // Route: "/login"
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
+import { request } from "../../api/movies.js";
+import { saveUser } from "../../api/session.js";
 import "../../styles/Login.css";
 
 const IconMail = (props) => (
@@ -107,6 +109,12 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+  // Pages that need a login (like Seat Selection) send people here with { from, fromState },
+  // so after logging in they land back where they were. Otherwise go to the movies page.
+  const { from, fromState } = location.state ?? {};
 
   const validate = () => {
     const next = {};
@@ -121,22 +129,23 @@ function Login() {
     setStatus(null);
     if (!validate()) return;
 
+    setSubmitting(true);
     try {
-      const res = await fetch("http://localhost:5000/api/auth/login", {
+      const data = await request("/api/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), password }),
+        body: { email: email.trim(), password },
       });
-      const data = await res.json().catch(() => ({}));
 
-      if (res.ok && data.success) {
-        setStatus({ type: "success", message: data.message || "Login successful!" });
-      } else {
-        setStatus({ type: "error", message: data.message || "Login failed." });
-      }
+      // Remember who logged in. Seat Selection, Checkout and Tickets all read this.
+      saveUser(data.user);
+      navigate(data.user.role === "admin" ? "/admin/dashboard" : from ?? "/movies", {
+        replace: true,
+        state: from ? fromState : undefined,
+      });
     } catch (err) {
-      console.error("Login request failed:", err);
-      setStatus({ type: "error", message: "Unable to reach the server. Please try again." });
+      // 401 comes back as "Invalid email or password."; a network failure has no useful message.
+      setStatus({ type: "error", message: err.status ? err.message : "Unable to reach the server. Please try again." });
+      setSubmitting(false);
     }
   };
 
@@ -231,7 +240,9 @@ function Login() {
 
               {status && <p className={"status-message " + status.type}>{status.message}</p>}
 
-              <button type="submit" className="btn-submit">Login</button>
+              <button type="submit" className="btn-submit" disabled={submitting}>
+                {submitting ? "Logging in…" : "Login"}
+              </button>
 
               <div className="divider">or continue with</div>
 

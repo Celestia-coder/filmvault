@@ -542,7 +542,9 @@ function SeatSelection() {
                   {needsLogin && (
                     <>
                       {" "}
-                      <Link to="/login">Log in</Link>
+                      <Link to="/login" state={{ from: location.pathname, fromState: location.state }}>
+                        Log in
+                      </Link>
                     </>
                   )}
                 </p>

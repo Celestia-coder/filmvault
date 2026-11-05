@@ -26,9 +26,10 @@ const fs = require("fs");
 const crypto = require("crypto");
 const pool = require("../config/database");
 const paymentService = require("../services/paymentService");
-const { calculatePrice } = require("../utils/pricing");
+const { calculatePrice, toCents } = require("../utils/pricing");
 
 const MAX_SEATS_PER_BOOKING = 8; // SRS: 1 to 8 tickets per transaction
+const MAX_SNACK_QUANTITY = 10; // per snack, matches the Checkout page
 const TICKET_TYPE_NAMES = { regular: "Regular", senior: "Senior", pwd: "PWD" };
 const PURCHASE_TYPES = Object.keys(TICKET_TYPE_NAMES);
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I - easy to read out loud
@@ -143,6 +144,7 @@ const buildBookings = (rows) => {
         discount_type: r.discount_type,
         total_price: Number(r.total_price),
         tickets_total: 0,
+        snacks_total: 0,
         booking_fee: 0,
         purchase_datetime: r.purchase_datetime,
         user_id: r.user_id,
@@ -162,6 +164,7 @@ const buildBookings = (rows) => {
         ticket_count: 0,
         seats: [],
         tickets: [],
+        snacks: [],
       });
     }
     const booking = byId.get(r.booking_id);
@@ -176,12 +179,42 @@ const buildBookings = (rows) => {
     booking.ticket_count += 1;
     booking.tickets_total = Number((booking.tickets_total + Number(r.ticket_price)).toFixed(2));
   }
-  for (const booking of byId.values()) {
-    // The booking fee isn't stored on its own; it's what's left of the total
-    // after the tickets, so it can always be worked out from saved data.
-    booking.booking_fee = Number((booking.total_price - booking.tickets_total).toFixed(2));
-  }
   return [...byId.values()];
+};
+
+// Adds each booking's snacks (SNACK_PURCHASE) and works out the booking fee. The fee
+// isn't stored on its own: it's what's left of the total after tickets and snacks,
+// so it can always be worked out from saved data.
+const withSnacks = async (bookings, db) => {
+  const snacksByBooking = new Map();
+  if (bookings.length > 0) {
+    const [rows] = await db.query(
+      `SELECT sp.purchase_id, sp.snack_id, sn.snack_name, sp.quantity, sp.subtotal
+       FROM SNACK_PURCHASE sp JOIN SNACK sn ON sn.snack_id = sp.snack_id
+       WHERE sp.purchase_id IN (?) ORDER BY sp.snack_id`,
+      [bookings.map((b) => b.booking_id)]
+    );
+    for (const r of rows) {
+      const list = snacksByBooking.get(r.purchase_id) ?? [];
+      list.push({
+        snack_id: r.snack_id,
+        name: r.snack_name,
+        quantity: r.quantity,
+        unit_price: Number((Number(r.subtotal) / r.quantity).toFixed(2)),
+        subtotal: Number(r.subtotal),
+      });
+      snacksByBooking.set(r.purchase_id, list);
+    }
+  }
+  for (const booking of bookings) {
+    booking.snacks = snacksByBooking.get(booking.booking_id) ?? [];
+    booking.snacks_total = Number(booking.snacks.reduce((sum, s) => sum + s.subtotal, 0).toFixed(2));
+    booking.booking_fee = Math.max(
+      0,
+      Number((booking.total_price - booking.tickets_total - booking.snacks_total).toFixed(2))
+    );
+  }
+  return bookings;
 };
 
 // GET /api/bookings?userId=
@@ -197,7 +230,8 @@ const getUserBookings = async (req, res) => {
 
   try {
     const [rows] = await pool.query(`${BOOKING_ROWS_SELECT} WHERE p.user_id = ? ${BOOKING_ROWS_ORDER}`, [userId]);
-    return res.status(200).json({ success: true, bookings: buildBookings(rows) });
+    const bookings = await withSnacks(buildBookings(rows), pool);
+    return res.status(200).json({ success: true, bookings });
   } catch (error) {
     console.error("getUserBookings error:", error);
     return res.status(500).json({ success: false, code: "SERVER_ERROR", message: "Failed to fetch bookings." });
@@ -206,7 +240,8 @@ const getUserBookings = async (req, res) => {
 
 const loadBooking = async (bookingId, db = pool) => {
   const [rows] = await db.query(`${BOOKING_ROWS_SELECT} WHERE p.purchase_id = ? ${BOOKING_ROWS_ORDER}`, [bookingId]);
-  return buildBookings(rows)[0] ?? null;
+  const [booking] = await withSnacks(buildBookings(rows), db);
+  return booking ?? null;
 };
 
 // GET /api/bookings/:id?userId=
@@ -273,6 +308,8 @@ const releaseHolds = async (conn, { showtimeId, userId, seatIds, onlyExpired }) 
 //                                 Per-seat types for Checkout's mixed bookings; when
 //                                 given, it wins over discount_type.
 //   idImage                       the ID photo (file). Required when any seat is discounted.
+//   snacks                        optional JSON [{ "snackId": 1, "quantity": 2 }]. Priced from
+//                                 the SNACK table and added to the total (never discounted).
 const createBooking = async (req, res) => {
   const file = req.file;
   let fileKept = false; // true only once a booking that references the ID photo is saved
@@ -319,6 +356,23 @@ const createBooking = async (req, res) => {
       }
       if (requestedSeatIds && !Object.keys(typeOverrides).every((id) => requestedSeatIds.includes(Number(id)))) {
         return fail(400, "VALIDATION_ERROR", "ticketTypes lists a seat that isn't in seatIds.");
+      }
+    }
+
+    // Snacks: [{ snackId, quantity }], each snack listed once.
+    const snackRequests = [];
+    const rawSnacks = parseList(pick(body, "snacks"));
+    if (rawSnacks !== undefined) {
+      const seenSnacks = new Set();
+      for (const item of rawSnacks) {
+        const snackId = Number(item?.snackId ?? item?.snack_id);
+        const quantity = Number(item?.quantity);
+        if (!isPositiveInt(snackId) || !Number.isInteger(quantity) || quantity < 1 || quantity > MAX_SNACK_QUANTITY) {
+          return fail(400, "VALIDATION_ERROR", `Each snack needs a snackId and a quantity from 1 to ${MAX_SNACK_QUANTITY}.`);
+        }
+        if (seenSnacks.has(snackId)) return fail(400, "VALIDATION_ERROR", "Each snack can only be listed once.");
+        seenSnacks.add(snackId);
+        snackRequests.push({ snackId, quantity });
       }
     }
 
@@ -434,7 +488,24 @@ const createBooking = async (req, res) => {
       const discountPercentByType = Object.fromEntries(
         [...neededKeys].map((key) => [key, Number(typeRowByKey[key].ticket_discount)])
       );
-      const price = calculatePrice({ basePrice: screening.base_price, seats: seatTypes, discountPercentByType });
+
+      // Snack prices also come from the database.
+      let snacks = [];
+      if (snackRequests.length > 0) {
+        const [snackRows] = await conn.query("SELECT snack_id, snack_price FROM SNACK WHERE snack_id IN (?)", [
+          snackRequests.map((s) => s.snackId),
+        ]);
+        if (snackRows.length !== snackRequests.length) {
+          throw new BookingError(400, "VALIDATION_ERROR", "One of the snacks you picked doesn't exist.");
+        }
+        const priceBySnack = new Map(snackRows.map((r) => [r.snack_id, toCents(r.snack_price)]));
+        snacks = snackRequests.map(({ snackId, quantity }) => ({
+          snackId,
+          quantity,
+          unitPriceCents: priceBySnack.get(snackId),
+        }));
+      }
+      const price = calculatePrice({ basePrice: screening.base_price, seats: seatTypes, discountPercentByType, snacks });
 
       // Payment: the single hook. Anything but { ok: true } stops the booking.
       let payment;
@@ -494,6 +565,12 @@ const createBooking = async (req, res) => {
           referenceCode,
         ]),
       ]);
+
+      if (price.snacks.length > 0) {
+        await conn.query("INSERT INTO SNACK_PURCHASE (purchase_id, snack_id, quantity, subtotal) VALUES ?", [
+          price.snacks.map((s) => [purchaseId, s.snackId, s.quantity, s.subtotal.toFixed(2)]),
+        ]);
+      }
 
       await conn.query(
         "UPDATE SEATBOOKING SET status = 'booked', held_until = NULL, held_by = NULL WHERE screening_id = ? AND seat_id IN (?)",

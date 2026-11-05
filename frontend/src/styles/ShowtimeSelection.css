@@ -340,6 +340,14 @@
 	color: var(--color-white);
 }
 
+.calendar-day-month {
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+}
+
 .calendar-day-today {
 	font-size: 9px;
 	font-weight: 800;
@@ -354,6 +362,7 @@
 }
 
 .calendar-day.selected .calendar-day-name,
+.calendar-day.selected .calendar-day-month,
 .calendar-day.selected .calendar-day-today {
 	color: rgba(255, 255, 255, 0.85);
 }

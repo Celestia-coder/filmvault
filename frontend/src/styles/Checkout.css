@@ -1174,3 +1174,9 @@
   flex-shrink: 0;
   margin-top: 2px;
 }
+
+.co-food-status {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--co-muted, #9a9a9a);
+}

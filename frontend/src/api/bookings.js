@@ -12,7 +12,8 @@
 //   branch_name, cinema_num     ->  branchName, cinemaNum
 //   seats (["A1","A2"])         ->  seats
 //   tickets[].ticket_type/price ->  tickets[].type / price
-//   total_price, tickets_total, booking_fee -> totalPrice, ticketsTotal, bookingFee
+//   total_price, tickets_total, snacks_total, booking_fee -> totalPrice, ticketsTotal, snacksTotal, bookingFee
+//   snacks[].name/quantity/unit_price/subtotal -> snacks[].name/quantity/unitPrice/subtotal
 //   status: confirmed | pending | cancelled      payment_status: pending | paid | failed
 
 import { request, resolvePoster } from "./movies.js";
@@ -44,6 +45,7 @@ function mapBooking(raw) {
     discountType: raw.discount_type,
     totalPrice: raw.total_price,
     ticketsTotal: raw.tickets_total,
+    snacksTotal: raw.snacks_total,
     bookingFee: raw.booking_fee,
     purchasedAt: raw.purchase_datetime,
     title: raw.movie_title,
@@ -56,22 +58,34 @@ function mapBooking(raw) {
     ticketCount: raw.ticket_count,
     seats: raw.seats,
     tickets: raw.tickets.map((t) => ({ id: t.ticket_id, seat: t.seat, type: t.ticket_type, price: t.ticket_price })),
+    snacks: raw.snacks.map((x) => ({
+      id: x.snack_id,
+      name: x.name,
+      quantity: x.quantity,
+      unitPrice: x.unit_price,
+      subtotal: x.subtotal,
+    })),
   };
 }
 
 // POST /api/bookings (multipart: the ID photo is a file upload).
 //   seatIds      the held seat ids, e.g. [41, 42]
 //   ticketTypes  { [seatId]: "regular" | "senior" | "pwd" }
+//   snacks       [{ snackId, quantity }]  (the server prices them from the SNACK table)
 //   idImage      File, required when any seat is senior/pwd. The API stores ONE
 //                ID photo per booking, so Checkout sends the first discounted seat's.
 // Resolves to the confirmed booking. Rejects with an ApiError (see BOOKING_ERRORS).
-export async function createBooking({ userId, showtimeId, seatIds, ticketTypes, paymentMethod, idImage }, signal) {
+export async function createBooking(
+  { userId, showtimeId, seatIds, ticketTypes, paymentMethod, snacks = [], idImage },
+  signal
+) {
   const form = new FormData();
   form.append("userId", userId);
   form.append("showtimeId", showtimeId);
   form.append("seatIds", JSON.stringify(seatIds));
   form.append("ticketTypes", JSON.stringify(ticketTypes));
   form.append("paymentMethod", paymentMethod);
+  if (snacks.length > 0) form.append("snacks", JSON.stringify(snacks));
 
   // discount_type is only sent when every discounted seat has the same type.
   const kinds = new Set(Object.values(ticketTypes).filter((t) => t !== "regular"));
@@ -92,4 +106,11 @@ export async function fetchBookings(userId, { signal } = {}) {
 export async function fetchBooking(bookingId, userId, { signal } = {}) {
   const body = await request(`/api/bookings/${bookingId}`, { signal, params: { userId } });
   return mapBooking(body.booking);
+}
+
+// GET /api/snacks - the food & drinks menu. Prices shown here are for display only;
+// the booking endpoint prices the order again on the server.
+export async function fetchSnacks({ signal } = {}) {
+  const body = await request("/api/snacks", { signal });
+  return body.snacks.map((x) => ({ id: x.snack_id, name: x.snack_name, price: x.snack_price }));
 }

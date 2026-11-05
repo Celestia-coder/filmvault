@@ -95,20 +95,12 @@ const MONTH_FULL = [
 /* Date helpers                                                       */
 /* ---------------------------------------------------------------- */
 
-// "Showtimes available for the next 14 days" — today through today+13,
-// computed for real (not hardcoded), so this stays correct on whatever
-// day it's actually loaded rather than freezing on one mockup date.
-function buildAvailableDays() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+const DAYS_PER_PAGE = 7;
 
-    const days = [];
-    for (let i = 0; i < 14; i++) {
-        const d = new Date(today);
-        d.setDate(today.getDate() + i);
-        days.push(d);
-    }
-    return days;
+// "2026-11-04" -> local midnight on that day (no timezone shift).
+function fromDateKey(key) {
+    const [year, month, day] = key.split("-").map(Number);
+    return new Date(year, month - 1, day);
 }
 
 function formatSidebarDate(date) {
@@ -186,9 +178,7 @@ function ShowtimeSelection() {
 
     const movieTitle = movie?.title ?? "Selected Movie";
 
-    const availableDays = useMemo(() => buildAvailableDays(), []);
-    const [page, setPage] = useState(0); // 0 = days 1-7, 1 = days 8-14
-    const visibleDays = availableDays.slice(page * 7, page * 7 + 7);
+    const [page, setPage] = useState(0); // which group of 7 dates is showing
 
     const [selectedBranch, setSelectedBranch] = useState(null);
     const [selectedDate, setSelectedDate] = useState(null);
@@ -216,6 +206,19 @@ function ShowtimeSelection() {
         });
         return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
     }, [bookable]);
+
+    // Only the dates that actually have a bookable showtime at the chosen branch
+    // (not every day of the next two weeks), earliest first.
+    const datesForBranch = (branchId) =>
+        [...new Set(bookable.filter((s) => s.branchId === branchId).map((s) => s.date))].sort();
+    const availableDays = useMemo(
+        () => (selectedBranch ? datesForBranch(selectedBranch.id).map(fromDateKey) : []),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [bookable, selectedBranch]
+    );
+    const totalPages = Math.max(1, Math.ceil(availableDays.length / DAYS_PER_PAGE));
+    const visibleDays = availableDays.slice(page * DAYS_PER_PAGE, page * DAYS_PER_PAGE + DAYS_PER_PAGE);
+    const todayKey = toDateKey(new Date());
 
     // Time slots for the chosen branch + date, grouped by cinema hall.
     const screenings = useMemo(() => {
@@ -254,6 +257,11 @@ function ShowtimeSelection() {
     const handleSelectBranch = (branch) => {
         setSelectedBranch(branch);
         setSelectedShowtime(null);
+        setPage(0);
+        // Keep the chosen date only if the new branch also has showtimes that day.
+        if (selectedDate && !datesForBranch(branch.id).includes(toDateKey(selectedDate))) {
+            setSelectedDate(null);
+        }
     };
 
     const handleSelectDate = (date) => {
@@ -376,55 +384,74 @@ function ShowtimeSelection() {
                         <span className="step-number">2</span>
                         <div>
                             <p className="step-title">Select Date</p>
-                            <p className="step-subtitle">Showtimes available for the next 14 days</p>
+                            <p className="step-subtitle">
+                                {selectedBranch
+                                    ? `Dates with showtimes at ${selectedBranch.name}`
+                                    : "Choose a branch to see its available dates"}
+                            </p>
                         </div>
                     </div>
 
-                    <div className="calendar-header">
-                        <span className="calendar-month">
-                            {MONTH_FULL[visibleDays[0].getMonth()]} {visibleDays[0].getFullYear()}
-                        </span>
-                        <div className="calendar-nav">
-                            <button
-                                type="button"
-                                className="calendar-nav-btn"
-                                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                                disabled={page === 0}
-                                aria-label="Previous days"
-                            >
-                                <IconChevronLeft />
-                            </button>
-                            <button
-                                type="button"
-                                className="calendar-nav-btn"
-                                onClick={() => setPage((p) => Math.min(1, p + 1))}
-                                disabled={page === 1}
-                                aria-label="Next days"
-                            >
-                                <IconChevronRight />
-                            </button>
-                        </div>
-                    </div>
+                    {!selectedBranch ? (
+                        <p className="showtime-hint">Choose a branch first.</p>
+                    ) : (
+                        <>
+                            <div className="calendar-header">
+                                <span className="calendar-month">
+                                    {(() => {
+                                        const first = visibleDays[0];
+                                        const last = visibleDays[visibleDays.length - 1];
+                                        return first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear()
+                                            ? `${MONTH_FULL[first.getMonth()]} ${first.getFullYear()}`
+                                            : `${MONTH_ABBR[first.getMonth()]} – ${MONTH_ABBR[last.getMonth()]} ${last.getFullYear()}`;
+                                    })()}
+                                </span>
+                                {totalPages > 1 && (
+                                    <div className="calendar-nav">
+                                        <button
+                                            type="button"
+                                            className="calendar-nav-btn"
+                                            onClick={() => setPage((p) => Math.max(0, p - 1))}
+                                            disabled={page === 0}
+                                            aria-label="Previous dates"
+                                        >
+                                            <IconChevronLeft />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="calendar-nav-btn"
+                                            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                                            disabled={page >= totalPages - 1}
+                                            aria-label="Next dates"
+                                        >
+                                            <IconChevronRight />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
 
-                    <div className="calendar-strip">
-                        {visibleDays.map((day) => {
-                            const isToday = day.getTime() === availableDays[0].getTime();
-                            const isSelected = selectedDate && day.getTime() === selectedDate.getTime();
+                            <div className="calendar-strip">
+                                {visibleDays.map((day) => {
+                                    const isToday = toDateKey(day) === todayKey;
+                                    const isSelected = selectedDate && day.getTime() === selectedDate.getTime();
 
-                            return (
-                                <button
-                                    type="button"
-                                    key={day.getTime()}
-                                    className={"calendar-day" + (isSelected ? " selected" : "")}
-                                    onClick={() => handleSelectDate(day)}
-                                >
-                                    <span className="calendar-day-name">{DAY_NAMES[day.getDay()]}</span>
-                                    <span className="calendar-day-number">{day.getDate()}</span>
-                                    {isToday && <span className="calendar-day-today">TODAY</span>}
-                                </button>
-                            );
-                        })}
-                    </div>
+                                    return (
+                                        <button
+                                            type="button"
+                                            key={day.getTime()}
+                                            className={"calendar-day" + (isSelected ? " selected" : "")}
+                                            onClick={() => handleSelectDate(day)}
+                                        >
+                                            <span className="calendar-day-name">{DAY_NAMES[day.getDay()]}</span>
+                                            <span className="calendar-day-number">{day.getDate()}</span>
+                                            <span className="calendar-day-month">{MONTH_ABBR[day.getMonth()]}</span>
+                                            {isToday && <span className="calendar-day-today">TODAY</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {/* Step 3 — Showtime */}

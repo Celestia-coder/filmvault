@@ -162,6 +162,14 @@ function TicketView({ bookingId }) {
                 <span>{peso(t.price)}</span>
               </li>
             ))}
+            {booking.snacks.map((x) => (
+              <li key={x.id}>
+                <span>
+                  {x.name} × {x.quantity}
+                </span>
+                <span>{peso(x.subtotal)}</span>
+              </li>
+            ))}
             <li>
               <span>Booking fee</span>
               <span>{peso(booking.bookingFee)}</span>

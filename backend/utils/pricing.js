@@ -15,7 +15,9 @@ const toPesos = (cents) => Number((cents / 100).toFixed(2));
 
 // seats: [{ seatId, type }]            type = "regular" | "senior" | "pwd"
 // discountPercentByType: { senior: 20, pwd: 20 }   (from TICKET_TYPE.ticket_discount)
-const calculatePrice = ({ basePrice, seats, discountPercentByType }) => {
+// snacks: [{ snackId, quantity, unitPriceCents }]   (prices from the SNACK table)
+// Snacks and the booking fee are never discounted; only ticket prices are.
+const calculatePrice = ({ basePrice, seats, discountPercentByType, snacks = [] }) => {
   const baseCents = toCents(basePrice);
 
   const tickets = seats.map(({ seatId, type }) => {
@@ -27,11 +29,20 @@ const calculatePrice = ({ basePrice, seats, discountPercentByType }) => {
   const ticketsTotalCents = tickets.reduce((sum, t) => sum + t.priceCents, 0);
   const bookingFeeCents = tickets.length * BOOKING_FEE_PER_TICKET_CENTS;
 
+  const pricedSnacks = snacks.map(({ snackId, quantity, unitPriceCents }) => ({
+    snackId,
+    quantity,
+    subtotal: toPesos(unitPriceCents * quantity),
+  }));
+  const snacksTotalCents = snacks.reduce((sum, s) => sum + s.unitPriceCents * s.quantity, 0);
+
   return {
     tickets,
+    snacks: pricedSnacks,
     ticketsTotal: toPesos(ticketsTotalCents),
+    snacksTotal: toPesos(snacksTotalCents),
     bookingFee: toPesos(bookingFeeCents),
-    total: toPesos(ticketsTotalCents + bookingFeeCents),
+    total: toPesos(ticketsTotalCents + snacksTotalCents + bookingFeeCents),
   };
 };
 

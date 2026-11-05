@@ -6,7 +6,7 @@ import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
 import moviePoster from "../../assets/images/movie-poster.webp";
 import { getUser } from "../../api/session.js";
-import { createBooking, NEEDS_NEW_SEATS } from "../../api/bookings.js";
+import { createBooking, fetchSnacks, NEEDS_NEW_SEATS } from "../../api/bookings.js";
 import "../../styles/Checkout.css";
 
 /* ---------------------------------------------------------------- */
@@ -52,22 +52,22 @@ const PAYMENT_METHODS = [
 ];
 
 // TODO: replace with a real concessions API once the backend has one.
-const INITIAL_FOOD = [
-  { id: "popcorn", icon: "🍿", name: "Caramel Popcorn", size: "Large", price: 180, qty: 0 },
-  { id: "cola", icon: "🥤", name: "Coca-Cola", size: "Regular", price: 90, qty: 0 },
-  { id: "nachos", icon: "🧀", name: "Cheese Nachos", size: "Sharing", price: 160, qty: 0 },
-  { id: "combo", icon: "🎬", name: "Movie Combo", size: "Popcorn + 2 Drinks", price: 320, qty: 0 },
-];
+// The food menu comes from GET /api/snacks (names and prices live in the SNACK table).
+// The database only stores a name and a price, so the emoji is picked from the name.
+function snackIcon(name) {
+  const n = name.toLowerCase();
+  if (n.includes("popcorn")) return "🍿";
+  if (/soda|cola|drink|juice|water|tea|coffee/.test(n)) return "🥤";
+  if (n.includes("nacho")) return "🧀";
+  if (/combo|meal/.test(n)) return "🎬";
+  return "🍽️";
+}
 
 const HOLD_SECONDS = 10 * 60;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
 // The booking API takes ID photos as JPG / PNG / WebP (not PDF), up to 5 MB.
 const ID_FILE_PATTERN = /\.(jpe?g|png|webp)$/i;
-// No concessions API exists yet and the server prices the booking, so food can't
-// be ordered online for now. Flip to true once the backend supports it.
-const FOOD_ORDERING_AVAILABLE = false;
-
 // Used only when the page is opened without booking state (direct URL / refresh).
 const FALLBACK_BOOKING = {
   movieId: "1",
@@ -242,7 +242,9 @@ function Checkout() {
   const [ticketTypes, setTicketTypes] = useState(() =>
     Object.fromEntries(seats.map((seat) => [seat, "regular"]))
   );
-  const [food, setFood] = useState(INITIAL_FOOD);
+  const [food, setFood] = useState([]); // [{ id, icon, name, price, qty }]
+  const [foodState, setFoodState] = useState("loading"); // loading | ready | error
+  const [foodReload, setFoodReload] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState("");
   // Discounted-ticket ID details — one entry per seat, keyed by seat id (e.g. "A1")
   const [idFiles, setIdFiles] = useState({}); // { A1: File }
@@ -355,6 +357,25 @@ function Checkout() {
     setIdVerified(dropSeat(seat)); // details changed, so the demo scan no longer applies
   };
 
+  // Load the menu. Ordering food is optional, so a failure here never blocks booking.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchSnacks({ signal: controller.signal })
+      .then((snacks) => {
+        setFood(snacks.map((x) => ({ id: x.id, icon: snackIcon(x.name), name: x.name, price: x.price, qty: 0 })));
+        setFoodState("ready");
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") setFoodState("error");
+      });
+    return () => controller.abort();
+  }, [foodReload]);
+
+  const retryFood = () => {
+    setFoodState("loading");
+    setFoodReload((n) => n + 1);
+  };
+
   const changeQty = (id, delta) =>
     setFood((prev) =>
       prev.map((f) => (f.id === id ? { ...f, qty: Math.max(0, Math.min(10, f.qty + delta)) } : f))
@@ -400,6 +421,7 @@ function Checkout() {
         seatIds,
         ticketTypes: typesBySeatId,
         paymentMethod,
+        snacks: foodItems.map((f) => ({ snackId: f.id, quantity: f.qty })),
         idImage: discountedSeats.length ? idFiles[discountedSeats[0]] : undefined,
       });
       setBookedId(booked.id);
@@ -655,22 +677,25 @@ function Checkout() {
                 <span className="co-step-number">2</span>
                 <div>
                   <p className="co-card-title">Food &amp; Snacks</p>
-                  <p className="co-card-subtitle">
-                    {FOOD_ORDERING_AVAILABLE
-                      ? "Add concessions to your order — picked up at the counter"
-                      : "Online pre-ordering isn't available yet. You can buy snacks at the counter."}
-                  </p>
+                  <p className="co-card-subtitle">Add concessions to your order — picked up at the counter</p>
                 </div>
               </div>
               <div className="co-card-body">
+                {foodState === "loading" && <p className="co-food-status">Loading the menu…</p>}
+                {foodState === "error" && (
+                  <p className="co-food-status" role="alert">
+                    We couldn't load the food menu.{" "}
+                    <button type="button" className="co-link-btn" onClick={retryFood}>
+                      Try again
+                    </button>
+                  </p>
+                )}
                 {food.map((item) => (
                   <div className="co-food-row" key={item.id}>
                     <span className="co-food-icon">{item.icon}</span>
                     <div className="co-food-info">
                       <span className="co-food-name">{item.name}</span>
-                      <span className="co-food-desc">
-                        {item.size} · {peso(item.price)}
-                      </span>
+                      <span className="co-food-desc">{peso(item.price)}</span>
                     </div>
                     <div className="co-qty">
                       <button
@@ -685,7 +710,7 @@ function Checkout() {
                       <button
                         type="button"
                         onClick={() => changeQty(item.id, 1)}
-                        disabled={!FOOD_ORDERING_AVAILABLE}
+                        disabled={item.qty >= 10}
                         aria-label={`Add one ${item.name}`}
                       >
                         +

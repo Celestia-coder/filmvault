@@ -130,7 +130,7 @@ function SeatSelection() {
   } = bookingState;
   const showtimeId = showtime?.id ?? bookingState.showtimeId ?? null;
 
-  const [ticketCount, setTicketCount] = useState(initialTicketCount ?? 2);
+  const [ticketCount, setTicketCount] = useState(initialTicketCount ?? MIN_TICKETS);
   const [selectedIds, setSelectedIds] = useState([]); // seat ids, e.g. [41, 42]
 
   const [seatMap, setSeatMap] = useState(null); // { cinema, seats }

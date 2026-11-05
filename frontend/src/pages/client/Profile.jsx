@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   User,
   ShieldCheck,
   Lock,
   CalendarDays,
+  CreditCard,
   Eye,
   EyeOff,
   LogOut,
-  Pencil,
+  UserPen,
+  Camera,
 } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
+import heroBg from "../../assets/images/hero-bg.png";
 import "../../styles/Profile.css";
 
 /* ---------- Mock data ---------- */
@@ -22,14 +25,20 @@ const mockProfile = {
   email: "juan@example.com",
   phone: "09123456789",
   username: "juan_d",
+  avatarUrl: null, // URL of the saved profile picture (null = default icon)
   memberSince: "June 2025",
-  memberId: "FV-2025-00183",
+  memberId: "FV-2025-00124",
   status: "Active",
   totalBookings: 12,
   activeReservations: 2,
 };
 
 const EMPTY_PASSWORDS = { current: "", next: "", confirm: "" };
+
+const AVATAR_TYPES = ["image/jpeg", "image/pjpeg", "image/png", "image/webp", "image/gif"];
+const AVATAR_EXTENSIONS = /\.(jpe?g|jfif|png|webp|gif)$/i; // fallback when the browser gives no MIME type
+const AVATAR_MAX_MB = 10;
+const AVATAR_MAX_BYTES = AVATAR_MAX_MB * 1024 * 1024;
 
 /* ---------- Validation ---------- */
 
@@ -64,28 +73,61 @@ function validate(form, passwords) {
 
 /* ---------- Small reusable pieces ---------- */
 
-// One row: read-only text in view mode, input in edit mode
-function InfoField({ id, label, value, editing, onChange, error, locked, children }) {
-  return (
-    <div className="profile-field">
-      <label htmlFor={id} className="profile-field-label">
-        {label}
-      </label>
+/*
+  One row of an info card.
+  - View mode:  label + plain text (or `children`, e.g. the email link / status dot)
+  - Edit mode:  label + input
+  - locked:     shown in a greyed-out box with a lock icon in edit mode (cannot be edited)
+*/
+function InfoField({
+  id,
+  label,
+  value,
+  editing,
+  onChange,
+  error,
+  locked = false,
+  type = "text",
+  autoComplete,
+  maxLength,
+  children,
+}) {
+  const isInput = editing && !locked;
 
-      {!editing ? (
-        <span className="profile-field-value">{children ?? value}</span>
+  return (
+    <div className={`profile-field ${editing ? "profile-field--edit" : "profile-field--view"}`}>
+      {isInput ? (
+        <label htmlFor={id} className="profile-field-label">
+          {label}
+        </label>
       ) : (
+        <span className="profile-field-label">{label}</span>
+      )}
+
+      {!editing && <span className="profile-field-value">{children ?? value}</span>}
+
+      {editing && locked && (
+        <div className="profile-field-control">
+          <div className="profile-locked">
+            <span className="profile-locked-value">{children ?? value}</span>
+            <Lock size={16} className="profile-lock" aria-hidden="true" />
+            <span className="profile-sr-only">{label} cannot be edited</span>
+          </div>
+        </div>
+      )}
+
+      {isInput && (
         <div className="profile-field-control">
           <input
             id={id}
-            type="text"
+            type={type}
             value={value}
             onChange={onChange}
-            disabled={locked}
+            autoComplete={autoComplete}
+            maxLength={maxLength}
             aria-invalid={Boolean(error)}
             aria-describedby={error ? `${id}-error` : undefined}
           />
-          {locked && <Lock size={13} className="profile-lock" aria-label="Cannot be edited" />}
           {error && (
             <p id={`${id}-error`} className="profile-error">
               {error}
@@ -97,7 +139,7 @@ function InfoField({ id, label, value, editing, onChange, error, locked, childre
   );
 }
 
-function PasswordField({ id, label, value, onChange, placeholder, error }) {
+function PasswordField({ id, label, value, onChange, placeholder, autoComplete, error }) {
   const [visible, setVisible] = useState(false);
 
   return (
@@ -110,7 +152,7 @@ function PasswordField({ id, label, value, onChange, placeholder, error }) {
           value={value}
           onChange={onChange}
           placeholder={placeholder}
-          autoComplete="off"
+          autoComplete={autoComplete}
           aria-invalid={Boolean(error)}
           aria-describedby={error ? `${id}-error` : undefined}
         />
@@ -120,7 +162,7 @@ function PasswordField({ id, label, value, onChange, placeholder, error }) {
           onClick={() => setVisible((v) => !v)}
           aria-label={visible ? "Hide password" : "Show password"}
         >
-          {visible ? <EyeOff size={15} /> : <Eye size={15} />}
+          {visible ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       </div>
       {error && (
@@ -136,26 +178,65 @@ function PasswordField({ id, label, value, onChange, placeholder, error }) {
 
 export default function Profile() {
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
 
   const [profile, setProfile] = useState(mockProfile); // saved data
   const [form, setForm] = useState(mockProfile); // draft while editing
   const [passwords, setPasswords] = useState(EMPTY_PASSWORDS);
   const [errors, setErrors] = useState({});
   const [editing, setEditing] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [notice, setNotice] = useState(""); // success message shown after saving
+
+  // Picked-but-not-saved profile picture: { file, preview }
+  const [avatarDraft, setAvatarDraft] = useState(null);
+  const [avatarError, setAvatarError] = useState("");
+
+  // Hide the success message after a few seconds
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(""), 6000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
   const setPassword = (key) => (e) => setPasswords((p) => ({ ...p, [key]: e.target.value }));
 
+  const discardAvatarDraft = () => {
+    if (avatarDraft) URL.revokeObjectURL(avatarDraft.preview);
+    setAvatarDraft(null);
+    setAvatarError("");
+  };
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // lets the user pick the same file again later
+    if (!file) return;
+
+    if (!AVATAR_TYPES.includes(file.type) && !AVATAR_EXTENSIONS.test(file.name)) {
+      setAvatarError("Use a JPG, PNG, WebP or GIF image.");
+      return;
+    }
+    if (file.size > AVATAR_MAX_BYTES) {
+      setAvatarError(`Image must be ${AVATAR_MAX_MB} MB or smaller.`);
+      return;
+    }
+
+    if (avatarDraft) URL.revokeObjectURL(avatarDraft.preview);
+    setAvatarError("");
+    setAvatarDraft({ file, preview: URL.createObjectURL(file) });
+  };
+
   const startEditing = () => {
+    discardAvatarDraft();
     setForm(profile);
     setPasswords(EMPTY_PASSWORDS);
     setErrors({});
-    setSaved(false);
+    setNotice("");
     setEditing(true);
   };
 
   const cancelEditing = () => {
+    discardAvatarDraft();
     setForm(profile);
     setPasswords(EMPTY_PASSWORDS);
     setErrors({});
@@ -171,10 +252,25 @@ export default function Profile() {
 
     // TODO: call the backend here (e.g. PUT /api/profile) and send the
     // password fields only if the user filled them in.
-    setProfile(form);
+    // TODO: if the backend rejects the current password, show it on the field and stop:
+    //   setErrors({ current: "Current password is incorrect." }); return;
+    const passwordChanged = Boolean(passwords.next);
+    const profileChanged =
+      Boolean(avatarDraft) || Object.keys(form).some((key) => form[key] !== profile[key]);
+
+    // TODO: if avatarDraft exists, upload avatarDraft.file (multipart / Cloudinary)
+    // and save the URL it returns as avatarUrl instead of the local preview below.
+    setProfile({
+      ...form,
+      avatarUrl: avatarDraft ? avatarDraft.preview : profile.avatarUrl,
+    });
+    setAvatarDraft(null); // preview URL now belongs to the saved profile
     setPasswords(EMPTY_PASSWORDS);
     setEditing(false);
-    setSaved(true);
+    if (passwordChanged && profileChanged) setNotice("Your profile and password were updated.");
+    else if (passwordChanged) setNotice("Your password was changed.");
+    else if (profileChanged) setNotice("Your profile was updated.");
+    // Nothing changed: leave edit mode quietly, no message
   };
 
   const handleLogout = () => {
@@ -185,30 +281,70 @@ export default function Profile() {
 
   const fullName = `${profile.firstName} ${profile.lastName}`;
 
+  // While editing, inputs read from the draft; otherwise from saved data
+  const current = editing ? form : profile;
+  const avatarSrc = editing && avatarDraft ? avatarDraft.preview : profile.avatarUrl;
+
   return (
     <>
       <Navbar />
       <main className="profile-page">
-        <form onSubmit={handleSave} noValidate>
+        <form className="profile-container" onSubmit={handleSave} noValidate>
           {/* ---- Banner ---- */}
-          <section className="profile-banner">
-            <div className="profile-avatar" aria-hidden="true">
-              <User size={44} />
+          <section
+            className="profile-banner"
+            aria-label="Profile summary"
+            style={{ "--profile-banner-image": `url(${heroBg})` }}
+          >
+            <div className="profile-avatar-wrap">
+              <div className="profile-avatar">
+                {avatarSrc ? (
+                  <img src={avatarSrc} alt={`${fullName} profile photo`} />
+                ) : (
+                  <User fill="currentColor" strokeWidth={1.5} aria-hidden="true" />
+                )}
+              </div>
+
+              {editing && (
+                <>
+                  <button
+                    type="button"
+                    className="profile-avatar-upload"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Upload profile photo"
+                    title="Upload profile photo"
+                  >
+                    <Camera size={18} aria-hidden="true" />
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif,.jfif"
+                    onChange={handleAvatarChange}
+                    hidden
+                  />
+                </>
+              )}
             </div>
 
             <div className="profile-banner-info">
               <h1>{fullName}</h1>
               <p className="profile-role">FilmVault Member</p>
               <p className="profile-meta">
-                <CalendarDays size={12} aria-hidden="true" /> Member Since {profile.memberSince}
+                <CalendarDays size={16} aria-hidden="true" /> Member Since {profile.memberSince}
               </p>
               <p className="profile-meta">
-                <CalendarDays size={12} aria-hidden="true" /> Member ID: {profile.memberId}
+                <CreditCard size={16} aria-hidden="true" /> Member ID: {profile.memberId}
               </p>
+              {avatarError && (
+                <p className="profile-avatar-error" role="alert">
+                  {avatarError}
+                </p>
+              )}
             </div>
 
-            {/* FIX: each button has its own key so React does not reuse the
-                Edit button as the Save (submit) button */}
+            {/* Each button has its own key so React never reuses the Edit
+                button as the Save (submit) button */}
             <div className="profile-actions">
               {!editing ? (
                 <>
@@ -218,7 +354,7 @@ export default function Profile() {
                     className="profile-btn profile-btn--outline"
                     onClick={handleLogout}
                   >
-                    <LogOut size={13} aria-hidden="true" /> Log Out
+                    <LogOut size={18} aria-hidden="true" /> Log Out
                   </button>
                   <button
                     key="edit"
@@ -226,7 +362,7 @@ export default function Profile() {
                     className="profile-btn profile-btn--red"
                     onClick={startEditing}
                   >
-                    <Pencil size={13} aria-hidden="true" /> Edit Profile
+                    <UserPen size={18} aria-hidden="true" /> Edit Profile
                   </button>
                 </>
               ) : (
@@ -247,9 +383,9 @@ export default function Profile() {
             </div>
           </section>
 
-          {saved && (
+          {notice && (
             <p className="profile-toast" role="status">
-              Your profile was updated.
+              {notice}
             </p>
           )}
 
@@ -257,55 +393,67 @@ export default function Profile() {
           <div className="profile-grid">
             <section className="profile-card" aria-labelledby="personal-title">
               <h2 id="personal-title" className="profile-card-title">
-                <User size={16} aria-hidden="true" /> Personal Information
+                <User size={24} aria-hidden="true" /> Personal Information
               </h2>
 
               <InfoField
                 id="firstName"
                 label="First Name"
-                value={editing ? form.firstName : profile.firstName}
+                value={current.firstName}
                 editing={editing}
                 onChange={setField("firstName")}
                 error={errors.firstName}
+                autoComplete="given-name"
               />
               <InfoField
                 id="lastName"
                 label="Last Name"
-                value={editing ? form.lastName : profile.lastName}
+                value={current.lastName}
                 editing={editing}
                 onChange={setField("lastName")}
                 error={errors.lastName}
+                autoComplete="family-name"
               />
               <InfoField
                 id="email"
                 label="Email Address"
-                value={editing ? form.email : profile.email}
+                type="email"
+                value={current.email}
                 editing={editing}
                 onChange={setField("email")}
                 error={errors.email}
-              />
+                autoComplete="email"
+              >
+                <a href={`mailto:${profile.email}`} className="profile-link">
+                  {profile.email}
+                </a>
+              </InfoField>
               <InfoField
                 id="phone"
                 label="Phone Number"
-                value={editing ? form.phone : profile.phone}
+                type="tel"
+                value={current.phone}
                 editing={editing}
                 onChange={setField("phone")}
                 error={errors.phone}
+                autoComplete="tel"
+                maxLength={11}
               />
             </section>
 
             <section className="profile-card" aria-labelledby="account-title">
               <h2 id="account-title" className="profile-card-title">
-                <ShieldCheck size={16} aria-hidden="true" /> Account Information
+                <ShieldCheck size={24} aria-hidden="true" /> Account Information
               </h2>
 
               <InfoField
                 id="username"
                 label="Username"
-                value={editing ? form.username : profile.username}
+                value={current.username}
                 editing={editing}
                 onChange={setField("username")}
                 error={errors.username}
+                autoComplete="username"
               />
               <InfoField id="status" label="Status" value={profile.status} editing={editing} locked>
                 <span className="profile-status">
@@ -334,15 +482,18 @@ export default function Profile() {
           {editing && (
             <section className="profile-card profile-card--wide" aria-labelledby="password-title">
               <h2 id="password-title" className="profile-card-title">
-                <Lock size={16} aria-hidden="true" /> Change Password
+                <Lock size={24} aria-hidden="true" /> Security &amp; Password
               </h2>
-              <p className="profile-hint">Leave these blank if you don't want to change your password.</p>
+              <p className="profile-hint">
+                Leave blank if you don't want to update your password.
+              </p>
 
               <div className="profile-password-grid">
                 <PasswordField
                   id="currentPassword"
                   label="Current Password"
                   placeholder="Enter current password"
+                  autoComplete="current-password"
                   value={passwords.current}
                   onChange={setPassword("current")}
                   error={errors.current}
@@ -351,6 +502,7 @@ export default function Profile() {
                   id="newPassword"
                   label="New Password"
                   placeholder="Enter new password"
+                  autoComplete="new-password"
                   value={passwords.next}
                   onChange={setPassword("next")}
                   error={errors.next}
@@ -359,6 +511,7 @@ export default function Profile() {
                   id="confirmPassword"
                   label="Confirm Password"
                   placeholder="Confirm new password"
+                  autoComplete="new-password"
                   value={passwords.confirm}
                   onChange={setPassword("confirm")}
                   error={errors.confirm}

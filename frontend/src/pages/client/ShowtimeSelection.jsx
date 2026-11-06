@@ -173,7 +173,8 @@ function ShowtimeSelection() {
             })
             .catch((error) => {
                 if (error.name === "AbortError") return;
-                if (error.status === 404) {
+                // 400 = malformed id (e.g. /booking/abc), 404 = no such movie: both mean "not found"
+                if (error.status === 400 || error.status === 404) {
                     setLoadState("not-found");
                     return;
                 }
@@ -304,7 +305,7 @@ function ShowtimeSelection() {
         if (loadState === "not-found") {
             return (
                 <StateBox tone="error" title="We couldn't find that movie.">
-                    <button type="button" className="btn-back-top" onClick={() => navigate("/")}>
+                    <button type="button" className="btn-back-top" onClick={() => navigate("/movies")}>
                         ← Back to movies
                     </button>
                 </StateBox>

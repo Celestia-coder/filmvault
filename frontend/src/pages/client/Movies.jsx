@@ -98,7 +98,9 @@ function Movies() {
         </button>
       </section>
     );
-  } else if (!isLoading && movies.length === 0) {
+  } else if (!isLoading && nowShowing.length === 0 && comingSoon.length === 0) {
+    // Also covers a response that only has movies we don't list (e.g. "ended"),
+    // which would otherwise render a blank page.
     content = (
       <section className="movies-section movies-message">
         <h2 className="section-title">{title ? `No movies match "${title}"` : "No movies yet"}</h2>

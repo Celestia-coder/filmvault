@@ -21,6 +21,7 @@ const BOOKING_SELECT = `
     p.payment_method,
     p.total_price,
     p.purchase_datetime,
+    MIN(t.booking_ref) AS booking_ref,
     u.user_id,
     u.name AS customer_name,
     u.email AS customer_email,
@@ -37,10 +38,15 @@ const BOOKING_SELECT = `
     GROUP_CONCAT(
       CONCAT(CHAR(64 + se.row_num USING utf8mb4), se.seat_num)
       ORDER BY se.row_num, se.seat_num SEPARATOR ','
-    ) AS seats
+    ) AS seats,
+    GROUP_CONCAT(
+      tt.type
+      ORDER BY se.row_num, se.seat_num SEPARATOR ','
+    ) AS ticket_types
   FROM TOTAL_PURCHASE p
   JOIN \`USER\` u ON u.user_id = p.user_id
   JOIN TICKET t ON t.purchase_id = p.purchase_id
+  JOIN TICKET_TYPE tt ON tt.type_id = t.type_id
   JOIN SEAT se ON se.seat_id = t.seat_id
   JOIN SCREENING s ON s.screening_id = t.screening_id
   JOIN MOVIE m ON m.movie_id = s.movie_id
@@ -53,6 +59,8 @@ const formatBooking = (row) => ({
   ...row,
   total_price: Number(row.total_price),
   seats: row.seats ? row.seats.split(",") : [],
+  // One entry per seat, same order as `seats` (e.g. ["Regular", "Senior"]).
+  ticket_types: row.ticket_types ? row.ticket_types.split(",") : [],
 });
 
 const isPositiveInt = (value) => Number.isInteger(Number(value)) && Number(value) > 0;

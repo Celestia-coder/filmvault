@@ -95,6 +95,8 @@ const login = async (req, res) => {
         name: matchedUser.name,
         email: matchedUser.email,
         role: matchedUser.role,
+        // Admins manage one branch; the admin pages send this as ?branchId=.
+        branchId: matchedUser.branch_id ?? null,
       },
     });
   } catch (error) {

@@ -11,6 +11,8 @@ const searchRoutes = require("./routes/searchRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const seatRoutes = require("./routes/seatRoutes");
 const seatHoldRoutes = require("./routes/seatHoldRoutes");
+const customerBookingRoutes = require("./routes/customerBookingRoutes");
+const snackRoutes = require("./routes/snackRoutes");
 
 const app = express();
 
@@ -47,6 +49,12 @@ app.use("/api", seatRoutes);
 
 // Customer seat routes: seat map for a showtime + temporary seat holds
 app.use("/api", seatHoldRoutes);
+
+// Customer booking routes: POST /api/bookings (checkout), GET /api/bookings, GET /api/bookings/:id
+app.use("/api", customerBookingRoutes);
+
+// Snacks: GET /api/snacks (the food menu Checkout shows)
+app.use("/api", snackRoutes);
 
 const PORT = process.env.PORT || 5000;
 

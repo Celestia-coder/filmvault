@@ -1,2 +1,6 @@
 node_modules/
 .env
+
+# Uploaded ID images (senior/PWD). Private: never committed, never served.
+private/id-uploads/*
+!private/id-uploads/.gitkeep

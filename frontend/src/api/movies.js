@@ -46,7 +46,9 @@ export class ApiError extends Error {
   }
 }
 
-// GET by default. Pass { method: "POST", body: {...} } to send JSON.
+// GET by default. Pass { method: "POST", body: {...} } to send JSON, or a
+// FormData object to send a multipart upload (the browser sets the
+// Content-Type and boundary itself, so we must NOT set it here).
 // Exported so other api/ files (seats.js, ...) reuse the same error handling.
 export async function request(path, { signal, params, method = "GET", body } = {}) {
   const query = new URLSearchParams(
@@ -54,7 +56,9 @@ export async function request(path, { signal, params, method = "GET", body } = {
   ).toString();
 
   const init = { method, signal };
-  if (body !== undefined) {
+  if (body instanceof FormData) {
+    init.body = body;
+  } else if (body !== undefined) {
     init.headers = { "Content-Type": "application/json" };
     init.body = JSON.stringify(body);
   }
@@ -86,7 +90,7 @@ const postersByFilename = Object.fromEntries(
   Object.entries(bundledPosters).map(([path, url]) => [path.split("/").pop().toLowerCase(), url])
 );
 
-function resolvePoster(poster) {
+export function resolvePoster(poster) {
   if (!poster) return placeholderPoster;
   if (/^https?:\/\//i.test(poster)) return poster;
   return postersByFilename[poster.split("/").pop().toLowerCase()] ?? placeholderPoster;

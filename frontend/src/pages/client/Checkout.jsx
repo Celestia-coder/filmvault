@@ -103,11 +103,16 @@ const formatTimer = (secs) =>
 // Opens the camera and plays a fake "scanning" animation. It does NOT
 // read or validate the ID — swap this for a real provider's SDK
 // (Stripe Identity, Veriff, Sumsub, ...) if real verification is ever needed.
+//
+// What it DOES do: when the scan finishes it takes a photo of the camera frame and
+// hands it to onVerified(file). That photo is the ID image the booking needs, so
+// scanning works as an alternative to uploading a file.
 function IdScanModal({ seat, typeLabel, onVerified, onClose }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const [status, setStatus] = useState("starting"); // starting | ready | scanning | done | error
   const [errorMsg, setErrorMsg] = useState("");
+  const [shot, setShot] = useState(null); // the photo taken when the scan finishes
 
   useEffect(() => {
     let cancelled = false;
@@ -145,12 +150,36 @@ function IdScanModal({ seat, typeLabel, onVerified, onClose }) {
     };
   }, []);
 
-  // Fake 3-second scan.
+  // Fake 3-second scan, then take a photo of the frame as the ID image.
   useEffect(() => {
     if (status !== "scanning") return undefined;
-    const id = setTimeout(() => setStatus("done"), 3000);
+    const id = setTimeout(() => {
+      const video = videoRef.current;
+      if (!video || !video.videoWidth) {
+        setErrorMsg("Couldn't capture the ID. Try again, or close this and upload a photo instead.");
+        setStatus("error");
+        return;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            setErrorMsg("Couldn't capture the ID. Try again, or close this and upload a photo instead.");
+            setStatus("error");
+            return;
+          }
+          setShot(new File([blob], `id-scan-${seat}.jpg`, { type: "image/jpeg" }));
+          setStatus("done");
+        },
+        "image/jpeg",
+        0.85
+      );
+    }, 3000);
     return () => clearTimeout(id);
-  }, [status]);
+  }, [status, seat]);
 
   return (
     <div className="co-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="co-scan-title">
@@ -193,7 +222,7 @@ function IdScanModal({ seat, typeLabel, onVerified, onClose }) {
             </button>
           )}
           {status === "done" && (
-            <button type="button" className="co-scan-btn co-scan-btn--primary" onClick={onVerified}>
+            <button type="button" className="co-scan-btn co-scan-btn--primary" onClick={() => onVerified(shot)} disabled={!shot}>
               Done
             </button>
           )}
@@ -316,7 +345,7 @@ function Checkout() {
 
   const emailValid = EMAIL_REGEX.test(email.trim());
   // Every discounted seat needs its own upload, holder name and ID number.
-  // The camera scan is a demo extra, so it is NOT required to pay.
+  // Either an uploaded photo or a camera scan (which saves its photo into idFiles) counts.
   const idOk = discountedSeats.every(
     (seat) =>
       Boolean(idFiles[seat]) &&
@@ -650,7 +679,7 @@ function Checkout() {
                             >
                               <IconCamera /> {idVerified[seat] ? "✓ ID scanned (demo)" : "Scan ID with camera"}
                             </button>
-                            {!idVerified[seat] && <span className="co-id-optional">Optional · demo only</span>}
+                            {!idVerified[seat] && <span className="co-id-optional">Or upload a photo above</span>}
                           </div>
                         </div>
                       )}
@@ -929,7 +958,10 @@ function Checkout() {
           seat={scanSeat}
           typeLabel={TICKET_TYPES[ticketTypes[scanSeat]]?.label ?? "Discount"}
           onClose={() => setScanSeat(null)}
-          onVerified={() => {
+          onVerified={(photo) => {
+            // The scan's photo counts as this seat's ID image, same as an upload.
+            setIdFiles((prev) => ({ ...prev, [scanSeat]: photo }));
+            setSeatError(scanSeat, "");
             setIdVerified((prev) => ({ ...prev, [scanSeat]: true }));
             setScanSeat(null);
           }}

@@ -5,12 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import searchIcon from "../assets/images/icons/search-icon.png";
 import profileIcon from "../assets/images/icons/profile-icon.png";
+import { getUser } from "../api/session.js";
 import "../styles/Navbar.css";
 
-// Placeholder auth check — swap this out once real Auth endpoints exist
-// (Week 2 backend work). For now, presence of a token means "logged in".
+// Logged in = the login page saved a user (see api/session.js).
 function isLoggedIn() {
-	return Boolean(localStorage.getItem("filmvault_token"));
+	return Boolean(getUser());
 }
 
 function Navbar() {

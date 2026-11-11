@@ -1,99 +1,35 @@
 // ListOfBookings.jsx — Admin list of bookings
 // Route: "/admin/bookings"
 //
-// All data is placeholder client-side state until the backend exists.
-// Filters (status tabs, search, movie, date) all combine; pagination runs
-// over the filtered result. Clicking a row opens a read-only detail view.
+// Real data:
+//   bookings            -> GET /api/admin/bookings?branchId=&date=&movieId=
+//   cancel + free seats -> PATCH /api/admin/bookings/:id?branchId=
+//   movie/date options  -> GET /api/showtimes + GET /api/movies (this branch only)
+//
+// The movie and date filters run on the server. The status tabs and the search
+// box filter that result in the browser, so every tab can show its count from
+// one response. Pagination runs over the filtered result.
 
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, Navigate } from "react-router";
 import "../../styles/ListOfBookings.css";
+import "../../styles/AdminLive.css";
 
 import AdminSidebar from "../../components/AdminSidebar.jsx";
 import Dropdown from "../../components/Dropdown.jsx";
 import navBookings from "../../assets/images/dashboard/nav-bookings.svg";
 
-import posterWhiteChicks from "../../assets/images/dashboard/white-chicks.png";
-import posterMeanGirls from "../../assets/images/dashboard/mean-girls.png";
-import posterDisclosureDay from "../../assets/images/dashboard/disclosure-day.png";
-import posterToyStory from "../../assets/images/dashboard/toy-story-5.png";
-import posterDevilWearsPrada from "../../assets/images/dashboard/devil-wears-prada-2.png";
+import { clearUser } from "../../api/session.js";
+import { formatDate } from "../../api/movies.js";
+import {
+	getAdminSession,
+	fetchBranchShowtimes,
+	fetchAdminBookings,
+	cancelBooking,
+} from "../../api/admin.js";
 
 const PAGE_SIZE = 10;
-
-// Same catalog and ticket prices as the admin dashboard.
-const MOVIES = [
-	{ id: "white-chicks", title: "White Chicks", price: 550, poster: posterWhiteChicks },
-	{ id: "mean-girls", title: "Mean Girls", price: 500, poster: posterMeanGirls },
-	{ id: "disclosure-day", title: "Disclosure Day", price: 600, poster: posterDisclosureDay },
-	{ id: "toy-story-5", title: "Toy Story 5", price: 350, poster: posterToyStory },
-	{ id: "devil-wears-prada-2", title: "The Devil Wears Prada 2", price: 800, poster: posterDevilWearsPrada },
-];
-
-const SHOWTIMES = [
-	{ movieId: "devil-wears-prada-2", datetime: "2026-06-05T10:00", cinema: "Cinema 1", branch: "Vista Mall Taguig" },
-	{ movieId: "toy-story-5", datetime: "2026-06-05T13:00", cinema: "Cinema 2", branch: "Vista Mall Taguig" },
-	{ movieId: "mean-girls", datetime: "2026-06-06T10:30", cinema: "Cinema 1", branch: "Market! Market!" },
-	{ movieId: "disclosure-day", datetime: "2026-06-06T15:00", cinema: "Cinema 3", branch: "Market! Market!" },
-	{ movieId: "white-chicks", datetime: "2026-06-06T19:30", cinema: "Cinema 2", branch: "Venice McKinley" },
-	{ movieId: "toy-story-5", datetime: "2026-06-07T12:00", cinema: "Cinema 1", branch: "Venice McKinley" },
-	{ movieId: "devil-wears-prada-2", datetime: "2026-06-07T18:30", cinema: "Cinema 3", branch: "Vista Mall Taguig" },
-	{ movieId: "mean-girls", datetime: "2026-06-08T16:00", cinema: "Cinema 2", branch: "Market! Market!" },
-];
-
-const FIRST_NAMES = ["Ralph", "Jose", "Trisha", "Juan", "Christine", "Gabriel", "Juliana", "Ben", "Maria", "Angelo", "Patricia", "Miguel", "Andrea", "Carlo", "Bea"];
-const LAST_NAMES = ["Tomas", "Reyes", "Esguerra", "Rivera", "Dela Cruz", "Santos", "Bernabe", "Domingo", "Garcia", "Mendoza", "Villanueva", "Ramos", "Aquino", "Castillo", "Navarro"];
-const SEAT_ROWS = "ABCDEFGHJ";
-const PAYMENT_METHODS = ["GCash", "Credit Card", "Maya"];
-const CANCELLED_AT = new Set([6, 17, 29, 38, 51]);
-const PENDING_AT = new Set([9, 23, 44]);
-
-function findMovie(movieId) {
-	return MOVIES.find((movie) => movie.id === movieId);
-}
-
-// 55 placeholder bookings built from the seed lists above, so there's
-// enough data to paginate without hand-writing every row. Deterministic:
-// the same input always produces the same rows.
-const BOOKINGS = Array.from({ length: 55 }, (_, index) => {
-	const firstName = FIRST_NAMES[index % FIRST_NAMES.length];
-	const lastName = LAST_NAMES[(index * 7 + Math.floor(index / FIRST_NAMES.length)) % LAST_NAMES.length];
-	const showtime = SHOWTIMES[(index * 3) % SHOWTIMES.length];
-	const movie = findMovie(showtime.movieId);
-
-	const seatRow = SEAT_ROWS[(index * 5) % SEAT_ROWS.length];
-	const firstSeat = 1 + ((index * 3) % 9);
-	const seats = Array.from({ length: 1 + (index % 4) }, (_, offset) => `${seatRow}${firstSeat + offset}`);
-
-	let status = "Confirmed";
-	if (CANCELLED_AT.has(index)) status = "Cancelled";
-	if (PENDING_AT.has(index)) status = "Pending";
-
-	return {
-		id: index + 1,
-		reference: `FV-2026-${String(index + 1).padStart(5, "0")}`,
-		customer: {
-			name: `${firstName} ${lastName}`,
-			email: `${firstName}.${lastName}`.toLowerCase().replace(/\s+/g, "") + "@gmail.com",
-		},
-		movieId: movie.id,
-		datetime: showtime.datetime,
-		cinema: showtime.cinema,
-		branch: showtime.branch,
-		seats,
-		amount: seats.length * movie.price,
-		status,
-		paymentMethod: PAYMENT_METHODS[index % PAYMENT_METHODS.length],
-		bookedOn: `2026-06-0${1 + (index % 4)}`,
-	};
-});
-
 const STATUS_TABS = ["All", "Confirmed", "Pending", "Cancelled"];
-
-const MOVIE_FILTER_OPTIONS = [
-	{ value: "all", label: "All Movies" },
-	...MOVIES.map((movie) => ({ value: movie.id, label: movie.title, thumbnail: movie.poster })),
-];
 
 // "2026-06-06T10:30" -> "Jun 6, 2026 10:30 AM"
 function formatDatetime(value) {
@@ -103,27 +39,24 @@ function formatDatetime(value) {
 	return `${datePart} ${timePart}`;
 }
 
-// "2026-06-06" -> "Jun 6, 2026"
-function formatDateOnly(value) {
-	return new Date(`${value}T00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// When the purchase was made (an ISO timestamp from the server).
+function formatBookedAt(value) {
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return "—";
+	return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatPeso(amount) {
-	return `₱${amount.toLocaleString("en-US")}`;
+	return `₱${Number(amount).toLocaleString("en-US")}`;
 }
 
 function getInitials(name) {
-	const parts = name.split(" ");
+	const parts = name.split(" ").filter(Boolean);
+	if (parts.length === 0) return "?";
 	return `${parts[0][0]}${parts[parts.length - 1][0]}`;
 }
 
-// Every distinct showtime date in the data, oldest first.
-const DATE_FILTER_OPTIONS = [
-	{ value: "all", label: "All Dates" },
-	...[...new Set(BOOKINGS.map((booking) => booking.datetime.slice(0, 10)))]
-		.sort()
-		.map((date) => ({ value: date, label: formatDateOnly(date) })),
-];
+const idStatusText = (booking) => booking.idStatus ?? "Not recorded";
 
 const IconSearch = () => (
 	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -148,13 +81,33 @@ function StatusPill({ status }) {
 	return <span className={`status-pill status-pill--${status.toLowerCase()}`}>{status}</span>;
 }
 
-function ListOfBookings() {
+function StateBox({ title, text, loading, error, onRetry }) {
+	return (
+		<div className={`adm-state${error ? " adm-state--error" : ""}`} role={error ? "alert" : "status"}>
+			{loading && <span className="adm-spinner" aria-hidden="true" />}
+			<p className="adm-state-title">{title}</p>
+			{text && <p className="adm-state-text">{text}</p>}
+			{onRetry && (
+				<button type="button" className="adm-btn" onClick={onRetry}>
+					Try again
+				</button>
+			)}
+		</div>
+	);
+}
+
+function ListOfBookings({ branchId }) {
 	const [statusFilter, setStatusFilter] = useState("All");
 	const [query, setQuery] = useState("");
-	const [movieFilter, setMovieFilter] = useState("all");
-	const [dateFilter, setDateFilter] = useState("all");
+	const [movieFilter, setMovieFilter] = useState("all"); // "all" or a movie id
+	const [dateFilter, setDateFilter] = useState("all"); // "all" or "YYYY-MM-DD"
 	const [page, setPage] = useState(1);
 	const [selectedId, setSelectedId] = useState(null);
+
+	const [confirmingCancel, setConfirmingCancel] = useState(false);
+	const [cancelling, setCancelling] = useState(false);
+	const [cancelError, setCancelError] = useState("");
+	const [notice, setNotice] = useState("");
 
 	// Any filter change goes back to page 1 — otherwise you can land on a
 	// page that no longer exists for the smaller result set.
@@ -163,51 +116,310 @@ function ListOfBookings() {
 		setPage(1);
 	};
 
-	const normalizedQuery = query.trim().toLowerCase();
-	const matchesQuery = (booking) =>
-		!normalizedQuery ||
-		booking.reference.toLowerCase().includes(normalizedQuery) ||
-		booking.customer.name.toLowerCase().includes(normalizedQuery) ||
-		booking.customer.email.toLowerCase().includes(normalizedQuery) ||
-		booking.seats.some((seat) => seat.toLowerCase().includes(normalizedQuery));
+	/* ---------- Filter options (this branch's movies and show dates) ---------- */
 
-	// Everything except the status tab, so each tab's count shows how many
-	// rows it would give you under the current search/movie/date.
-	const matchingOtherFilters = BOOKINGS.filter(
+	const [optionsResult, setOptionsResult] = useState(null);
+
+	useEffect(() => {
+		const controller = new AbortController();
+		fetchBranchShowtimes(branchId, controller.signal)
+			.then(({ showtimes }) => {
+				const movies = new Map();
+				showtimes.forEach((showtime) => {
+					if (!movies.has(showtime.movieId)) {
+						movies.set(showtime.movieId, {
+							value: showtime.movieId,
+							label: showtime.movieTitle,
+							thumbnail: showtime.poster ?? undefined,
+						});
+					}
+				});
+				const dates = [...new Set(showtimes.map((showtime) => showtime.date))].sort();
+				setOptionsResult({
+					movies: [...movies.values()].sort((a, b) => a.label.localeCompare(b.label)),
+					dates: dates.map((date) => ({ value: date, label: formatDate(date) })),
+				});
+			})
+			.catch((error) => {
+				// Filters just stay on "All"; the bookings list reports its own errors.
+				if (error.name !== "AbortError") setOptionsResult({ movies: [], dates: [] });
+			});
+		return () => controller.abort();
+	}, [branchId]);
+
+	const movieOptions = [{ value: "all", label: "All Movies" }, ...(optionsResult?.movies ?? [])];
+	const dateOptions = [{ value: "all", label: "All Dates" }, ...(optionsResult?.dates ?? [])];
+
+	/* ---------- Bookings (movie + date are filtered by the server) ---------- */
+
+	const [reloadKey, setReloadKey] = useState(0);
+	const [bookingsResult, setBookingsResult] = useState(null);
+	const requestKey = `${branchId}:${movieFilter}:${dateFilter}:${reloadKey}`;
+
+	useEffect(() => {
+		const controller = new AbortController();
+		fetchAdminBookings(
+			{
+				branchId,
+				movieId: movieFilter === "all" ? undefined : movieFilter,
+				date: dateFilter === "all" ? undefined : dateFilter,
+			},
+			controller.signal,
+		)
+			.then((bookings) => setBookingsResult({ key: requestKey, bookings }))
+			.catch((error) => {
+				if (error.name === "AbortError") return;
+				setBookingsResult({ key: requestKey, error });
+			});
+		return () => controller.abort();
+	}, [branchId, movieFilter, dateFilter, requestKey]);
+
+	const current = bookingsResult?.key === requestKey ? bookingsResult : null;
+	const bookings = current?.bookings ?? [];
+
+	/* ---------- Search, status tabs, pagination (in the browser) ---------- */
+
+	const normalizedQuery = query.trim().toLowerCase();
+	const matchesSearch = bookings.filter(
 		(booking) =>
-			matchesQuery(booking) &&
-			(movieFilter === "all" || booking.movieId === movieFilter) &&
-			(dateFilter === "all" || booking.datetime.startsWith(dateFilter))
+			!normalizedQuery ||
+			booking.reference.toLowerCase().includes(normalizedQuery) ||
+			booking.customer.name.toLowerCase().includes(normalizedQuery) ||
+			booking.customer.email.toLowerCase().includes(normalizedQuery) ||
+			booking.seats.some((seat) => seat.toLowerCase().includes(normalizedQuery)),
 	);
 
-	const tabCounts = { All: matchingOtherFilters.length, Confirmed: 0, Pending: 0, Cancelled: 0 };
-	matchingOtherFilters.forEach((booking) => {
-		tabCounts[booking.status] += 1;
+	// Each tab's count = how many rows it would show under the current search.
+	const tabCounts = { All: matchesSearch.length, Confirmed: 0, Pending: 0, Cancelled: 0 };
+	matchesSearch.forEach((booking) => {
+		if (booking.status in tabCounts) tabCounts[booking.status] += 1;
 	});
 
 	const filtered =
-		statusFilter === "All" ? matchingOtherFilters : matchingOtherFilters.filter((booking) => booking.status === statusFilter);
+		statusFilter === "All" ? matchesSearch : matchesSearch.filter((booking) => booking.status === statusFilter);
 
 	const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 	const currentPage = Math.min(page, totalPages);
 	const pageStart = (currentPage - 1) * PAGE_SIZE;
 	const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
-	// Summary cards describe all bookings, not the current filter.
-	const confirmedTotal = BOOKINGS.filter((booking) => booking.status === "Confirmed").length;
-	const cancelledTotal = BOOKINGS.filter((booking) => booking.status === "Cancelled").length;
+	// Summary cards follow the movie/date filters (not search or status tab).
+	const confirmedTotal = bookings.filter((booking) => booking.status === "Confirmed").length;
+	const cancelledTotal = bookings.filter((booking) => booking.status === "Cancelled").length;
 
-	const selectedBooking = selectedId !== null ? BOOKINGS.find((booking) => booking.id === selectedId) : null;
+	const selectedBooking = selectedId !== null ? bookings.find((booking) => booking.id === selectedId) : null;
+
+	function closeDetail() {
+		setSelectedId(null);
+		setConfirmingCancel(false);
+		setCancelError("");
+	}
 
 	// Escape closes the detail view.
 	useEffect(() => {
 		if (!selectedBooking) return undefined;
 		const handleKeyDown = (event) => {
-			if (event.key === "Escape") setSelectedId(null);
+			if (event.key === "Escape" && !cancelling) {
+				setSelectedId(null);
+				setConfirmingCancel(false);
+				setCancelError("");
+			}
 		};
 		document.addEventListener("keydown", handleKeyDown);
 		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, [selectedBooking]);
+	}, [selectedBooking, cancelling]);
+
+	async function handleCancelBooking() {
+		setCancelling(true);
+		setCancelError("");
+		try {
+			const { seatsReleased } = await cancelBooking({ bookingId: selectedBooking.id, branchId });
+			setNotice(
+				`Booking ${selectedBooking.reference} cancelled. ${seatsReleased} ${seatsReleased === 1 ? "seat is" : "seats are"} available again.`,
+			);
+			closeDetail();
+			setReloadKey((n) => n + 1);
+		} catch (error) {
+			setCancelError(error.message);
+		} finally {
+			setCancelling(false);
+		}
+	}
+
+	const hasServerFilter = movieFilter !== "all" || dateFilter !== "all";
+
+	let content;
+	if (!current) {
+		content = <StateBox loading title="Loading bookings…" />;
+	} else if (current.error) {
+		content = (
+			<StateBox
+				error
+				title="Couldn't load bookings"
+				text={current.error.message}
+				onRetry={() => setReloadKey((n) => n + 1)}
+			/>
+		);
+	} else if (bookings.length === 0) {
+		content = (
+			<StateBox
+				title="No bookings yet"
+				text={
+					hasServerFilter
+						? "No bookings match this movie and date. Try All Movies or All Dates."
+						: "Bookings for this branch will show up here once customers check out."
+				}
+			/>
+		);
+	} else {
+		content = (
+			<section className="bookings-panel">
+				<div className="bookings-toolbar">
+					<label className="bookings-search">
+						<IconSearch />
+						<input
+							type="search"
+							placeholder="Search reference, customer, email, seat..."
+							aria-label="Search bookings"
+							value={query}
+							onChange={(event) => updateFilter(setQuery)(event.target.value)}
+						/>
+					</label>
+
+					<div className="status-tabs" role="group" aria-label="Filter by status">
+						{STATUS_TABS.map((tab) => (
+							<button
+								key={tab}
+								type="button"
+								className={`status-tab status-tab--${tab.toLowerCase()}${statusFilter === tab ? " active" : ""}`}
+								aria-pressed={statusFilter === tab}
+								onClick={() => updateFilter(setStatusFilter)(tab)}
+							>
+								{tab !== "All" && <span className="status-tab-dot" aria-hidden="true" />}
+								{tab}
+								<span className="status-tab-count">{tabCounts[tab]}</span>
+							</button>
+						))}
+					</div>
+				</div>
+
+				<div className="bookings-meta">
+					<p>
+						{filtered.length === 0
+							? "Showing 0 bookings"
+							: `Showing ${pageStart + 1}–${pageStart + pageRows.length} of ${filtered.length} ${
+									filtered.length === 1 ? "booking" : "bookings"
+								}`}
+					</p>
+
+					<nav className="pagination" aria-label="Pagination">
+						<button
+							type="button"
+							className="pagination-btn"
+							onClick={() => setPage(currentPage - 1)}
+							disabled={currentPage === 1}
+							aria-label="Previous page"
+						>
+							<IconChevronLeft />
+						</button>
+						{Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+							<button
+								key={pageNumber}
+								type="button"
+								className={`pagination-btn${pageNumber === currentPage ? " active" : ""}`}
+								onClick={() => setPage(pageNumber)}
+								aria-current={pageNumber === currentPage ? "page" : undefined}
+							>
+								{pageNumber}
+							</button>
+						))}
+						<button
+							type="button"
+							className="pagination-btn"
+							onClick={() => setPage(currentPage + 1)}
+							disabled={currentPage === totalPages}
+							aria-label="Next page"
+						>
+							<IconChevronRight />
+						</button>
+					</nav>
+				</div>
+
+				{pageRows.length === 0 ? (
+					<p className="bookings-empty">No bookings match these filters.</p>
+				) : (
+					<div className="bookings-table-wrap">
+						<table className="bookings-table">
+							<thead>
+								<tr>
+									<th>Reference</th>
+									<th>Customer</th>
+									<th>Movie &amp; Showtime</th>
+									<th>Cinema</th>
+									<th>Seats</th>
+									<th>Discount</th>
+									<th>Amount</th>
+									<th>Status</th>
+									<th>
+										<span className="visually-hidden">Details</span>
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								{pageRows.map((booking) => (
+									<tr key={`${booking.id}-${booking.showtimeId}`} onClick={() => setSelectedId(booking.id)}>
+										<td data-label="Reference" className="booking-reference">
+											{booking.reference}
+										</td>
+										<td data-label="Customer">
+											<div className="booking-customer">
+												<span className="booking-avatar" aria-hidden="true">
+													{getInitials(booking.customer.name)}
+												</span>
+												<div>
+													<p className="booking-primary">{booking.customer.name}</p>
+													<p className="booking-secondary">{booking.customer.email}</p>
+												</div>
+											</div>
+										</td>
+										<td data-label="Movie & Showtime">
+											<p className="booking-primary">{booking.movieTitle}</p>
+											<p className="booking-secondary">{formatDatetime(booking.datetime)}</p>
+										</td>
+										<td data-label="Cinema">
+											<p className="booking-primary">{booking.cinema}</p>
+											<p className="booking-secondary">{booking.branch}</p>
+										</td>
+										<td data-label="Seats">{booking.seats.join(", ")}</td>
+										<td data-label="Discount">
+											<p className="booking-primary">{booking.discountLabel || "—"}</p>
+											<p className="booking-secondary">ID: {idStatusText(booking)}</p>
+										</td>
+										<td data-label="Amount" className="booking-amount">
+											{formatPeso(booking.amount)}
+										</td>
+										<td data-label="Status">
+											<StatusPill status={booking.status} />
+										</td>
+										<td data-label="Details">
+											<button
+												type="button"
+												className="booking-view-btn"
+												onClick={() => setSelectedId(booking.id)}
+												aria-label={`View booking ${booking.reference}`}
+											>
+												<IconChevronRight />
+											</button>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
+			</section>
+		);
+	}
 
 	return (
 		<div className="admin-dashboard">
@@ -221,7 +433,7 @@ function ListOfBookings() {
 							List of <em>Bookings</em>
 						</span>
 					</h1>
-					<Link to="/" className="admin-logout">
+					<Link to="/" className="admin-logout" onClick={clearUser}>
 						Log Out
 					</Link>
 				</header>
@@ -229,14 +441,14 @@ function ListOfBookings() {
 				<section className="bookings-intro">
 					<div>
 						<h2>List of Bookings</h2>
-						<p>Review, search, and manage every ticket booking across branches and showtimes.</p>
+						<p>Review, search, and manage every ticket booking for your branch.</p>
 					</div>
 
 					<div className="bookings-filters">
 						<div className="filter-field">
 							<span>Movie</span>
 							<Dropdown
-								options={MOVIE_FILTER_OPTIONS}
+								options={movieOptions}
 								value={movieFilter}
 								onChange={updateFilter(setMovieFilter)}
 								ariaLabel="Filter by movie"
@@ -245,7 +457,7 @@ function ListOfBookings() {
 						<div className="filter-field">
 							<span>Date</span>
 							<Dropdown
-								options={DATE_FILTER_OPTIONS}
+								options={dateOptions}
 								value={dateFilter}
 								onChange={updateFilter(setDateFilter)}
 								ariaLabel="Filter by date"
@@ -253,6 +465,12 @@ function ListOfBookings() {
 						</div>
 					</div>
 				</section>
+
+				{notice && (
+					<p className="adm-notice" role="status">
+						{notice}
+					</p>
+				)}
 
 				<section className="bookings-summary" aria-label="Summary">
 					<article className="summary-card">
@@ -265,146 +483,7 @@ function ListOfBookings() {
 					</article>
 				</section>
 
-				<section className="bookings-panel">
-					<div className="bookings-toolbar">
-						<label className="bookings-search">
-							<IconSearch />
-							<input
-								type="search"
-								placeholder="Search reference, customer, email, seat..."
-								aria-label="Search bookings"
-								value={query}
-								onChange={(event) => updateFilter(setQuery)(event.target.value)}
-							/>
-						</label>
-
-						<div className="status-tabs" role="group" aria-label="Filter by status">
-							{STATUS_TABS.map((tab) => (
-								<button
-									key={tab}
-									type="button"
-									className={`status-tab status-tab--${tab.toLowerCase()}${statusFilter === tab ? " active" : ""}`}
-									aria-pressed={statusFilter === tab}
-									onClick={() => updateFilter(setStatusFilter)(tab)}
-								>
-									{tab !== "All" && <span className="status-tab-dot" aria-hidden="true" />}
-									{tab}
-									<span className="status-tab-count">{tabCounts[tab]}</span>
-								</button>
-							))}
-						</div>
-					</div>
-
-					<div className="bookings-meta">
-						<p>
-							{filtered.length === 0
-								? "Showing 0 bookings"
-								: `Showing ${pageStart + 1}–${pageStart + pageRows.length} of ${filtered.length} ${
-										filtered.length === 1 ? "booking" : "bookings"
-									}`}
-						</p>
-
-						<nav className="pagination" aria-label="Pagination">
-							<button
-								type="button"
-								className="pagination-btn"
-								onClick={() => setPage(currentPage - 1)}
-								disabled={currentPage === 1}
-								aria-label="Previous page"
-							>
-								<IconChevronLeft />
-							</button>
-							{Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
-								<button
-									key={pageNumber}
-									type="button"
-									className={`pagination-btn${pageNumber === currentPage ? " active" : ""}`}
-									onClick={() => setPage(pageNumber)}
-									aria-current={pageNumber === currentPage ? "page" : undefined}
-								>
-									{pageNumber}
-								</button>
-							))}
-							<button
-								type="button"
-								className="pagination-btn"
-								onClick={() => setPage(currentPage + 1)}
-								disabled={currentPage === totalPages}
-								aria-label="Next page"
-							>
-								<IconChevronRight />
-							</button>
-						</nav>
-					</div>
-
-					{pageRows.length === 0 ? (
-						<p className="bookings-empty">No bookings match these filters.</p>
-					) : (
-						<div className="bookings-table-wrap">
-							<table className="bookings-table">
-								<thead>
-									<tr>
-										<th>Reference</th>
-										<th>Customer</th>
-										<th>Movie &amp; Showtime</th>
-										<th>Cinema</th>
-										<th>Seats</th>
-										<th>Amount</th>
-										<th>Status</th>
-										<th>
-											<span className="visually-hidden">Details</span>
-										</th>
-									</tr>
-								</thead>
-								<tbody>
-									{pageRows.map((booking) => (
-										<tr key={booking.id} onClick={() => setSelectedId(booking.id)}>
-											<td data-label="Reference" className="booking-reference">
-												{booking.reference}
-											</td>
-											<td data-label="Customer">
-												<div className="booking-customer">
-													<span className="booking-avatar" aria-hidden="true">
-														{getInitials(booking.customer.name)}
-													</span>
-													<div>
-														<p className="booking-primary">{booking.customer.name}</p>
-														<p className="booking-secondary">{booking.customer.email}</p>
-													</div>
-												</div>
-											</td>
-											<td data-label="Movie & Showtime">
-												<p className="booking-primary">{findMovie(booking.movieId).title}</p>
-												<p className="booking-secondary">{formatDatetime(booking.datetime)}</p>
-											</td>
-											<td data-label="Cinema">
-												<p className="booking-primary">{booking.cinema}</p>
-												<p className="booking-secondary">{booking.branch}</p>
-											</td>
-											<td data-label="Seats">{booking.seats.join(", ")}</td>
-											<td data-label="Amount" className="booking-amount">
-												{formatPeso(booking.amount)}
-											</td>
-											<td data-label="Status">
-												<StatusPill status={booking.status} />
-											</td>
-											<td data-label="Details">
-												<button
-													type="button"
-													className="booking-view-btn"
-													onClick={() => setSelectedId(booking.id)}
-													aria-label={`View booking ${booking.reference}`}
-												>
-													<IconChevronRight />
-												</button>
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
-					)}
-				</section>
+				{content}
 			</div>
 
 			{selectedBooking && (
@@ -415,7 +494,7 @@ function ListOfBookings() {
 					aria-labelledby="booking-detail-title"
 					onClick={(event) => {
 						// Only a click on the dimmed backdrop itself closes it.
-						if (event.target === event.currentTarget) setSelectedId(null);
+						if (event.target === event.currentTarget && !cancelling) closeDetail();
 					}}
 				>
 					<div className="modal-card">
@@ -429,9 +508,8 @@ function ListOfBookings() {
 						</div>
 
 						<div className="booking-detail-movie">
-							<img src={findMovie(selectedBooking.movieId).poster} alt="" />
 							<div>
-								<p className="booking-primary">{findMovie(selectedBooking.movieId).title}</p>
+								<p className="booking-primary">{selectedBooking.movieTitle}</p>
 								<p className="booking-secondary">{formatDatetime(selectedBooking.datetime)}</p>
 							</div>
 						</div>
@@ -445,12 +523,22 @@ function ListOfBookings() {
 							</div>
 							<div>
 								<dt>Seats</dt>
-								<dd>{selectedBooking.seats.join(", ")}</dd>
+								<dd>
+									{selectedBooking.ticketTypes.length === selectedBooking.seats.length
+										? selectedBooking.seats
+												.map((seat, index) => `${seat} (${selectedBooking.ticketTypes[index]})`)
+												.join(", ")
+										: selectedBooking.seats.join(", ")}
+								</dd>
 							</div>
 							<div>
-								<dt>Tickets</dt>
+								<dt>Discount type</dt>
+								<dd>{selectedBooking.discountLabel || "—"}</dd>
+							</div>
+							<div>
+								<dt>ID status</dt>
 								<dd>
-									{selectedBooking.seats.length} × {formatPeso(findMovie(selectedBooking.movieId).price)}
+									<span className="adm-detail-id">{idStatusText(selectedBooking)}</span>
 								</dd>
 							</div>
 							<div>
@@ -463,14 +551,59 @@ function ListOfBookings() {
 							</div>
 							<div>
 								<dt>Booked on</dt>
-								<dd>{formatDateOnly(selectedBooking.bookedOn)}</dd>
+								<dd>{formatBookedAt(selectedBooking.bookedAt)}</dd>
 							</div>
 						</dl>
 
+						{confirmingCancel && (
+							<div className="adm-cancel-confirm" role="alert">
+								<p>
+									Cancel booking {selectedBooking.reference}? Its{" "}
+									{selectedBooking.seats.length === 1 ? "seat becomes" : `${selectedBooking.seats.length} seats become`}{" "}
+									available again. This can't be undone.
+								</p>
+								{cancelError && <p>{cancelError}</p>}
+							</div>
+						)}
+
 						<div className="modal-actions">
-							<button type="button" className="modal-btn modal-btn--ghost" onClick={() => setSelectedId(null)}>
+							<button type="button" className="modal-btn modal-btn--ghost" onClick={closeDetail} disabled={cancelling}>
 								Close
 							</button>
+
+							{selectedBooking.status !== "Cancelled" && !confirmingCancel && (
+								<button
+									type="button"
+									className="modal-btn adm-btn-danger"
+									onClick={() => setConfirmingCancel(true)}
+								>
+									Cancel booking
+								</button>
+							)}
+
+							{confirmingCancel && (
+								<>
+									<button
+										type="button"
+										className="modal-btn modal-btn--ghost"
+										onClick={() => {
+											setConfirmingCancel(false);
+											setCancelError("");
+										}}
+										disabled={cancelling}
+									>
+										Keep booking
+									</button>
+									<button
+										type="button"
+										className="modal-btn adm-btn-danger"
+										onClick={handleCancelBooking}
+										disabled={cancelling}
+									>
+										{cancelling ? "Cancelling…" : "Yes, cancel booking"}
+									</button>
+								</>
+							)}
 						</div>
 					</div>
 				</div>
@@ -479,4 +612,11 @@ function ListOfBookings() {
 	);
 }
 
-export default ListOfBookings;
+// Only a logged-in admin gets the page; everyone else goes to the admin login.
+function ListOfBookingsPage() {
+	const admin = getAdminSession();
+	if (!admin) return <Navigate to="/admin/login" replace />;
+	return <ListOfBookings branchId={admin.branchId} />;
+}
+
+export default ListOfBookingsPage;

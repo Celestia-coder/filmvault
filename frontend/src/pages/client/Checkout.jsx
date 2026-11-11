@@ -1,15 +1,21 @@
 // Route: "/checkout"
+// Reached from SeatSelection, which passes the held seats and the hold expiry in route state.
+// Next page: "/tickets/:bookedId" (after a successful booking).
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
 import moviePoster from "../../assets/images/movie-poster.webp";
+import { getUser } from "../../api/session.js";
+import { createBooking, fetchSnacks, NEEDS_NEW_SEATS } from "../../api/bookings.js";
 import "../../styles/Checkout.css";
 
 /* ---------------------------------------------------------------- */
 /* Icons                                                            */
 /* ---------------------------------------------------------------- */
+
+// Shared SVG wrapper. Pass size to change width and height.
 const Icon = ({ children, size = 16, ...props }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -31,10 +37,11 @@ const IconCamera = (p) => (<Icon {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 
 const IconInfo = (p) => (<Icon {...p}><circle cx="12" cy="12" r="10" /><path d="M12 16v-5M12 8h.01" /></Icon>);
 
 /* ---------------------------------------------------------------- */
-/* Static data                                                      */
+/* Constants                                                        */
 /* ---------------------------------------------------------------- */
+
 const DISCOUNT_RATE = 0.2; // PWD + Senior Citizen
-const BOOKING_FEE_PER_TICKET = 30; // ₱30 per ticket — never discounted
+const BOOKING_FEE_PER_TICKET = 30; // ₱30 per ticket, never discounted
 
 const TICKET_TYPES = {
   regular: { label: "Regular", discounted: false },
@@ -49,17 +56,11 @@ const PAYMENT_METHODS = [
   { id: "bpi", logo: "BPI", name: "BPI Online", desc: "Online Banking", color: "#a4161a" },
 ];
 
-// TODO: replace with a real concessions API once the backend has one.
-const INITIAL_FOOD = [
-  { id: "popcorn", icon: "🍿", name: "Caramel Popcorn", size: "Large", price: 180, qty: 0 },
-  { id: "cola", icon: "🥤", name: "Coca-Cola", size: "Regular", price: 90, qty: 0 },
-  { id: "nachos", icon: "🧀", name: "Cheese Nachos", size: "Sharing", price: 160, qty: 0 },
-  { id: "combo", icon: "🎬", name: "Movie Combo", size: "Popcorn + 2 Drinks", price: 320, qty: 0 },
-];
-
-const HOLD_SECONDS = 10 * 60;
+const HOLD_SECONDS = 10 * 60; // used only when the page has no real hold expiry
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const EMAIL_REGEX = /^\S+@\S+\.\S+$/;
+// The booking API takes ID photos as JPG / PNG / WebP (not PDF), up to 5 MB.
+const ID_FILE_PATTERN = /\.(jpe?g|png|webp)$/i;
 
 // Used only when the page is opened without booking state (direct URL / refresh).
 const FALLBACK_BOOKING = {
@@ -77,8 +78,25 @@ const FALLBACK_BOOKING = {
 /* ---------------------------------------------------------------- */
 /* Helpers                                                          */
 /* ---------------------------------------------------------------- */
+
+/**
+ * Picks an emoji for a snack from its name.
+ * TODO: replace with a real concessions API once the backend has one.
+ * The menu comes from GET /api/snacks, which only stores a name and a price.
+ */
+function snackIcon(name) {
+  const n = name.toLowerCase();
+  if (n.includes("popcorn")) return "🍿";
+  if (/soda|cola|drink|juice|water|tea|coffee/.test(n)) return "🥤";
+  if (n.includes("nacho")) return "🧀";
+  if (/combo|meal/.test(n)) return "🎬";
+  return "🍽️";
+}
+
+/** Formats a number as pesos, e.g. 1500 -> "₱1,500". */
 const peso = (n) => `₱${Number(n).toLocaleString("en-PH")}`;
 
+/** Formats a date like "Sat, Jun 14, 2026". */
 const formatDate = (value) =>
   new Date(value).toLocaleDateString("en-US", {
     weekday: "short",
@@ -87,21 +105,182 @@ const formatDate = (value) =>
     year: "numeric",
   });
 
+/** Formats seconds as "MM:SS". */
 const formatTimer = (secs) =>
   `${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}`;
 
 /* ---------------------------------------------------------------- */
+/* Small components                                                 */
+/* ---------------------------------------------------------------- */
+
+/** Header of a checkout card. Pass `step` to show a step number. */
+function CardHeader({ step, title, subtitle }) {
+  return (
+    <div className="co-card-header">
+      {step && <span className="co-step-number">{step}</span>}
+      <div>
+        <p className="co-card-title">{title}</p>
+        <p className="co-card-subtitle">{subtitle}</p>
+      </div>
+    </div>
+  );
+}
+
+/** One label/value row in the confirm pop-up. `note` is small text under the label. */
+function ConfirmRow({ label, value, note }) {
+  return (
+    <div className="co-confirm-row">
+      <span>
+        {label}
+        {note && <small>{note}</small>}
+      </span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+/**
+ * Last check before paying. Tickets can't be cancelled, so the user reviews
+ * everything here and either goes back to edit or confirms the payment.
+ */
+function ConfirmModal({
+  movieTitle,
+  branch,
+  showtime,
+  date,
+  seatLines,
+  foodItems,
+  email,
+  paymentName,
+  discountTotal,
+  bookingFee,
+  total,
+  secondsLeft,
+  submitting,
+  onEdit,
+  onConfirm,
+}) {
+  // Escape goes back to editing (not while the payment is being sent).
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === "Escape" && !submitting) onEdit();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onEdit, submitting]);
+
+  return (
+    <div className="co-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="co-confirm-title">
+      <div className="co-modal co-modal--confirm">
+        <h2 className="co-modal-title" id="co-confirm-title">Confirm your booking</h2>
+
+        <p className="co-confirm-warning">
+          <IconWarning />
+          <span>
+            Please check everything. Tickets can't be cancelled or changed after you pay.
+          </span>
+        </p>
+        <p className="co-confirm-hold">Your seats are held for {formatTimer(secondsLeft)}</p>
+
+        <div className="co-confirm-body">
+          <section className="co-confirm-section">
+            <p className="co-confirm-movie">{movieTitle}</p>
+            <ConfirmRow label="Branch" value={branch.name} />
+            <ConfirmRow label="Cinema" value={showtime.hall} />
+            <ConfirmRow label="Date" value={formatDate(date)} />
+            <ConfirmRow label="Time" value={showtime.time} />
+          </section>
+
+          <section className="co-confirm-section">
+            <p className="co-confirm-heading">Tickets · {seatLines.length}</p>
+            {seatLines.map(({ seat, typeLabel, discounted, price, holderName }) => (
+              <ConfirmRow
+                key={seat}
+                label={`Seat ${seat} · ${typeLabel}${discounted ? " (−20%)" : ""}`}
+                note={holderName ? `Name on ID: ${holderName}` : undefined}
+                value={peso(price)}
+              />
+            ))}
+          </section>
+
+          {foodItems.length > 0 && (
+            <section className="co-confirm-section">
+              <p className="co-confirm-heading">Food &amp; Snacks</p>
+              {foodItems.map((f) => (
+                <ConfirmRow key={f.id} label={`${f.name} ×${f.qty}`} value={peso(f.price * f.qty)} />
+              ))}
+            </section>
+          )}
+
+          <section className="co-confirm-section">
+            <p className="co-confirm-heading">Contact &amp; Payment</p>
+            <ConfirmRow label="Email" value={email.trim()} />
+            <ConfirmRow label="Payment" value={paymentName} />
+          </section>
+
+          <section className="co-confirm-section">
+            {discountTotal > 0 && <ConfirmRow label="Discounts" value={`-${peso(discountTotal)}`} />}
+            <ConfirmRow label="Booking fee" value={peso(bookingFee)} />
+            <ConfirmRow label="Total" value={peso(total)} />
+          </section>
+        </div>
+
+        <div className="co-confirm-actions">
+          <button type="button" className="co-modal-btn co-modal-btn--ghost" onClick={onEdit} disabled={submitting}>
+            Edit booking
+          </button>
+          <button type="button" className="co-modal-btn" onClick={onConfirm} disabled={submitting}>
+            {submitting ? "Processing…" : `Confirm & Pay ${peso(total)}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Shown after the booking succeeds. */
+function PaymentSuccessModal({ onViewTicket }) {
+  return (
+    <div className="co-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="co-modal-title">
+      <div className="co-modal">
+        <div className="co-modal-head">
+          <span className="co-modal-icon">
+            <IconCheckCircle />
+          </span>
+          <h2 className="co-modal-title" id="co-modal-title">Payment Successful</h2>
+        </div>
+        <p className="co-modal-text">
+          Booking confirmed — please check your email for your ticket details.
+        </p>
+        <button type="button" className="co-modal-btn" onClick={onViewTicket}>
+          View My Ticket
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
 /* Simulated ID scan (DEMO ONLY)                                    */
 /* ---------------------------------------------------------------- */
-// Opens the camera and plays a fake "scanning" animation. It does NOT
-// read or validate the ID — swap this for a real provider's SDK
-// (Stripe Identity, Veriff, Sumsub, ...) if real verification is ever needed.
+
+/**
+ * Opens the camera and plays a fake "scanning" animation. It does NOT read
+ * or check the ID. Swap it for a real provider's SDK (Stripe Identity,
+ * Veriff, Sumsub, ...) if real verification is ever needed.
+ *
+ * What it does do: when the scan ends, it takes a photo of the camera frame
+ * and gives it to onVerified(file). That photo is the ID image the booking
+ * needs, so scanning works as another way to upload a file.
+ */
 function IdScanModal({ seat, typeLabel, onVerified, onClose }) {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const [status, setStatus] = useState("starting"); // starting | ready | scanning | done | error
   const [errorMsg, setErrorMsg] = useState("");
+  const [shot, setShot] = useState(null); // the photo taken when the scan ends
 
+  // Start the camera when the modal opens.
   useEffect(() => {
     let cancelled = false;
 
@@ -138,12 +317,41 @@ function IdScanModal({ seat, typeLabel, onVerified, onClose }) {
     };
   }, []);
 
-  // Fake 3-second scan.
+  // Fake 3-second scan, then take a photo of the frame as the ID image.
   useEffect(() => {
     if (status !== "scanning") return undefined;
-    const id = setTimeout(() => setStatus("done"), 3000);
+
+    const captureFailed = () => {
+      setErrorMsg("Couldn't capture the ID. Try again, or close this and upload a photo instead.");
+      setStatus("error");
+    };
+
+    const id = setTimeout(() => {
+      const video = videoRef.current;
+      if (!video || !video.videoWidth) {
+        captureFailed();
+        return;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            captureFailed();
+            return;
+          }
+          setShot(new File([blob], `id-scan-${seat}.jpg`, { type: "image/jpeg" }));
+          setStatus("done");
+        },
+        "image/jpeg",
+        0.85
+      );
+    }, 3000);
+
     return () => clearTimeout(id);
-  }, [status]);
+  }, [status, seat]);
 
   return (
     <div className="co-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="co-scan-title">
@@ -186,7 +394,7 @@ function IdScanModal({ seat, typeLabel, onVerified, onClose }) {
             </button>
           )}
           {status === "done" && (
-            <button type="button" className="co-scan-btn co-scan-btn--primary" onClick={onVerified}>
+            <button type="button" className="co-scan-btn co-scan-btn--primary" onClick={() => onVerified(shot)} disabled={!shot}>
               Done
             </button>
           )}
@@ -203,6 +411,7 @@ function Checkout() {
   const navigate = useNavigate();
   const { state } = useLocation();
 
+  // Booking details from the previous page, with fallbacks for direct visits.
   const booking = useMemo(() => {
     const s = state || {};
     return {
@@ -215,31 +424,55 @@ function Checkout() {
       date: s.date ?? FALLBACK_BOOKING.date,
       showtime: s.showtime ?? FALLBACK_BOOKING.showtime,
       seats: s.seats?.length ? s.seats : FALLBACK_BOOKING.seats,
+      // Set by Seat Selection after the seats are held. Missing if the page was opened directly.
+      showtimeId: s.showtimeId ?? null,
+      seatIds: s.seatIds ?? null,
+      holdExpiresAt: s.holdExpiresAt ?? null,
     };
   }, [state]);
-  const { movieId, movieTitle, genres, rating, poster, branch, date, showtime, seats } = booking;
+  const { movieId, movieTitle, genres, rating, poster, branch, date, showtime, seats, showtimeId, seatIds, holdExpiresAt } =
+    booking;
+
+  const user = getUser();
+  // Booking needs a logged-in user and seats that were really held in Seat Selection.
+  const canBook = Boolean(user && showtimeId && seatIds?.length === seats.length);
   const basePrice = showtime.price;
 
-  /* ---- form state ---- */
+  /* ---- state: contact ---- */
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
   const [emailTouched, setEmailTouched] = useState(false);
+
+  /* ---- state: tickets and ID details (keyed by seat label, e.g. "A1") ---- */
   const [ticketTypes, setTicketTypes] = useState(() =>
     Object.fromEntries(seats.map((seat) => [seat, "regular"]))
   );
-  const [food, setFood] = useState(INITIAL_FOOD);
-  const [paymentMethod, setPaymentMethod] = useState("");
-  // Discounted-ticket ID details — one entry per seat, keyed by seat id (e.g. "A1")
   const [idFiles, setIdFiles] = useState({}); // { A1: File }
   const [idErrors, setIdErrors] = useState({}); // { A1: "message" }
   const [idHolders, setIdHolders] = useState({}); // { A1: { name, number } }
-  const [idVerified, setIdVerified] = useState({}); // { A1: true } — simulated scan only
-  const [draggingSeat, setDraggingSeat] = useState(null);
-  const [scanSeat, setScanSeat] = useState(null); // seat whose scan modal is open
-  const [secondsLeft, setSecondsLeft] = useState(HOLD_SECONDS);
-  const [paid, setPaid] = useState(false);
+  const [idVerified, setIdVerified] = useState({}); // { A1: true } (simulated scan only)
+  const [draggingSeat, setDraggingSeat] = useState(null); // seat whose upload box is being dragged over
+  const [scanSeat, setScanSeat] = useState(null); // seat whose scan pop-up is open
   const fileInputRefs = useRef({});
 
+  /* ---- state: food ---- */
+  const [food, setFood] = useState([]); // [{ id, icon, name, price, qty }]
+  const [foodState, setFoodState] = useState("loading"); // loading | ready | error
+  const [foodReload, setFoodReload] = useState(0); // change it to reload the menu
+
+  /* ---- state: payment and checkout flow ---- */
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false); // "Confirm your booking" pop-up
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(null); // { message, needsNewSeats }
+  const [paid, setPaid] = useState(false);
+  const [bookedId, setBookedId] = useState(null);
+  // Count down from the hold's real expiry (set by Seat Selection), not a fresh 10 minutes.
+  const [secondsLeft, setSecondsLeft] = useState(() =>
+    holdExpiresAt ? Math.max(0, Math.round((holdExpiresAt - Date.now()) / 1000)) : HOLD_SECONDS
+  );
+
+  /** Goes back to Seat Selection and keeps the current seats and showtime. */
   const goToSeats = () =>
     navigate(`/booking/${movieId}/seats`, {
       state: {
@@ -260,6 +493,7 @@ function Checkout() {
     return () => clearInterval(id);
   }, [paid]);
 
+  // When the hold runs out, send the user back to pick seats again.
   useEffect(() => {
     if (secondsLeft === 0 && !paid) {
       alert("Your seat hold has expired. Please select your seats again.");
@@ -267,12 +501,30 @@ function Checkout() {
     }
   }, [secondsLeft, paid]);
 
+  // Load the food menu. Food is optional, so a failure here never blocks booking.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchSnacks({ signal: controller.signal })
+      .then((snacks) => {
+        setFood(snacks.map((x) => ({ id: x.id, icon: snackIcon(x.name), name: x.name, price: x.price, qty: 0 })));
+        setFoodState("ready");
+      })
+      .catch((err) => {
+        if (err.name !== "AbortError") setFoodState("error");
+      });
+    return () => controller.abort();
+  }, [foodReload]);
+
+  /* ---- prices and totals ---- */
+
+  /** Price of one ticket of the given type (20% off for discounted types). */
   const priceFor = (type) =>
     TICKET_TYPES[type].discounted ? Math.round(basePrice * (1 - DISCOUNT_RATE)) : basePrice;
 
   const discountedSeats = seats.filter((s) => TICKET_TYPES[ticketTypes[s]].discounted);
   const hasDiscountedTicket = discountedSeats.length > 0;
 
+  // Tickets grouped by type for the sidebar, e.g. [{ type: "regular", count: 2 }].
   const ticketSummary = useMemo(() => {
     const groups = {};
     seats.forEach((seat) => {
@@ -288,28 +540,45 @@ function Checkout() {
   const fullPriceTotal = seats.length * basePrice;
   const discountTotal = fullPriceTotal - ticketsTotal;
   const subtotal = fullPriceTotal + foodTotal; // tickets at full price + food, before discounts
-  const bookingFee = seats.length * BOOKING_FEE_PER_TICKET; // ₱30 per ticket, not discounted
+  const bookingFee = seats.length * BOOKING_FEE_PER_TICKET; // not discounted
   const total = subtotal - discountTotal + bookingFee;
 
+  /* ---- validation ---- */
   const emailValid = EMAIL_REGEX.test(email.trim());
-  // Every discounted seat needs its own upload, holder name and ID number.
-  // The camera scan is a demo extra, so it is NOT required to pay.
+  // Every discounted seat needs its own ID photo, holder name and ID number.
+  // A camera scan counts too, because it saves its photo into idFiles.
   const idOk = discountedSeats.every(
     (seat) =>
       Boolean(idFiles[seat]) &&
       Boolean(idHolders[seat]?.name?.trim()) &&
       Boolean(idHolders[seat]?.number?.trim())
   );
-  const canPay = emailValid && idOk && Boolean(paymentMethod) && seats.length > 0 && !paid;
+  const canPay =
+    emailValid && idOk && Boolean(paymentMethod) && seats.length > 0 && canBook && !paid && !submitting;
+
+  // One line per seat for the confirm pop-up.
+  const seatLines = seats.map((seat) => {
+    const type = ticketTypes[seat];
+    return {
+      seat,
+      typeLabel: TICKET_TYPES[type].label,
+      discounted: TICKET_TYPES[type].discounted,
+      price: priceFor(type),
+      holderName: idHolders[seat]?.name?.trim(),
+    };
+  });
+  const paymentName = PAYMENT_METHODS.find((m) => m.id === paymentMethod)?.name ?? "";
 
   /* ---- handlers ---- */
-  // Removes one seat's entry from a { seat: value } state object.
+
+  /** Returns an updater that removes one seat's entry from a { seat: value } state object. */
   const dropSeat = (seat) => (prev) => {
     const next = { ...prev };
     delete next[seat];
     return next;
   };
 
+  /** Clears all ID details for one seat. */
   const clearSeatId = (seat) => {
     setIdFiles(dropSeat(seat));
     setIdErrors(dropSeat(seat));
@@ -317,13 +586,14 @@ function Checkout() {
     setIdVerified(dropSeat(seat));
   };
 
+  /** Changes a seat's ticket type. Going back to Regular removes its ID details. */
   const handleTicketType = (seat) => (e) => {
     const type = e.target.value;
     setTicketTypes((prev) => ({ ...prev, [seat]: type }));
-    // Switched back to Regular: that seat no longer needs (or submits) an ID.
     if (!TICKET_TYPES[type].discounted) clearSeatId(seat);
   };
 
+  /** Saves the ID holder's name or number for a seat. */
   const handleHolderChange = (seat, field) => (e) => {
     const value = e.target.value;
     setIdHolders((prev) => ({
@@ -333,6 +603,13 @@ function Checkout() {
     setIdVerified(dropSeat(seat)); // details changed, so the demo scan no longer applies
   };
 
+  /** Reloads the food menu after a failed load. */
+  const retryFood = () => {
+    setFoodState("loading");
+    setFoodReload((n) => n + 1);
+  };
+
+  /** Changes a snack's quantity by `delta` (kept between 0 and 10). */
   const changeQty = (id, delta) =>
     setFood((prev) =>
       prev.map((f) => (f.id === id ? { ...f, qty: Math.max(0, Math.min(10, f.qty + delta)) } : f))
@@ -341,10 +618,11 @@ function Checkout() {
   const setSeatError = (seat, message) =>
     setIdErrors((prev) => ({ ...prev, [seat]: message }));
 
+  /** Checks an uploaded ID photo (type and size) and saves it for a seat. */
   const handleFile = (seat, file) => {
     if (!file) return;
-    if (!/\.(jpe?g|png|pdf)$/i.test(file.name)) {
-      setSeatError(seat, "Only JPG, PNG or PDF files are allowed.");
+    if (!ID_FILE_PATTERN.test(file.name)) {
+      setSeatError(seat, "Only JPG, PNG or WebP images are allowed.");
       return;
     }
     if (file.size > MAX_FILE_SIZE) {
@@ -356,41 +634,49 @@ function Checkout() {
     setIdVerified(dropSeat(seat)); // new file, so the demo scan no longer applies
   };
 
+  /** Handles a file dropped on a seat's upload box. */
   const handleDrop = (seat) => (e) => {
     e.preventDefault();
     setDraggingSeat(null);
     handleFile(seat, e.dataTransfer.files?.[0]);
   };
 
-  const handlePay = () => {
+  /** Opens the confirm pop-up (the real payment happens in handlePay). */
+  const handleReview = () => {
+    if (canPay) setConfirmOpen(true);
+  };
+
+  /** Sends the booking to the server. Called from the confirm pop-up. */
+  const handlePay = async () => {
     if (!canPay) return;
-    // TODO (backend): create the booking + process the payment here.
-    const payload = {
-      movieId,
-      email: email.trim(),
-      mobile: mobile.trim() || null,
-      branch: branch.name,
-      date,
-      showtime,
-      tickets: seats.map((seat) => ({ seat, type: ticketTypes[seat], price: priceFor(ticketTypes[seat]) })),
-      food: foodItems.map(({ id, qty, price }) => ({ id, qty, price })),
-      discountIds: Object.fromEntries(
-        discountedSeats.map((seat) => [
-          seat,
-          {
-            holderName: idHolders[seat].name.trim(),
-            idNumber: idHolders[seat].number.trim(),
-            fileName: idFiles[seat].name,
-            demoScanVerified: Boolean(idVerified[seat]), // simulated, not a real check
-          },
-        ])
-      ),
-      paymentMethod,
-      bookingFee,
-      total,
-    };
-    console.log("Checkout payload:", payload);
-    setPaid(true); // shows the "Payment Successful" pop-up
+    setSubmitting(true);
+    setSubmitError(null);
+
+    // seats[] (labels like "A1") and seatIds[] (database ids) are in the same order.
+    const typesBySeatId = Object.fromEntries(seats.map((label, i) => [seatIds[i], ticketTypes[label]]));
+    try {
+      // The server prices the booking itself (discount + booking fee) and checks the
+      // hold. Only the first discounted seat's ID photo is sent: the API stores one per booking.
+      const booked = await createBooking({
+        userId: user.userId,
+        showtimeId,
+        seatIds,
+        ticketTypes: typesBySeatId,
+        paymentMethod,
+        snacks: foodItems.map((f) => ({ snackId: f.id, quantity: f.qty })),
+        idImage: discountedSeats.length ? idFiles[discountedSeats[0]] : undefined,
+      });
+      setBookedId(booked.id);
+      setPaid(true); // shows the "Payment Successful" pop-up
+    } catch (error) {
+      setSubmitError({
+        message: error.message,
+        needsNewSeats: NEEDS_NEW_SEATS.includes(error.data?.code),
+      });
+    } finally {
+      setSubmitting(false);
+      setConfirmOpen(false); // on an error, this shows the message in the sidebar
+    }
   };
 
   return (
@@ -417,14 +703,10 @@ function Checkout() {
           <div className="checkout-main">
             {/* Contact */}
             <div className="co-card">
-              <div className="co-card-header">
-                <div>
-                  <p className="co-card-title">Contact Details</p>
-                  <p className="co-card-subtitle">
-                    Your e-ticket with QR code &amp; booking confirmation are sent here
-                  </p>
-                </div>
-              </div>
+              <CardHeader
+                title="Contact Details"
+                subtitle="Your e-ticket with QR code & booking confirmation are sent here"
+              />
               <div className="co-card-body">
                 <div className="co-form-row">
                   <div className="co-field">
@@ -453,7 +735,7 @@ function Checkout() {
                       id="co-mobile"
                       type="tel"
                       className="co-input"
-                      placeholder="+63 9XX XXX XXXX"
+                      placeholder="09XXXXXXXXX"
                       autoComplete="tel"
                       value={mobile}
                       onChange={(e) => setMobile(e.target.value.replace(/[^\d+\s]/g, ""))}
@@ -470,17 +752,13 @@ function Checkout() {
               </div>
             </div>
 
-            {/* 1 — Ticket types */}
+            {/* 1. Ticket types */}
             <div className="co-card">
-              <div className="co-card-header">
-                <span className="co-step-number">1</span>
-                <div>
-                  <p className="co-card-title">Ticket Types &amp; Discounts</p>
-                  <p className="co-card-subtitle">
-                    Assign a customer type to each seat — discounts apply automatically
-                  </p>
-                </div>
-              </div>
+              <CardHeader
+                step="1"
+                title="Ticket Types & Discounts"
+                subtitle="Assign a customer type to each seat — discounts apply automatically"
+              />
               <div className="co-card-body">
                 {seats.map((seat) => {
                   const type = ticketTypes[seat];
@@ -525,7 +803,7 @@ function Checkout() {
                         </div>
                       </div>
 
-                      {/* ID verification for THIS ticket only */}
+                      {/* ID check for this ticket only */}
                       {discounted && (
                         <div className="co-id-panel">
                           <p className="co-id-title">
@@ -570,7 +848,7 @@ function Checkout() {
                           <input
                             ref={(el) => (fileInputRefs.current[seat] = el)}
                             type="file"
-                            accept=".jpg,.jpeg,.png,.pdf"
+                            accept=".jpg,.jpeg,.png,.webp"
                             hidden
                             onChange={(e) => handleFile(seat, e.target.files?.[0])}
                           />
@@ -593,7 +871,7 @@ function Checkout() {
                             <span className="co-id-drop-title">
                               {idFile ? `✓ ${idFile.name}` : "Click to upload or drag & drop"}
                             </span>
-                            <span className="co-id-drop-desc">JPG, PNG or PDF · max 5 MB</span>
+                            <span className="co-id-drop-desc">JPG, PNG or WebP · max 5 MB</span>
                           </button>
                           {idErrors[seat] && <p className="co-error">{idErrors[seat]}</p>}
 
@@ -606,7 +884,7 @@ function Checkout() {
                             >
                               <IconCamera /> {idVerified[seat] ? "✓ ID scanned (demo)" : "Scan ID with camera"}
                             </button>
-                            {!idVerified[seat] && <span className="co-id-optional">Optional · demo only</span>}
+                            {!idVerified[seat] && <span className="co-id-optional">Or upload a photo above</span>}
                           </div>
                         </div>
                       )}
@@ -627,26 +905,29 @@ function Checkout() {
               </div>
             </div>
 
-            {/* 2 — Food */}
+            {/* 2. Food */}
             <div className="co-card">
-              <div className="co-card-header">
-                <span className="co-step-number">2</span>
-                <div>
-                  <p className="co-card-title">Food &amp; Snacks</p>
-                  <p className="co-card-subtitle">
-                    Add concessions to your order — picked up at the counter
-                  </p>
-                </div>
-              </div>
+              <CardHeader
+                step="2"
+                title="Food & Snacks"
+                subtitle="Add concessions to your order — picked up at the counter"
+              />
               <div className="co-card-body">
+                {foodState === "loading" && <p className="co-food-status">Loading the menu…</p>}
+                {foodState === "error" && (
+                  <p className="co-food-status" role="alert">
+                    We couldn't load the food menu.{" "}
+                    <button type="button" className="co-link-btn" onClick={retryFood}>
+                      Try again
+                    </button>
+                  </p>
+                )}
                 {food.map((item) => (
                   <div className="co-food-row" key={item.id}>
                     <span className="co-food-icon">{item.icon}</span>
                     <div className="co-food-info">
                       <span className="co-food-name">{item.name}</span>
-                      <span className="co-food-desc">
-                        {item.size} · {peso(item.price)}
-                      </span>
+                      <span className="co-food-desc">{peso(item.price)}</span>
                     </div>
                     <div className="co-qty">
                       <button
@@ -661,6 +942,7 @@ function Checkout() {
                       <button
                         type="button"
                         onClick={() => changeQty(item.id, 1)}
+                        disabled={item.qty >= 10}
                         aria-label={`Add one ${item.name}`}
                       >
                         +
@@ -671,15 +953,13 @@ function Checkout() {
               </div>
             </div>
 
-            {/* 3 — Payment */}
+            {/* 3. Payment */}
             <div className="co-card">
-              <div className="co-card-header">
-                <span className="co-step-number">3</span>
-                <div>
-                  <p className="co-card-title">Payment Method</p>
-                  <p className="co-card-subtitle">Protected payment · encrypted and secure</p>
-                </div>
-              </div>
+              <CardHeader
+                step="3"
+                title="Payment Method"
+                subtitle="Protected payment · encrypted and secure"
+              />
               <div className="co-card-body co-pay-grid">
                 {PAYMENT_METHODS.map((m) => (
                   <button
@@ -712,7 +992,7 @@ function Checkout() {
                   alt={`${movieTitle} poster`}
                   className="co-summary-poster"
                   onError={(e) => {
-                    e.currentTarget.onerror = null;
+                    e.currentTarget.onerror = null; // stop a loop if the fallback fails too
                     e.currentTarget.src = moviePoster;
                   }}
                 />
@@ -791,7 +1071,7 @@ function Checkout() {
                     <div className="co-line" key={f.id}>
                       <div>
                         <p className="co-line-name">{f.name} ×{f.qty}</p>
-                        <p className="co-line-sub">{f.size}</p>
+                        <p className="co-line-sub">{peso(f.price)} each</p>
                       </div>
                       <p className="co-line-price">{peso(f.price * f.qty)}</p>
                     </div>
@@ -822,8 +1102,35 @@ function Checkout() {
                   <p className="co-grand-amount">{peso(total)}</p>
                 </div>
 
-                <button type="button" className="co-btn-pay" disabled={!canPay} onClick={handlePay}>
-                  <IconLock /> Pay {peso(total)}
+                {!canBook && (
+                  <div className="co-note co-note--warn" role="alert">
+                    <IconWarning />
+                    <span>
+                      {user
+                        ? "We lost track of your seats. Please start again from seat selection."
+                        : "Please log in, then choose your seats again to complete your booking."}
+                    </span>
+                  </div>
+                )}
+                {submitError && (
+                  <div className="co-note co-note--warn" role="alert">
+                    <IconWarning />
+                    <span>
+                      {submitError.message}
+                      {submitError.needsNewSeats && (
+                        <>
+                          {" "}
+                          <button type="button" className="co-link-btn" onClick={goToSeats}>
+                            Choose seats again
+                          </button>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                )}
+
+                <button type="button" className="co-btn-pay" disabled={!canPay} onClick={handleReview}>
+                  <IconLock /> {submitting ? "Processing…" : `Review & Pay ${peso(total)}`}
                 </button>
                 <p className="co-secure">
                   <IconShield size={13} /> Your payment information is securely protected
@@ -852,31 +1159,42 @@ function Checkout() {
           seat={scanSeat}
           typeLabel={TICKET_TYPES[ticketTypes[scanSeat]]?.label ?? "Discount"}
           onClose={() => setScanSeat(null)}
-          onVerified={() => {
+          onVerified={(photo) => {
+            // The scan's photo counts as this seat's ID image, same as an upload.
+            setIdFiles((prev) => ({ ...prev, [scanSeat]: photo }));
+            setSeatError(scanSeat, "");
             setIdVerified((prev) => ({ ...prev, [scanSeat]: true }));
             setScanSeat(null);
           }}
         />
       )}
 
+      {/* ============ CONFIRM BOOKING POP-UP ============ */}
+      {confirmOpen && !paid && (
+        <ConfirmModal
+          movieTitle={movieTitle}
+          branch={branch}
+          showtime={showtime}
+          date={date}
+          seatLines={seatLines}
+          foodItems={foodItems}
+          email={email}
+          paymentName={paymentName}
+          discountTotal={discountTotal}
+          bookingFee={bookingFee}
+          total={total}
+          secondsLeft={secondsLeft}
+          submitting={submitting}
+          onEdit={() => setConfirmOpen(false)}
+          onConfirm={handlePay}
+        />
+      )}
+
       {/* ============ PAYMENT SUCCESSFUL POP-UP ============ */}
       {paid && (
-        <div className="co-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="co-modal-title">
-          <div className="co-modal">
-            <div className="co-modal-head">
-              <span className="co-modal-icon">
-                <IconCheckCircle />
-              </span>
-              <h2 className="co-modal-title" id="co-modal-title">Payment Successful</h2>
-            </div>
-            <p className="co-modal-text">
-              Booking confirmed — please check your email for your ticket details.
-            </p>
-            <button type="button" className="co-modal-btn" onClick={() => navigate("/tickets")}>
-              View Tickets
-            </button>
-          </div>
-        </div>
+        <PaymentSuccessModal
+          onViewTicket={() => navigate(`/tickets/${bookedId}`, { state: { justBooked: true } })}
+        />
       )}
     </div>
   );

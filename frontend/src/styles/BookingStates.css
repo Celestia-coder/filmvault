@@ -1,0 +1,76 @@
+/* BookingStates.css
+   Styles for the loading / empty / error messages on the Showtime Selection
+   and Seat Selection pages. Imported by those two pages, so no other CSS file
+   needs editing. Neutral colors that sit on the existing dark pages; restyle freely. */
+
+/* ---------- Showtime Selection ---------- */
+
+.showtime-state {
+  padding: 28px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  text-align: center;
+}
+
+.showtime-state--error {
+  border-color: rgba(229, 72, 77, 0.6);
+}
+
+.showtime-state-title {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.showtime-state p {
+  margin: 0 0 12px;
+  opacity: 0.85;
+}
+
+.showtime-hint {
+  margin: 0;
+  padding: 12px 0 4px;
+  opacity: 0.8;
+}
+
+/* ---------- Seat Selection ---------- */
+
+.seat-state {
+  padding: 28px 24px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  text-align: center;
+}
+
+.seat-state--error {
+  border-color: rgba(229, 72, 77, 0.6);
+}
+
+.seat-state-title {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.seat-state p {
+  margin: 0 0 12px;
+  opacity: 0.85;
+}
+
+.seat-hold-error {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(229, 72, 77, 0.6);
+  background: rgba(229, 72, 77, 0.12);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.seat-hold-error a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}

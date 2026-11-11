@@ -2,17 +2,16 @@
 
 .tickets-page {
   --fv-bg: #141414;
-  --fv-card: #1e1e1e;
   --fv-card-border: #2c2c2c;
   --fv-red: #e50914;
   --fv-red-hover: #ff1f2b;
   --fv-text: #ffffff;
   --fv-muted: #b3b3b3;
+  --fv-content-width: 720px; /* shared width for tabs, list, and empty state */
 
   min-height: 100vh;
   background: var(--fv-bg);
   color: var(--fv-text);
-  /* Navbar is position:absolute and ~114px tall, so clear it */
   padding: 150px 16px 80px;
   font-family: "Poppins", system-ui, sans-serif;
 }
@@ -38,7 +37,7 @@
 /* ---- Tabs ---- */
 .tickets-tabs {
   display: flex;
-  max-width: 720px;
+  max-width: var(--fv-content-width);
   margin: 0 auto 28px;
 }
 
@@ -139,32 +138,35 @@
   list-style: none;
   margin: 0 auto;
   padding: 0;
-  max-width: 980px;
+  max-width: var(--fv-content-width);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .booking-card {
   display: flex;
   align-items: stretch;
-  gap: 18px;
-  background: var(--fv-card);
-  border: 1px solid var(--fv-card-border);
+  gap: 20px;
+  background: var(--color-surface, #1e1e1e); /* falls back if the variable isn't defined globally */
+  border: 1.5px solid var(--fv-card-border);
   border-radius: 8px;
-  padding: 10px 18px 10px 10px;
-  animation: fv-fade-in 0.3s ease both;
+  padding: 16px 22px 16px 16px;
+  min-height: 190px;
+  animation: fv-fade-in 0.3s ease backwards; /* was "both" */
+  will-change: transform;
+  -webkit-font-smoothing: antialiased;
   transition: transform 0.2s ease, border-color 0.2s ease;
 }
 
 .booking-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(229, 9, 20, 0.5);
+  border-color: var(--fv-red);
 }
 
 .booking-poster {
-  width: 80px;
-  height: 120px;
+  width: 110px;
+  height: 165px;
   object-fit: cover;
   object-position: top;
   border-radius: 4px;
@@ -193,21 +195,21 @@
 }
 
 .booking-title {
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   font-weight: 600;
-  margin: 2px 0 2px;
+  margin: 2px 0 4px;
 }
 
 .booking-runtime,
 .booking-showtime,
 .booking-ref {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--fv-muted);
 }
 
 .booking-ref {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   opacity: 0.75;
   margin-bottom: 2px;
 }
@@ -217,8 +219,10 @@
 }
 
 .booking-meta {
+  flex: 0 0 auto;
+  max-width: 220px;
   text-align: right;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   color: var(--fv-muted);
   display: flex;
   flex-direction: column;
@@ -228,23 +232,29 @@
 
 .booking-meta p {
   margin: 0;
+  overflow-wrap: anywhere; /* long seat lists wrap instead of stretching the card */
 }
 
 .booking-price {
   color: var(--fv-text);
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   font-weight: 700;
   margin-bottom: 4px !important;
 }
 
 .bookings-empty {
-  max-width: 980px;
+  max-width: var(--fv-content-width);
   margin: 0 auto;
   text-align: center;
   color: var(--fv-muted);
   padding: 48px 16px;
   border: 1px dashed var(--fv-card-border);
   border-radius: 8px;
+}
+
+.booking-view-link {
+  color: var(--fv-red-hover);
+  font-weight: 600;
 }
 
 /* ---- Utilities ---- */
@@ -273,15 +283,17 @@
   .booking-card {
     flex-wrap: wrap;
     padding: 10px;
+    min-height: 0; /* no forced height on mobile */
   }
 
   .booking-poster {
-    width: 70px;
-    height: 105px;
+    width: 80px;
+    height: 120px;
   }
 
   .booking-meta {
     width: 100%;
+    max-width: none;
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: space-between;

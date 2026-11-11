@@ -1,71 +1,12 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { Search, Film } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
+import { fetchBookings } from "../../api/bookings.js";
+import { getUser } from "../../api/session.js";
 import "../../styles/Tickets.css";
-import projectHailMary from "../../assets/images/movies/project-hailmary.jpg";
-import wicked from "../../assets/images/movies/wicked.jpg";
-import moana from "../../assets/images/movies/moana.jpg";
-import toyStory5 from "../../assets/images/movies/toy-story-5.jpg";
-
-/* ---------- Mock data ---------- */
-// Mock booking data for the Tickets (My Bookings) page.
-// Replace with an API call (e.g. GET /api/bookings) once the backend endpoint is ready.
-// `poster` uses images from src/assets/images/movies — a placeholder shows if one is missing.
-
-const mockBookings = [
-  // ---- Active reservations ----
-  {
-    id: 1,
-    referenceNo: "FV-20260610-0012",
-    title: "Project Hail Mary",
-    poster: projectHailMary,
-    runtimeMins: 105,
-    showDateTime: "2026-06-10T11:30:00",
-    ticketCount: 2,
-    seats: ["G1", "G2"],
-    totalPrice: 1090,
-    status: "active",
-  },
-  {
-    id: 2,
-    referenceNo: "FV-20260615-0047",
-    title: "Wicked",
-    poster: wicked,
-    runtimeMins: 108,
-    showDateTime: "2026-06-15T19:30:00",
-    ticketCount: 1,
-    seats: ["E5"],
-    totalPrice: 540,
-    status: "active",
-  },
-
-  // ---- Past reservations ----
-  {
-    id: 3,
-    referenceNo: "FV-20260512-0103",
-    title: "Moana",
-    poster: moana,
-    runtimeMins: 141,
-    showDateTime: "2026-05-12T14:00:00",
-    ticketCount: 2,
-    seats: ["D7", "D8"],
-    totalPrice: 1090,
-    status: "past",
-  },
-  {
-    id: 4,
-    referenceNo: "FV-20260428-0088",
-    title: "Toy Story 5",
-    poster: toyStory5,
-    runtimeMins: 108,
-    showDateTime: "2026-04-28T19:30:00",
-    ticketCount: 1,
-    seats: ["E5"],
-    totalPrice: 540,
-    status: "past",
-  },
-];
+import "../../styles/Ticket.css";
 
 const TABS = [
   { key: "active", label: "Active Reservations" },
@@ -104,6 +45,14 @@ function formatPrice(amount) {
   return `₱${amount.toFixed(2)}`;
 }
 
+// "Active" = not cancelled and the movie hasn't finished yet. Everything else is "past".
+function getTab(booking) {
+  if (booking.status === "cancelled") return "past";
+  const start = new Date(booking.showDateTime).getTime();
+  const end = start + (booking.runtimeMins || 0) * 60 * 1000;
+  return end > Date.now() ? "active" : "past";
+}
+
 /* ---------- Poster with fallback ---------- */
 
 function Poster({ src, title }) {
@@ -132,8 +81,7 @@ function Poster({ src, title }) {
 /* ---------- Booking card ---------- */
 
 function BookingCard({ booking }) {
-  const { title, poster, runtimeMins, showDateTime, totalPrice, ticketCount, seats } =
-    booking;
+  const { id, title, poster, runtimeMins, showDateTime, totalPrice, ticketCount, seats, referenceNo, status } = booking;
 
   return (
     <li className="booking-card">
@@ -146,6 +94,10 @@ function BookingCard({ booking }) {
         </div>
         <div>
           <p className="booking-showtime">{formatShowtime(showDateTime)}</p>
+          <p className="booking-ref">
+            Ref: {referenceNo}
+            {status === "cancelled" && <span className="booking-badge booking-badge--cancelled">Cancelled</span>}
+          </p>
         </div>
       </div>
 
@@ -153,6 +105,9 @@ function BookingCard({ booking }) {
         <p className="booking-price">{formatPrice(totalPrice)}</p>
         <p>Total Ticket(s): {ticketCount}</p>
         <p>Seat Number: {seats.join(", ")}</p>
+        <Link className="booking-view-link" to={`/tickets/${id}`}>
+          View ticket
+        </Link>
       </div>
     </li>
   );
@@ -161,21 +116,49 @@ function BookingCard({ booking }) {
 /* ---------- Page ---------- */
 
 export default function Tickets() {
+  const user = getUser();
+  const userId = user?.userId;
+
   const [activeTab, setActiveTab] = useState("active");
   const [query, setQuery] = useState("");
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(Boolean(userId));
+  const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // GET /api/bookings?userId=  (newest first). reloadKey lets "Try again" re-run it.
+  useEffect(() => {
+    if (!userId) return undefined;
+    const controller = new AbortController();
+    fetchBookings(userId, { signal: controller.signal })
+      .then(setBookings)
+      .catch((err) => {
+        if (err.name !== "AbortError") setError(err.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [userId, reloadKey]);
+
+  const retry = useCallback(() => {
+    setLoading(true);
+    setError("");
+    setReloadKey((k) => k + 1);
+  }, []);
 
   // Function 1 + 2: filter by tab, then by reference number or movie name
   const filteredBookings = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return mockBookings
-      .filter((b) => b.status === activeTab)
+    return bookings
+      .filter((b) => getTab(b) === activeTab)
       .filter(
         (b) =>
           q === "" ||
           b.title.toLowerCase().includes(q) ||
           b.referenceNo.toLowerCase().includes(q)
       );
-  }, [activeTab, query]);
+  }, [bookings, activeTab, query]);
 
   const handleSubmit = (e) => {
     e.preventDefault(); // list already filters live as you type
@@ -245,7 +228,25 @@ export default function Tickets() {
         aria-labelledby={`tab-${activeTab}`}
         aria-live="polite"
       >
-        {filteredBookings.length > 0 ? (
+        {!userId ? (
+          <div className="bookings-empty">
+            <p>Log in to see your bookings.</p>
+            <Link className="booking-view-link" to="/login">
+              Log in
+            </Link>
+          </div>
+        ) : loading ? (
+          <div className="bookings-empty" role="status">
+            Loading your bookings…
+          </div>
+        ) : error ? (
+          <div className="bookings-empty bookings-empty--error" role="alert">
+            <p>We couldn't load your bookings. {error}</p>
+            <button type="button" className="tickets-search-btn" onClick={retry}>
+              Try again
+            </button>
+          </div>
+        ) : filteredBookings.length > 0 ? (
           <ul className="bookings-list">
             {filteredBookings.map((b) => (
               <BookingCard key={b.id} booking={b} />

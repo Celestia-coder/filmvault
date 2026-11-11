@@ -1,9 +1,11 @@
 // Route: "/admin/login"
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
+import { request } from "../../api/movies.js";
+import { saveUser } from "../../api/session.js";
 import "../../styles/AdminLogin.css";
 
 const IconMail = (props) => (
@@ -107,46 +109,71 @@ function AdminFeatureCard({ icon, title, desc }) {
   );
 }
 
-// Mock auth
-const MOCK_ADMIN_ACCOUNT = {
-  email: "admin@filmvault.com",
-  password: "admin123",
-};
-
-// Branch list for the dropdown
+// Branch list for the dropdown. ids match BRANCH.branch_id in database/seed.sql.
 const BRANCHES = [
-  "Vista Mall Taguig",
-  "Market! Market!",
-  "Venice McKinley",
+  { id: 1, name: "Vista Mall Taguig" },
+  { id: 2, name: "Market! Market!" },
+  { id: 3, name: "Venice McKinley" },
 ];
 
 function AdminLogin() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [branch, setBranch] = useState("BRANCHES[0]");
+  const [branchId, setBranchId] = useState(BRANCHES[0].id);
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const validate = () => {
     const next = {};
     if (!email.trim()) next.email = "Email is required.";
     if (!password) next.password = "Password is required.";
-    if (!branch) next.branch = "Please select your branch.";
+    if (!branchId) next.branch = "Please select your branch.";
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setStatus(null);
     if (!validate()) return;
 
-    if (email === MOCK_ADMIN_ACCOUNT.email && password === MOCK_ADMIN_ACCOUNT.password) {
-      setStatus({ type: "success", message: `Login successful! Redirecting to the ${branch} dashboard...` });
-    } else {
-      setStatus({ type: "error", message: "Invalid email or password." });
+    setSubmitting(true);
+    try {
+      // POST /api/auth/login -> { user: { userId, username, name, email, role, branchId } }
+      const { user } = await request("/api/auth/login", {
+        method: "POST",
+        body: { email: email.trim(), password },
+      });
+
+      if (user.role !== "admin") {
+        setStatus({ type: "error", message: "This account is not an admin account." });
+        return;
+      }
+      // Each admin manages exactly one branch (USER.branch_id); the dropdown
+      // must match it, so an admin can't open another branch's data.
+      if (user.branchId !== branchId) {
+        const own = BRANCHES.find((b) => b.id === user.branchId);
+        setStatus({
+          type: "error",
+          message: own
+            ? `This account manages ${own.name}. Select that branch to continue.`
+            : "This account isn't assigned to a branch.",
+        });
+        return;
+      }
+
+      saveUser(user);
+      const name = BRANCHES.find((b) => b.id === branchId).name;
+      setStatus({ type: "success", message: `Login successful! Redirecting to the ${name} dashboard...` });
+      navigate("/admin/dashboard");
+    } catch (error) {
+      setStatus({ type: "error", message: error.message });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -233,11 +260,11 @@ function AdminLogin() {
                   <select
                     id="admin-branch"
                     className="admin-form-select"
-                    value={branch}
-                    onChange={(e) => setBranch(e.target.value)}
+                    value={branchId}
+                    onChange={(e) => setBranchId(Number(e.target.value))}
                   >
                     {BRANCHES.map((b) => (
-                      <option key={b} value={b}>{b}</option>
+                      <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
                   <IconChevronDown className="admin-select-caret" />
@@ -259,7 +286,9 @@ function AdminLogin() {
 
               {status && <p className={"admin-status-message " + status.type}>{status.message}</p>}
 
-              <button type="submit" className="admin-btn-submit">Login</button>
+              <button type="submit" className="admin-btn-submit" disabled={submitting}>
+                {submitting ? "Signing in…" : "Login"}
+              </button>
 
               <div className="admin-divider">or continue with</div>
 

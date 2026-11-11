@@ -937,10 +937,203 @@
   max-width: 520px;
   padding: 32px 28px 30px;
   text-align: center;
-  background: var(--color-bg-dark2);
+  background: var(--color-bg-dark);
   border: 2px solid var(--color-green);
   border-radius: 12px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+
+/* ---------- Confirm booking pop-up ---------- */
+.co-modal--confirm {
+  width: min(540px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  padding: 28px;
+  overflow: hidden;
+  text-align: left;
+  background: var(--color-bg-dark);
+  border: 1px solid var(--co-border);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.75);
+}
+
+.co-modal--confirm .co-modal-title {
+  margin: 0 0 16px;
+  font-size: 23px;
+}
+
+.co-confirm-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 13px 15px;
+  border: 1px solid rgba(245, 166, 35, 0.25);
+  border-radius: 10px;
+  background: rgba(245, 166, 35, 0.07);
+  color: #e5d2a8;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.co-confirm-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--color-yellow);
+}
+
+.co-confirm-hold {
+  margin: 0 0 16px;
+  padding-left: 2px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  opacity: 1;
+}
+
+.co-confirm-body {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(48vh, 420px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 14px 4px 0;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
+}
+
+.co-confirm-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.co-confirm-body::-webkit-scrollbar-track {
+  margin: 8px 0;
+  background: transparent;
+}
+
+.co-confirm-body::-webkit-scrollbar-thumb {
+  border-radius: 20px;
+  background: #3a3a3a;
+}
+
+.co-confirm-body::-webkit-scrollbar-thumb:hover {
+  background: var(--color-red);
+}
+
+.co-confirm-section {
+  padding: 16px 0;
+  border-top: 1px solid var(--co-border);
+}
+
+.co-confirm-section:first-child {
+  padding-top: 4px;
+  border-top: 0;
+}
+
+.co-confirm-heading {
+  margin: 0 0 12px;
+  color: var(--color-red);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.co-confirm-movie {
+  margin: 0 0 12px;
+  color: var(--color-white);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.co-confirm-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 6px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.co-confirm-row span {
+  flex: 1;
+  min-width: 0;
+  color: var(--color-text-muted);
+}
+
+.co-confirm-row small {
+  display: block;
+  margin-top: 3px;
+  color: #888;
+  font-size: 11px;
+}
+
+.co-confirm-row strong {
+  max-width: 58%;
+  color: var(--color-white);
+  font-weight: 500;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.co-confirm-actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.co-confirm-actions .co-modal-btn {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  min-height: 48px;
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.co-confirm-actions .co-modal-btn:not(.co-modal-btn--ghost) {
+  background: var(--color-red);
+  border-color: var(--color-red);
+  color: var(--color-white);
+  box-shadow: 0 4px 16px rgba(238, 17, 43, 0.16);
+}
+
+.co-confirm-actions .co-modal-btn:not(.co-modal-btn--ghost):hover:not(:disabled) {
+  background: #c90e25;
+  border-color: #c90e25;
+  transform: translateY(-1px);
+}
+
+.co-confirm-actions .co-modal-btn--ghost {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #d0d0d0;
+}
+
+.co-confirm-actions .co-modal-btn--ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.co-modal-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.co-modal-btn:focus-visible {
+  outline: 2px solid var(--color-red);
+  outline-offset: 3px;
 }
 
 .co-modal-head {
@@ -971,10 +1164,10 @@
 
 .co-modal-btn {
   padding: 12px 22px;
-  background: var(--color-surface);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: var(--color-red);
+  border: 1px solid var(--color-red);
   border-radius: 8px;
-  color: var(--color-yellow);
+  color: var(--color-white);
   font-family: inherit;
   font-size: 15px;
   font-weight: 500;
@@ -982,7 +1175,7 @@
 }
 
 .co-modal-btn:hover {
-  background: #343434;
+  background: #c90e25;
 }
 
 /* ---------- ID scan pop-up (demo) ---------- */
@@ -1099,6 +1292,11 @@
 .co-scan-btn--primary {
   background: var(--color-red);
   border-color: var(--color-red);
+  color: var(--color-white);
+}
+
+.co-scan-btn--primary:hover:not(:disabled) {
+  background: #c90e25;
 }
 
 .co-scan-btn:disabled {
@@ -1113,40 +1311,86 @@
   }
 }
 
-/* ---------- Responsive (same breakpoints as the seat page) ---------- */
-@media (max-width: 980px) {
-  .checkout-layout {
-    flex-direction: column;
+/* ---- Booking errors (Checkout wired to POST /api/bookings) ---- */
+.co-link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.co-note--warn {
+  margin-bottom: 12px;
+  background: rgba(229, 72, 77, 0.1);
+  border: 1px solid rgba(229, 72, 77, 0.45);
+  color: #f3b4b6;
+}
+
+.co-note--warn svg {
+  color: var(--co-danger);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.co-food-status {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--co-muted, #9a9a9a);
+}
+
+
+/* ---------- Confirm popup responsive layout ---------- */
+@media (max-width: 600px) {
+  .co-modal--confirm {
+    width: calc(100vw - 28px);
+    max-height: calc(100vh - 32px);
+    padding: 22px 20px 18px;
+    border-radius: 14px;
   }
 
-  .checkout-sidebar {
-    width: 100%;
+  .co-modal--confirm .co-modal-title {
+    font-size: 20px;
+    margin-bottom: 14px;
   }
 
-  .checkout-header {
-    flex-direction: column;
+  .co-confirm-body {
+    max-height: min(45vh, 360px);
+    padding-right: 12px;
+  }
+
+  .co-confirm-row {
+    gap: 12px;
+    font-size: 12px;
+  }
+
+  .co-confirm-actions {
+    gap: 10px;
+    margin-top: 14px;
+    padding-top: 14px;
+  }
+
+  .co-confirm-actions .co-modal-btn {
+    min-height: 46px;
+    font-size: 12px;
   }
 }
 
-@media (max-width: 600px) {
-  .co-form-row,
-  .co-id-fields {
-    flex-direction: column;
+@media (max-width: 480px) {
+  .co-confirm-actions {
+    flex-direction: column-reverse;
   }
 
-  .co-seat-row {
-    flex-wrap: wrap;
-  }
-
-  .co-select-wrap {
+  .co-confirm-actions .co-modal-btn {
     width: 100%;
   }
+}
 
-  .co-card-body.co-pay-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .co-modal-title {
-    font-size: 22px;
+@media (prefers-reduced-motion: reduce) {
+  .co-confirm-actions .co-modal-btn {
+    transition: none;
   }
 }

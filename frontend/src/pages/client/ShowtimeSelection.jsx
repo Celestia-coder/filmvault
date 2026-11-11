@@ -522,8 +522,11 @@ function ShowtimeSelection() {
                         <h1 className="showtime-heading">Book Your Tickets</h1>
                         <p className="showtime-subtext">Choose where and when you'd like to watch.</p>
                     </div>
-
-                    <button type="button" className="btn-back-top" onClick={() => navigate(-1)}>
+                    
+                    <button
+                        type="button"
+                        className="btn-back-top"
+                        onClick={() => navigate(`/movies/${movieId}`)}>
                         ← Back
                     </button>
                 </div>

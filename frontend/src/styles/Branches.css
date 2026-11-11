@@ -273,10 +273,10 @@
 }
 
 /* ---------- Focus states ---------- */
-.branches :focus-visible {
+/* .branches :focus-visible {
   outline: 2px solid var(--color-red);
   outline-offset: 2px;
-}
+} */
 
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {

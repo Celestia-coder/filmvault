@@ -1,52 +1,97 @@
+
 /* variables.css
    Shared design tokens + self-hosted Poppins font.
    Import this in EVERY page/component CSS file:  @import './variables.css'; */
 
 @font-face {
-	font-family: "Poppins";
-	src: url("../assets/fonts/Poppins-Regular.ttf") format("truetype");
-	font-weight: 400;
+    font-family: "Poppins";
+    src: url("../assets/fonts/Poppins-Regular.ttf") format("truetype");
+    font-weight: 400;
 }
+
 @font-face {
-	font-family: "Poppins";
-	src: url("../assets/fonts/Poppins-Medium.ttf") format("truetype");
-	font-weight: 500;
+    font-family: "Poppins";
+    src: url("../assets/fonts/Poppins-Medium.ttf") format("truetype");
+    font-weight: 500;
 }
+
 @font-face {
-	font-family: "Poppins";
-	src: url("../assets/fonts/Poppins-SemiBold.ttf") format("truetype");
-	font-weight: 600;
+    font-family: "Poppins";
+    src: url("../assets/fonts/Poppins-SemiBold.ttf") format("truetype");
+    font-weight: 600;
 }
+
 @font-face {
-	font-family: "Poppins";
-	src: url("../assets/fonts/Poppins-Bold.ttf") format("truetype");
-	font-weight: 700;
+    font-family: "Poppins";
+    src: url("../assets/fonts/Poppins-Bold.ttf") format("truetype");
+    font-weight: 700;
 }
+
 @font-face {
-	font-family: "Poppins";
-	src: url("../assets/fonts/Poppins-ExtraBold.ttf") format("truetype");
-	font-weight: 800;
+    font-family: "Poppins";
+    src: url("../assets/fonts/Poppins-ExtraBold.ttf") format("truetype");
+    font-weight: 800;
 }
 
 :root {
-	--color-red: #ee112b;
-	--color-green: #1fa971;
-	--color-yellow: #f5a623;
-	--color-bg-dark: #191919;
-	--color-bg-dark2: #0f0f0f;
-	--color-surface: #2a2a2a;
-	--color-white: #ffffff;
-	--color-text-muted: #b3b3b3;
-	--font-main: "Poppins", sans-serif;
+    --color-red: #ee112b;
+    --color-green: #1fa971;
+    --color-yellow: #f5a623;
+    --color-bg-dark: #191919;
+    --color-bg-dark2: #0f0f0f;
+    --color-surface: #2a2a2a;
+    --color-white: #ffffff;
+    --color-text-muted: #b3b3b3;
+    --font-main: "Poppins", sans-serif;
+
+    /* Scrollbar Variables */
+    --scrollbar-width: 8px;
+    --scrollbar-track: #0f0f0f;
+    --scrollbar-thumb: #3a3a3a;
+    --scrollbar-thumb-hover: #ee112b;
+    --scrollbar-radius: 20px;
 }
 
 * {
-	box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 body {
-	margin: 0;
-	font-family: var(--font-main);
-	background-color: var(--color-bg-dark);
-	color: var(--color-white);
+    margin: 0;
+    font-family: var(--font-main);
+    background-color: var(--color-bg-dark);
+    color: var(--color-white);
+}
+
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+    width: var(--scrollbar-width);
+    height: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: var(--scrollbar-radius);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: var(--scrollbar-radius);
+    border: 2px solid var(--scrollbar-track);
+    transition: background 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+    background: var(--scrollbar-track);
 }

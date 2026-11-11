@@ -10,7 +10,7 @@
   --fv-content-width: 720px; /* shared width for tabs, list, and empty state */
 
   min-height: 100vh;
-  background: var(--fv-bg);
+  background: #191919;
   color: var(--fv-text);
   padding: 150px 16px 80px;
   font-family: "Poppins", system-ui, sans-serif;

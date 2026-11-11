@@ -1,5 +1,4 @@
-// MovieManagement.jsx — Admin movie management
-// Route: "/admin/movies"
+// Admin movie management. Route: /admin/movies
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
@@ -9,19 +8,18 @@ import AdminSidebar from "../../components/AdminSidebar";
 
 import navMovie from "../../assets/images/dashboard/nav-movie.svg";
 
-// Fixed lists — genres are shown as toggle chips and language as a
-// dropdown since both are constrained sets in the real database, not
-// freeform text.
+// Fixed options used by the form.
 const GENRE_OPTIONS = [
 	"Action",
+	"Adventure",
+	"Animation",
 	"Comedy",
 	"Drama",
-	"Romance",
+	"Fantasy",
 	"Horror",
-	"Sci-Fi",
+	"Romance",
+	"Science Fiction",
 	"Thriller",
-	"Animation",
-	"Family",
 ];
 const LANGUAGE_OPTIONS = ["English", "Filipino", "Korean", "Japanese"];
 
@@ -50,6 +48,7 @@ const EMPTY_FORM = {
 	director: "",
 	releaseDate: "",
 	genres: [],
+	cast: [],
 	language: LANGUAGE_OPTIONS[0],
 	rating: "PG",
 	durationMinutes: "",
@@ -58,13 +57,10 @@ const EMPTY_FORM = {
 	trailerUrl: "",
 };
 
-// Base URL for the backend API. Change this if your local server runs on
-// a different port, or swap it for an environment variable later.
+// Backend API base URL.
 const API_URL = "http://localhost:5000";
 
-// Backend returns raw DB column names (movie_id, base_price, age_rating,
-// duration, release_date, trailer_url); this maps them to the camelCase
-// shape this component already uses everywhere else.
+// Converts the backend's DB column names to the camelCase used in this file.
 function normalizeMovie(row) {
 	return {
 		id: row.movie_id,
@@ -76,6 +72,7 @@ function normalizeMovie(row) {
 		durationMinutes: row.duration,
 		language: row.language ?? LANGUAGE_OPTIONS[0],
 		genres: row.genres ?? [],
+		cast: row.cast ?? [],
 		price: row.base_price,
 		status: row.status,
 		trailerUrl: row.trailer_url ?? "",
@@ -275,9 +272,7 @@ const IconAlertTriangle = () => (
 	</svg>
 );
 
-// Same lightweight custom dropdown pattern used on Schedule Management —
-// kept local to this file rather than shared, since each admin page owns
-// its own markup/styles for now (see team note on ScheduleManagement.jsx).
+// Custom dropdown. Same pattern as Schedule Management, kept local to this file.
 function Dropdown({ options, value, onChange, ariaLabel }) {
 	const [isOpen, setIsOpen] = useState(false);
 	const containerRef = useRef(null);
@@ -362,21 +357,20 @@ function MovieManagement() {
 	const [statusFilter, setStatusFilter] = useState("all");
 	const [genreFilter, setGenreFilter] = useState("all");
 
-	// "list" shows the toolbar + grid. "form" shows the Add/Edit Movie view
-	// in place of them, reusing the same header and sidebar.
-	const [view, setView] = useState("list");
+	const [view, setView] = useState("list"); // "list" | "form"
 	const [formMode, setFormMode] = useState("add"); // "add" | "edit"
 	const [editingId, setEditingId] = useState(null);
 	const [form, setForm] = useState(EMPTY_FORM);
 
-	const [posterError, setPosterError] = useState(""); // wrong file type / too large
-	const [posterRequiredError, setPosterRequiredError] = useState(""); // no poster at all
+	const [posterError, setPosterError] = useState(""); // wrong type or too large
+	const [posterRequiredError, setPosterRequiredError] = useState(""); // no poster
 	const [genreError, setGenreError] = useState("");
+	const [castInput, setCastInput] = useState(""); // name being typed
 	const posterInputRef = useRef(null);
 
 	const [deletingId, setDeletingId] = useState(null);
 
-	// Fetch real movies from the backend on mount.
+	// Loads all movies from the backend.
 	const fetchMovies = async () => {
 		try {
 			const res = await fetch(`${API_URL}/api/movies`);
@@ -428,6 +422,7 @@ function MovieManagement() {
 		setPosterError("");
 		setPosterRequiredError("");
 		setGenreError("");
+		setCastInput("");
 		setFormMode("add");
 		setEditingId(null);
 		setView("form");
@@ -442,6 +437,7 @@ function MovieManagement() {
 			director: movie.director,
 			releaseDate: movie.releaseDate,
 			genres: movie.genres,
+			cast: movie.cast,
 			language: movie.language,
 			rating: movie.rating,
 			durationMinutes: String(movie.durationMinutes),
@@ -452,6 +448,7 @@ function MovieManagement() {
 		setPosterError("");
 		setPosterRequiredError("");
 		setGenreError("");
+		setCastInput("");
 		setFormMode("edit");
 		setEditingId(movie.id);
 		setView("form");
@@ -464,7 +461,7 @@ function MovieManagement() {
 
 	const handlePosterChange = (event) => {
 		const file = event.target.files?.[0];
-		event.target.value = ""; // allow re-selecting the same file later
+		event.target.value = ""; // lets the same file be picked again
 		if (!file) return;
 
 		if (!["image/jpeg", "image/png"].includes(file.type)) {
@@ -490,12 +487,34 @@ function MovieManagement() {
 		setPosterError("");
 	};
 
-	// NOTE: poster is currently sent to the backend as whatever string is in
-	// posterPreview. If the admin just uploaded a file, that's a local blob
-	// URL (URL.createObjectURL) which only exists in THIS browser tab — it
-	// will not resolve for other users or persist correctly in the database.
-	// Real image upload (e.g. multer + file storage, or an external image
-	// host) is a separate backend task that still needs to be built.
+	// Adds a cast name as a tag. Skips empty names and duplicates.
+	const addCastMember = () => {
+		const name = castInput.trim();
+		if (!name) return;
+		setForm((prev) =>
+			prev.cast.some((c) => c.toLowerCase() === name.toLowerCase())
+				? prev
+				: { ...prev, cast: [...prev.cast, name] },
+		);
+		setCastInput("");
+	};
+
+	const removeCastMember = (name) => {
+		setForm((prev) => ({
+			...prev,
+			cast: prev.cast.filter((c) => c !== name),
+		}));
+	};
+
+	const handleCastKeyDown = (event) => {
+		if (event.key === "Enter" || event.key === ",") {
+			event.preventDefault(); // stops Enter from submitting the whole form
+			addCastMember();
+		}
+	};
+
+	// TODO: an uploaded poster is sent as a local blob URL, which only works
+	// in this browser tab. Needs real image upload on the backend.
 	const handleFormSubmit = async (event) => {
 		event.preventDefault();
 
@@ -519,12 +538,23 @@ function MovieManagement() {
 		)
 			return;
 
+		// Include a cast name that was typed but not added yet.
+		const pendingName = castInput.trim();
+		const cast =
+			pendingName &&
+			!form.cast.some(
+				(c) => c.toLowerCase() === pendingName.toLowerCase(),
+			)
+				? [...form.cast, pendingName]
+				: form.cast;
+
 		const payload = {
 			title: form.title,
 			synopsis: form.synopsis,
 			director: form.director,
 			releaseDate: form.releaseDate,
 			genres: form.genres,
+			cast,
 			language: form.language,
 			ageRating: form.rating,
 			duration: Number(form.durationMinutes),
@@ -553,7 +583,7 @@ function MovieManagement() {
 				return;
 			}
 
-			await fetchMovies(); // refresh from server so state matches the DB
+			await fetchMovies(); // reload so the list matches the database
 			closeForm();
 		} catch (err) {
 			console.error("handleFormSubmit error:", err);
@@ -915,6 +945,51 @@ function MovieManagement() {
 											}
 										/>
 									</label>
+								</div>
+
+								<div className="form-field">
+									<span>Cast</span>
+									<div className="cast-input-row">
+										<input
+											type="text"
+											// placeholder="Type a name, then press Enter"
+											value={castInput}
+											onChange={(event) =>
+												setCastInput(event.target.value)
+											}
+											onKeyDown={handleCastKeyDown}
+										/>
+										<button
+											type="button"
+											className="cast-add-btn"
+											onClick={addCastMember}
+										>
+											Add
+										</button>
+									</div>
+									{form.cast.length > 0 && (
+										<div className="cast-tags">
+											{form.cast.map((name) => (
+												<span
+													className="cast-tag"
+													key={name}
+												>
+													{name}
+													<button
+														type="button"
+														aria-label={`Remove ${name}`}
+														onClick={() =>
+															removeCastMember(
+																name,
+															)
+														}
+													>
+														×
+													</button>
+												</span>
+											))}
+										</div>
+									)}
 								</div>
 
 								<div className="form-field-row">

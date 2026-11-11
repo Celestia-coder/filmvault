@@ -102,8 +102,8 @@
 	padding: 12px 20px;
 	border: none;
 	border-radius: 8px;
-	background-color: rgba(255, 255, 255, 0.9);
-	color: var(--color-bg-dark);
+	background-color: var(--color-red);
+	color: var(--color-white);
 	font-family: var(--font-main);
 	font-size: 14px;
 	font-weight: 600;
@@ -378,6 +378,62 @@
 	background-color: var(--color-red);
 	border-color: var(--color-red);
 	color: var(--color-white);
+}
+
+/* ---------- Cast input + tags ---------- */
+
+.cast-input-row {
+	display: flex;
+	gap: 10px;
+	margin-bottom: 8px;
+}
+
+.cast-input-row input {
+	flex: 1;
+	min-width: 0;
+}
+
+.cast-add-btn {
+	padding: 0 18px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 8px;
+	background-color: transparent;
+	color: var(--color-white);
+	font-family: var(--font-main);
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.cast-add-btn:hover {
+	background-color: rgba(255, 255, 255, 0.08);
+}
+
+.cast-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.cast-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	border-radius: 999px;
+	background-color: rgba(255, 255, 255, 0.1);
+	color: var(--color-white);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.cast-tag button {
+	border: none;
+	background: none;
+	color: var(--color-red);
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
 }
 
 .admin-movie-card-footer {
@@ -723,7 +779,7 @@
 /* ---------- Responsive ---------- */
 
 @media (max-width: 1180px) {
-	.movie-grid {
+	.admin-movie-grid {
 		grid-template-columns: repeat(2, 1fr);
 	}
 }
@@ -767,7 +823,7 @@
 		justify-content: center;
 	}
 
-	.movie-grid {
+	.admin-movie-grid {
 		grid-template-columns: 1fr;
 	}
 

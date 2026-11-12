@@ -56,6 +56,11 @@ app.use("/api", customerBookingRoutes);
 // Snacks: GET /api/snacks (the food menu Checkout shows)
 app.use("/api", snackRoutes);
 
+// Upload routes: POST /api/upload/poster, /profile, /id (images go to Cloudinary,
+// the backend returns the image URL), GET /api/upload/id/view (admin-only signed URL for ID photos)
+const uploadRoutes = require("./routes/upload");
+app.use("/api/upload", uploadRoutes);
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {

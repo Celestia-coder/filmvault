@@ -38,11 +38,13 @@ const STATUS_OPTIONS = [
 
 const RATING_OPTIONS = ["G", "PG", "PG-13", "R-13", "R-18"];
 
-const MAX_POSTER_BYTES = 4 * 1024 * 1024;
+// Must match the posterUpload limit and allowed types on the backend.
+const MAX_POSTER_BYTES = 5 * 1024 * 1024;
+const POSTER_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const EMPTY_FORM = {
-	posterPreview: null,
-	posterFile: null,
+	posterPreview: null, // what the form shows: an existing URL or a temporary blob preview
+	posterFile: null, // the newly picked file, only set when the admin picks one
 	title: "",
 	synopsis: "",
 	director: "",
@@ -59,6 +61,35 @@ const EMPTY_FORM = {
 
 // Backend API base URL.
 const API_URL = "http://localhost:5000";
+
+// Frees the temporary browser preview URL created by URL.createObjectURL.
+function revokeIfBlob(url) {
+	if (url && url.startsWith("blob:")) URL.revokeObjectURL(url);
+}
+
+// Sends the poster file to the backend, which stores it on Cloudinary.
+// Returns the permanent image URL.
+async function uploadPoster(file) {
+	const body = new FormData();
+	body.append("image", file); // must match posterUpload.single("image") on the backend
+
+	// Do NOT set Content-Type here: the browser adds the multipart boundary itself.
+	const res = await fetch(`${API_URL}/api/upload/poster`, {
+		method: "POST",
+		body,
+	});
+
+	let data = {};
+	try {
+		data = await res.json();
+	} catch {
+		// response was not JSON, handled below
+	}
+	if (!res.ok || !data.url) {
+		throw new Error(data.message || "Poster upload failed.");
+	}
+	return data.url;
+}
 
 // Converts the backend's DB column names to the camelCase used in this file.
 function normalizeMovie(row) {
@@ -344,6 +375,38 @@ function Dropdown({ options, value, onChange, ariaLabel }) {
 	);
 }
 
+// Poster on the movie card. Shows a placeholder if the URL is empty or fails to load.
+function PosterImage({ src, title }) {
+	const [failed, setFailed] = useState(false);
+
+	// Try again when the movie gets a new poster URL (e.g. after an edit).
+	useEffect(() => {
+		setFailed(false);
+	}, [src]);
+
+	if (!src || failed) {
+		return (
+			<div
+				className="admin-movie-poster admin-movie-poster--fallback"
+				role="img"
+				aria-label={`${title} poster unavailable`}
+			>
+				<IconImagePlaceholder />
+				<span>No poster</span>
+			</div>
+		);
+	}
+
+	return (
+		<img
+			className="admin-movie-poster"
+			src={src}
+			alt={`${title} poster`}
+			onError={() => setFailed(true)}
+		/>
+	);
+}
+
 function toggleGenre(list, genre) {
 	return list.includes(genre)
 		? list.filter((g) => g !== genre)
@@ -362,13 +425,22 @@ function MovieManagement() {
 	const [editingId, setEditingId] = useState(null);
 	const [form, setForm] = useState(EMPTY_FORM);
 
-	const [posterError, setPosterError] = useState(""); // wrong type or too large
+	const [posterError, setPosterError] = useState(""); // wrong type, too large, or upload failed
 	const [posterRequiredError, setPosterRequiredError] = useState(""); // no poster
 	const [genreError, setGenreError] = useState("");
 	const [castInput, setCastInput] = useState(""); // name being typed
 	const posterInputRef = useRef(null);
 
+	const [isSaving, setIsSaving] = useState(false); // whole save in progress
+	const [isUploadingPoster, setIsUploadingPoster] = useState(false); // poster upload in progress
+	const [previewBroken, setPreviewBroken] = useState(false); // form preview image failed to load
+
 	const [deletingId, setDeletingId] = useState(null);
+
+	// A new (or removed) preview gets a fresh chance to load.
+	useEffect(() => {
+		setPreviewBroken(false);
+	}, [form.posterPreview]);
 
 	// Loads all movies from the backend.
 	const fetchMovies = async () => {
@@ -455,34 +527,40 @@ function MovieManagement() {
 	};
 
 	const closeForm = () => {
+		revokeIfBlob(form.posterPreview);
 		setView("list");
 		setEditingId(null);
 	};
 
+	// Checks the file in the browser and shows a preview.
+	// The file is only uploaded when the admin saves the form.
 	const handlePosterChange = (event) => {
 		const file = event.target.files?.[0];
 		event.target.value = ""; // lets the same file be picked again
 		if (!file) return;
 
-		if (!["image/jpeg", "image/png"].includes(file.type)) {
-			setPosterError("Poster must be a JPG or PNG file.");
+		if (!POSTER_TYPES.includes(file.type)) {
+			setPosterError("Poster must be a JPG, PNG or WebP file.");
 			return;
 		}
 		if (file.size > MAX_POSTER_BYTES) {
-			setPosterError("Poster must be 4MB or smaller.");
+			setPosterError("Poster must be 5MB or smaller.");
 			return;
 		}
 
 		setPosterError("");
 		setPosterRequiredError("");
+		revokeIfBlob(form.posterPreview);
+		const previewUrl = URL.createObjectURL(file); // preview only, never saved
 		setForm((prev) => ({
 			...prev,
 			posterFile: file,
-			posterPreview: URL.createObjectURL(file),
+			posterPreview: previewUrl,
 		}));
 	};
 
 	const handlePosterRemove = () => {
+		revokeIfBlob(form.posterPreview);
 		setForm((prev) => ({ ...prev, posterFile: null, posterPreview: null }));
 		setPosterError("");
 	};
@@ -513,13 +591,19 @@ function MovieManagement() {
 		}
 	};
 
-	// TODO: an uploaded poster is sent as a local blob URL, which only works
-	// in this browser tab. Needs real image upload on the backend.
 	const handleFormSubmit = async (event) => {
 		event.preventDefault();
+		if (isSaving) return; // blocks double clicks
 
 		if (!form.posterPreview) {
 			setPosterRequiredError("Poster image is required.");
+			return;
+		}
+		// Edit mode with an old poster that can't load (e.g. a broken seeded URL).
+		if (!form.posterFile && previewBroken) {
+			setPosterRequiredError(
+				"The current poster can't be loaded. Upload a new one.",
+			);
 			return;
 		}
 		setPosterRequiredError("");
@@ -548,23 +632,46 @@ function MovieManagement() {
 				? [...form.cast, pendingName]
 				: form.cast;
 
-		const payload = {
-			title: form.title,
-			synopsis: form.synopsis,
-			director: form.director,
-			releaseDate: form.releaseDate,
-			genres: form.genres,
-			cast,
-			language: form.language,
-			ageRating: form.rating,
-			duration: Number(form.durationMinutes),
-			status: form.status,
-			price: Number(form.price),
-			trailerUrl: form.trailerUrl,
-			poster: form.posterPreview,
-		};
-
+		setIsSaving(true);
 		try {
+			// A newly picked file is uploaded first. If the poster was not
+			// changed (edit mode), the existing poster URL is sent back as is.
+			let posterUrl = form.posterPreview;
+			if (form.posterFile) {
+				setIsUploadingPoster(true);
+				try {
+					posterUrl = await uploadPoster(form.posterFile);
+				} catch (err) {
+					console.error("uploadPoster error:", err);
+					setPosterError(
+						err.message === "Failed to fetch"
+							? "Couldn't reach the server. Check your connection and try again."
+							: err.message ||
+									"Poster upload failed. Please try again.",
+					);
+					return; // stay on the form so the admin can retry
+				} finally {
+					setIsUploadingPoster(false);
+				}
+			}
+			setPosterError("");
+
+			const payload = {
+				title: form.title,
+				synopsis: form.synopsis,
+				director: form.director,
+				releaseDate: form.releaseDate,
+				genres: form.genres,
+				cast,
+				language: form.language,
+				ageRating: form.rating,
+				duration: Number(form.durationMinutes),
+				status: form.status,
+				price: Number(form.price),
+				trailerUrl: form.trailerUrl,
+				poster: posterUrl, // permanent Cloudinary URL, saved in the database
+			};
+
 			const url =
 				formMode === "add"
 					? `${API_URL}/api/admin/movies`
@@ -588,6 +695,8 @@ function MovieManagement() {
 		} catch (err) {
 			console.error("handleFormSubmit error:", err);
 			alert("Something went wrong while saving the movie.");
+		} finally {
+			setIsSaving(false);
 		}
 	};
 
@@ -697,10 +806,9 @@ function MovieManagement() {
 										</span>
 
 										<div className="admin-movie-card-body">
-											<img
-												className="admin-movie-poster"
+											<PosterImage
 												src={movie.poster}
-												alt={`${movie.title} poster`}
+												title={movie.title}
 											/>
 
 											<div className="admin-movie-info">
@@ -792,28 +900,47 @@ function MovieManagement() {
 									type="button"
 									className="form-btn form-btn--ghost"
 									onClick={closeForm}
+									disabled={isSaving}
 								>
 									Cancel
 								</button>
 								<button
 									type="submit"
 									className="form-btn form-btn--primary"
+									disabled={isSaving}
 								>
-									{formMode === "add"
-										? "Add Movie"
-										: "Save Changes"}
+									{isUploadingPoster
+										? "Uploading poster..."
+										: isSaving
+											? "Saving..."
+											: formMode === "add"
+												? "Add Movie"
+												: "Save Changes"}
 								</button>
 							</div>
 						</div>
 
 						<div className="poster-upload">
 							<div className="poster-box">
-								{form.posterPreview ? (
-									<img src={form.posterPreview} alt="" />
+								{form.posterPreview && !previewBroken ? (
+									<img
+										src={form.posterPreview}
+										alt=""
+										onError={() => setPreviewBroken(true)}
+									/>
 								) : (
 									<div className="poster-placeholder">
 										<IconImagePlaceholder />
-										<span>No poster</span>
+										<span>
+											{form.posterPreview
+												? "Image failed to load"
+												: "No poster"}
+										</span>
+									</div>
+								)}
+								{isUploadingPoster && (
+									<div className="poster-loading">
+										Uploading...
 									</div>
 								)}
 							</div>
@@ -830,6 +957,7 @@ function MovieManagement() {
 										onClick={() =>
 											posterInputRef.current?.click()
 										}
+										disabled={isSaving}
 									>
 										<IconUpload />
 										Replace
@@ -838,6 +966,7 @@ function MovieManagement() {
 										type="button"
 										className="poster-remove-btn"
 										onClick={handlePosterRemove}
+										disabled={isSaving}
 									>
 										Remove
 									</button>
@@ -845,12 +974,12 @@ function MovieManagement() {
 								<input
 									ref={posterInputRef}
 									type="file"
-									accept="image/png, image/jpeg"
+									accept="image/png, image/jpeg, image/webp"
 									className="poster-file-input"
 									onChange={handlePosterChange}
 								/>
 								<p className="poster-hint">
-									JPG or PNG, max 4MB.
+									JPG, PNG or WebP, max 5MB.
 								</p>
 								{posterError && (
 									<p className="poster-error">

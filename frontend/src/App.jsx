@@ -1,6 +1,8 @@
 import { Routes, Route } from "react-router";
 
-{/* CLIENT SIDE */}
+{
+	/* CLIENT SIDE */
+}
 import Home from "./pages/client/Home.jsx";
 import SignUp from "./pages/client/SignUp.jsx";
 import Login from "./pages/client/Login.jsx";
@@ -10,9 +12,13 @@ import Branches from "./pages/client/Branches.jsx";
 import ShowtimeSelection from "./pages/client/ShowtimeSelection.jsx";
 import SeatSelection from "./pages/client/SeatSelection.jsx";
 import Tickets from "./pages/client/Tickets.jsx";
+import Ticket from "./pages/client/Ticket.jsx";
+import Checkout from "./pages/client/Checkout.jsx";
 import Profile from "./pages/client/Profile.jsx"; // NEW
 
-{/* ADMIN SIDE */}
+{
+	/* ADMIN SIDE */
+}
 import AdminLogin from "./pages/client/AdminLogin.jsx";
 import Dashboard from "./pages/admin/Dashboard.jsx";
 import ScheduleManagement from "./pages/admin/ScheduleManagement.jsx";
@@ -32,9 +38,11 @@ function App() {
 			<Route path="/cinemas" element={<Branches />} />
 			<Route path="/booking/:movieId" element={<ShowtimeSelection />} />
 			<Route path="/booking/:movieId/seats" element={<SeatSelection />} />
+			<Route path="/tickets/:bookingId" element={<Ticket />} />
+			<Route path="/checkout" element={<Checkout />} />
 			<Route path="/tickets" element={<Tickets />} />
-			<Route path="/profile" element={<Profile />} /> {/* NEW */}
-
+			<Route path="/profile" element={<Profile />} />
+			
 			{/* ADMIN SIDE */}
 			<Route path="/admin/login" element={<AdminLogin />} />
 			<Route path="/admin/dashboard" element={<Dashboard />} />

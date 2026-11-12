@@ -190,6 +190,7 @@ WHERE NOT EXISTS (
 
 -- =============================================
 -- INSERT TEST CUSTOMER IF NOT EXISTS
+-- Password: Tester123!
 -- =============================================
 
 INSERT INTO `user`
@@ -199,7 +200,7 @@ SELECT
     'customer',
     'tester@filmvault.com',
     'tester',
-    '2b10$oz6pERZtOKE9SWJG0NtCi.G0fpLRTUcX4Fhqb/OECCZ/X.FkmYnmm',
+    '$2b$10$mo1ogcGDNQxeEwqhV9CyheM5y4gmv/o4Bgf1xwIA7degpbuh3Zdni',
     'Test Customer',
     '09170000000'
 WHERE NOT EXISTS (
@@ -260,5 +261,5 @@ SHOW INDEX FROM TOTAL_PURCHASE;
 SELECT user_id, email, role, branch_id FROM USER WHERE role = 'admin';
 
 UPDATE USER
-SET password = '2b10$oz6pERZtOKE9SWJG0NtCi.G0fpLRTUcX4Fhqb/OECCZ/X.FkmYnmm'
+SET password = '$2b$10$mo1ogcGDNQxeEwqhV9CyheM5y4gmv/o4Bgf1xwIA7degpbuh3Zdni'
 WHERE user_id = 1;

@@ -14,23 +14,22 @@ import {
 } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
+import { fetchProfile, updateProfile } from "../../api/profile";
 import heroBg from "../../assets/images/hero-bg.png";
 import "../../styles/Profile.css";
 
-/* ---------- Mock data ---------- */
-// Replace with an API call once the backend profile endpoint is ready.
-const mockProfile = {
-  firstName: "Juan",
-  lastName: "Dela Cruz",
-  email: "juan@example.com",
-  phone: "09123456789",
-  username: "juan_d",
-  avatarUrl: null, // URL of the saved profile picture (null = default icon)
-  memberSince: "June 2025",
-  memberId: "FV-2025-00124",
-  status: "Active",
-  totalBookings: 12,
-  activeReservations: 2,
+const EMPTY_PROFILE = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  phone: "",
+  username: "",
+  avatarUrl: null,
+  memberSince: "",
+  memberId: "",
+  status: "",
+  totalBookings: 0,
+  activeReservations: 0,
 };
 
 const EMPTY_PASSWORDS = { current: "", next: "", confirm: "" };
@@ -180,8 +179,11 @@ export default function Profile() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  const [profile, setProfile] = useState(mockProfile); // saved data
-  const [form, setForm] = useState(mockProfile); // draft while editing
+  const [profile, setProfile] = useState(EMPTY_PROFILE);
+  const [form, setForm] = useState(EMPTY_PROFILE);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [passwords, setPasswords] = useState(EMPTY_PASSWORDS);
   const [errors, setErrors] = useState({});
   const [editing, setEditing] = useState(false);
@@ -197,6 +199,33 @@ export default function Profile() {
     const timer = setTimeout(() => setNotice(""), 6000);
     return () => clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+  let cancelled = false;
+
+  fetchProfile()
+    .then((data) => {
+      if (cancelled) return;
+      setProfile(data);
+      setForm(data);
+    })
+    .catch((err) => {
+      if (cancelled) return;
+      if (err.status === 401) {
+        localStorage.clear();
+        navigate("/login");
+        return;
+      }
+      setLoadError(err.message);
+    })
+    .finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+  return () => {
+    cancelled = true;
+  };
+}, [navigate]);
 
   const setField = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
   const setPassword = (key) => (e) => setPasswords((p) => ({ ...p, [key]: e.target.value }));
@@ -243,35 +272,57 @@ export default function Profile() {
     setEditing(false);
   };
 
-  const handleSave = (e) => {
-    e.preventDefault();
+const handleSave = async (e) => {
+  e.preventDefault();
+  if (saving) return;
 
-    const found = validate(form, passwords);
-    setErrors(found);
-    if (Object.keys(found).length > 0) return;
+  const found = validate(form, passwords);
+  setErrors(found);
+  if (Object.keys(found).length > 0) return;
 
-    // TODO: call the backend here (e.g. PUT /api/profile) and send the
-    // password fields only if the user filled them in.
-    // TODO: if the backend rejects the current password, show it on the field and stop:
-    //   setErrors({ current: "Current password is incorrect." }); return;
-    const passwordChanged = Boolean(passwords.next);
-    const profileChanged =
-      Boolean(avatarDraft) || Object.keys(form).some((key) => form[key] !== profile[key]);
+  const passwordChanged = Boolean(passwords.next);
+  const profileChanged =
+    Boolean(avatarDraft) || Object.keys(form).some((key) => form[key] !== profile[key]);
 
-    // TODO: if avatarDraft exists, upload avatarDraft.file (multipart / Cloudinary)
-    // and save the URL it returns as avatarUrl instead of the local preview below.
-    setProfile({
-      ...form,
-      avatarUrl: avatarDraft ? avatarDraft.preview : profile.avatarUrl,
-    });
-    setAvatarDraft(null); // preview URL now belongs to the saved profile
-    setPasswords(EMPTY_PASSWORDS);
+  if (!passwordChanged && !profileChanged) {
     setEditing(false);
+    return;
+  }
+
+  setSaving(true);
+  try {
+    const saved = await updateProfile({
+      form,
+      passwords,
+      avatarFile: avatarDraft?.file,
+    });
+
+    if (avatarDraft) URL.revokeObjectURL(avatarDraft.preview);
+    setProfile(saved);
+    setForm(saved);
+    setAvatarDraft(null);
+    setAvatarError("");
+    setPasswords(EMPTY_PASSWORDS);
+    setErrors({});
+    setEditing(false);
+
     if (passwordChanged && profileChanged) setNotice("Your profile and password were updated.");
     else if (passwordChanged) setNotice("Your password was changed.");
-    else if (profileChanged) setNotice("Your profile was updated.");
-    // Nothing changed: leave edit mode quietly, no message
-  };
+    else setNotice("Your profile was updated.");
+  } catch (err) {
+    if (err.status === 401) {
+      localStorage.clear();
+      navigate("/login");
+      return;
+    }
+    const { avatar, ...fieldErrors } = err.errors || {};
+    if (avatar) setAvatarError(avatar);
+    if (Object.keys(fieldErrors).length) setErrors(fieldErrors);
+    else if (!avatar) setErrors({ form: err.message });
+  } finally {
+    setSaving(false);
+  }
+};
 
   const handleLogout = () => {
     // TODO: clear whatever your login stores (token / user) before redirecting
@@ -280,6 +331,20 @@ export default function Profile() {
   };
 
   const fullName = `${profile.firstName} ${profile.lastName}`;
+
+  if (loading || loadError) {
+  return (
+    <>
+      <Navbar />
+      <main className="profile-page">
+        <p className="profile-hint" role={loadError ? "alert" : "status"}>
+          {loadError || "Loading profile..."}
+        </p>
+      </main>
+      <Footer />
+    </>
+  );
+}
 
   // While editing, inputs read from the draft; otherwise from saved data
   const current = editing ? form : profile;
@@ -367,17 +432,23 @@ export default function Profile() {
                 </>
               ) : (
                 <>
-                  <button
-                    key="cancel"
-                    type="button"
-                    className="profile-btn profile-btn--outline"
-                    onClick={cancelEditing}
-                  >
-                    Cancel
-                  </button>
-                  <button key="save" type="submit" className="profile-btn profile-btn--green">
-                    Save Changes
-                  </button>
+                <button
+                  key="cancel"
+                  type="button"
+                  className="profile-btn profile-btn--outline"
+                  onClick={cancelEditing}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  key="save"
+                  type="submit"
+                  className="profile-btn profile-btn--green"
+                  disabled={saving}
+                >
+                  {saving ? "Saving..." : "Save Changes"}
+                </button>
                 </>
               )}
             </div>
@@ -388,6 +459,12 @@ export default function Profile() {
               {notice}
             </p>
           )}
+
+          {errors.form && (
+            <p className="profile-error" role="alert">
+              {errors.form}
+            </p>
+          )}          
 
           {/* ---- Info cards ---- */}
           <div className="profile-grid">

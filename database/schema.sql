@@ -41,7 +41,9 @@ CREATE TABLE `CAST` (
 CREATE TABLE TICKET_TYPE (
     type_id INT AUTO_INCREMENT PRIMARY KEY,
     type VARCHAR(50) NOT NULL,
-    ticket_discount DECIMAL(5,2) NOT NULL DEFAULT 0.00
+    ticket_discount DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+
+    CONSTRAINT uq_ticket_type_name UNIQUE (type)
 );
 
 CREATE TABLE SNACK (
@@ -87,10 +89,16 @@ CREATE TABLE TOTAL_PURCHASE (
     total_price DECIMAL(10,2) NOT NULL,
     purchase_datetime DATETIME NOT NULL,
     status VARCHAR(50) NOT NULL,
+    reference_code VARCHAR(100) NOT NULL,
+    payment_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    discount_type VARCHAR(20) NOT NULL DEFAULT 'none',
+    id_image_url VARCHAR(255),
 
     CONSTRAINT fk_total_purchase_user
         FOREIGN KEY (user_id)
-        REFERENCES `USER`(user_id)
+        REFERENCES `USER`(user_id),
+
+    CONSTRAINT uq_purchase_reference UNIQUE (reference_code)
 );
 
 CREATE TABLE SCREENING (
@@ -121,6 +129,7 @@ CREATE TABLE SEATBOOKING (
     screening_id INT NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'available',
     held_until DATETIME,
+    held_by INT,
 
     PRIMARY KEY (seat_id, screening_id),
 
@@ -132,7 +141,12 @@ CREATE TABLE SEATBOOKING (
     CONSTRAINT fk_seatbooking_screening
         FOREIGN KEY (screening_id)
         REFERENCES SCREENING(screening_id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_seatbooking_user
+        FOREIGN KEY (held_by)
+        REFERENCES `USER`(user_id)
+        ON DELETE SET NULL
 );
 
 CREATE TABLE MOVIE_GENRE (

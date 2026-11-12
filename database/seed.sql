@@ -1,3 +1,6 @@
+-- Optional demo catalog for a fresh, empty database only.
+-- Apply schema.sql and reference_data.sql first. Create users through the app.
+
 INSERT INTO GENRE (genre_name)
 VALUES
 ('Action'),
@@ -336,14 +339,11 @@ VALUES
 (8, 3, 2),
 (9, 3, 3);
 
-INSERT INTO `USER`
-(branch_id, role, email, username, password, name, phone_num)
+INSERT INTO SNACK (snack_name, snack_price)
 VALUES
-(1, 'admin', 'admin@filmvault.com', 'admin', '<hash_password>', 'FilmVault Admin', '09171234567'),
-(1, 'customer', 'ariana@gmail.com', 'ariana123', '<hash_password>', 'Ariana Grande', '09181234567'),
-(2, 'customer', 'maria@gmail.com', 'maria123', '<hash_password>', 'Maria Cruz', '09191234567'),
-(2, 'customer', 'ana@gmail.com', 'ana123', '<hash_password>', 'Ana Andrade', '09201234567'),
-(3, 'customer', 'mark@gmail.com', 'mark123', '<hash_password>', 'Mark Garcia', '09211234567'); 
+('Popcorn', 120.00),
+('Soda', 60.00),
+('Nachos', 100.00);
 
 INSERT INTO SEAT (cinema_id, row_num, seat_num, seat_status)
 VALUES

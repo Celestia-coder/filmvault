@@ -2,6 +2,7 @@
 // Route: "/admin/dashboard"
 
 import { Link } from "react-router";
+import { clearUser } from "../../api/session.js";
 import "../../styles/Dashboard.css";
 
 import AdminSidebar from "../../components/AdminSidebar.jsx";
@@ -76,7 +77,7 @@ function Dashboard() {
 							Admin <em>Dashboard</em>
 						</span>
 					</h1>
-					<Link to="/" className="admin-logout">
+					<Link to="/" className="admin-logout" onClick={clearUser}>
 						Log Out
 					</Link>
 				</header>

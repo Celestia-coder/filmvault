@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router";
+import { Navigate, useNavigate } from "react-router";
 import {
   User,
   ShieldCheck,
@@ -14,24 +14,10 @@ import {
 } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
+import { fetchProfile, saveProfile } from "../../api/auth.js";
+import { clearUser, getUser, saveUser } from "../../api/session.js";
 import heroBg from "../../assets/images/hero-bg.png";
 import "../../styles/Profile.css";
-
-/* ---------- Mock data ---------- */
-// Replace with an API call once the backend profile endpoint is ready.
-const mockProfile = {
-  firstName: "Juan",
-  lastName: "Dela Cruz",
-  email: "juan@example.com",
-  phone: "09123456789",
-  username: "juan_d",
-  avatarUrl: null, // URL of the saved profile picture (null = default icon)
-  memberSince: "June 2025",
-  memberId: "FV-2025-00124",
-  status: "Active",
-  totalBookings: 12,
-  activeReservations: 2,
-};
 
 const EMPTY_PASSWORDS = { current: "", next: "", confirm: "" };
 
@@ -176,12 +162,13 @@ function PasswordField({ id, label, value, onChange, placeholder, autoComplete, 
 
 /* ---------- Page ---------- */
 
-export default function Profile() {
+function ProfileView({ initialProfile }) {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  const [profile, setProfile] = useState(mockProfile); // saved data
-  const [form, setForm] = useState(mockProfile); // draft while editing
+  const [profile, setProfile] = useState(initialProfile); // saved data (from the API)
+  const [form, setForm] = useState(initialProfile); // draft while editing
+  const [saving, setSaving] = useState(false);
   const [passwords, setPasswords] = useState(EMPTY_PASSWORDS);
   const [errors, setErrors] = useState({});
   const [editing, setEditing] = useState(false);
@@ -243,40 +230,72 @@ export default function Profile() {
     setEditing(false);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
+    if (saving) return;
 
     const found = validate(form, passwords);
     setErrors(found);
     if (Object.keys(found).length > 0) return;
 
-    // TODO: call the backend here (e.g. PUT /api/profile) and send the
-    // password fields only if the user filled them in.
-    // TODO: if the backend rejects the current password, show it on the field and stop:
-    //   setErrors({ current: "Current password is incorrect." }); return;
     const passwordChanged = Boolean(passwords.next);
-    const profileChanged =
-      Boolean(avatarDraft) || Object.keys(form).some((key) => form[key] !== profile[key]);
+    const profileChanged = Object.keys(form).some((key) => form[key] !== profile[key]);
 
-    // TODO: if avatarDraft exists, upload avatarDraft.file (multipart / Cloudinary)
-    // and save the URL it returns as avatarUrl instead of the local preview below.
-    setProfile({
-      ...form,
-      avatarUrl: avatarDraft ? avatarDraft.preview : profile.avatarUrl,
-    });
-    setAvatarDraft(null); // preview URL now belongs to the saved profile
-    setPasswords(EMPTY_PASSWORDS);
-    setEditing(false);
-    if (passwordChanged && profileChanged) setNotice("Your profile and password were updated.");
-    else if (passwordChanged) setNotice("Your password was changed.");
-    else if (profileChanged) setNotice("Your profile was updated.");
-    // Nothing changed: leave edit mode quietly, no message
+    // Nothing to send: leave edit mode quietly (a picked photo is still kept locally)
+    if (!passwordChanged && !profileChanged) {
+      if (avatarDraft) {
+        setProfile((p) => ({ ...p, avatarUrl: avatarDraft.preview }));
+        setAvatarDraft(null);
+      }
+      setPasswords(EMPTY_PASSWORDS);
+      setEditing(false);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const saved = await saveProfile(profile.userId, {
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        username: form.username.trim(),
+        // Only sent when the user is changing their password
+        ...(passwordChanged ? { currentPassword: passwords.current, newPassword: passwords.next } : {}),
+      });
+
+      // Keep the browser session (used by the navbar, tickets, checkout) in step with the new details
+      const sessionUser = getUser();
+      if (sessionUser) {
+        saveUser({
+          ...sessionUser,
+          name: `${saved.firstName} ${saved.lastName}`.trim(),
+          username: saved.username,
+          email: saved.email,
+        });
+      }
+
+      // TODO: the profile picture is not stored by the backend yet, so it only
+      // lasts until the page is refreshed. Upload avatarDraft.file once there is an endpoint.
+      setProfile({ ...saved, avatarUrl: avatarDraft ? avatarDraft.preview : profile.avatarUrl });
+      setAvatarDraft(null); // preview URL now belongs to the saved profile
+      setPasswords(EMPTY_PASSWORDS);
+      setEditing(false);
+      if (passwordChanged && profileChanged) setNotice("Your profile and password were updated.");
+      else if (passwordChanged) setNotice("Your password was changed.");
+      else setNotice("Your profile was updated.");
+    } catch (err) {
+      // The API names the field that failed (email taken, wrong current password...)
+      if (err.data?.field) setErrors({ [err.data.field]: err.message });
+      else setErrors({ form: err.message });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleLogout = () => {
-    // TODO: clear whatever your login stores (token / user) before redirecting
-    localStorage.clear();
-    navigate("/login");
+    clearUser();
+    navigate("/login", { replace: true });
   };
 
   const fullName = `${profile.firstName} ${profile.lastName}`;
@@ -330,9 +349,11 @@ export default function Profile() {
             <div className="profile-banner-info">
               <h1>{fullName}</h1>
               <p className="profile-role">FilmVault Member</p>
-              <p className="profile-meta">
-                <CalendarDays size={16} aria-hidden="true" /> Member Since {profile.memberSince}
-              </p>
+              {profile.memberSince && (
+                <p className="profile-meta">
+                  <CalendarDays size={16} aria-hidden="true" /> Member Since {profile.memberSince}
+                </p>
+              )}
               <p className="profile-meta">
                 <CreditCard size={16} aria-hidden="true" /> Member ID: {profile.memberId}
               </p>
@@ -375,8 +396,8 @@ export default function Profile() {
                   >
                     Cancel
                   </button>
-                  <button key="save" type="submit" className="profile-btn profile-btn--green">
-                    Save Changes
+                  <button key="save" type="submit" className="profile-btn profile-btn--green" disabled={saving}>
+                    {saving ? "Saving..." : "Save Changes"}
                   </button>
                 </>
               )}
@@ -386,6 +407,12 @@ export default function Profile() {
           {notice && (
             <p className="profile-toast" role="status">
               {notice}
+            </p>
+          )}
+
+          {errors.form && (
+            <p className="profile-error" role="alert">
+              {errors.form}
             </p>
           )}
 
@@ -520,6 +547,50 @@ export default function Profile() {
             </section>
           )}
         </form>
+      </main>
+      <Footer />
+    </>
+  );
+}
+
+/* ---------- Page: needs a logged-in user, loads their profile from the API ---------- */
+
+export default function Profile() {
+  const user = getUser();
+  const userId = user?.userId;
+  const [state, setState] = useState({ status: "loading", profile: null, message: "" });
+
+  useEffect(() => {
+    if (!userId) return undefined;
+    const controller = new AbortController();
+
+    fetchProfile(userId, controller.signal)
+      .then((profile) => setState({ status: "ready", profile, message: "" }))
+      .catch((err) => {
+        if (err.name === "AbortError") return;
+        if (err.status === 404) clearUser(); // the saved login points at a user that no longer exists
+        setState({ status: err.status === 404 ? "gone" : "error", profile: null, message: err.message });
+      });
+
+    return () => controller.abort();
+  }, [userId]);
+
+  // Not logged in: go to login, and come back here afterwards
+  if (!userId || state.status === "gone") {
+    return <Navigate to="/login" replace state={{ from: "/profile" }} />;
+  }
+
+  if (state.status === "ready") return <ProfileView initialProfile={state.profile} />;
+
+  return (
+    <>
+      <Navbar />
+      <main className="profile-page">
+        <div className="profile-container">
+          <p role={state.status === "error" ? "alert" : "status"}>
+            {state.status === "error" ? state.message : "Loading your profile..."}
+          </p>
+        </div>
       </main>
       <Footer />
     </>

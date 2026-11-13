@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
+import { clearUser } from "../../api/session.js";
 import "../../styles/ScheduleManagement.css";
 
 import AdminSidebar from "../../components/AdminSidebar";
@@ -627,7 +628,7 @@ function ScheduleManagement() {
 							Schedule <em>Management</em>
 						</span>
 					</h1>
-					<Link to="/" className="admin-logout">
+					<Link to="/" className="admin-logout" onClick={clearUser}>
 						Log Out
 					</Link>
 				</header>

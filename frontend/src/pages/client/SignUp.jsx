@@ -6,6 +6,7 @@ import SignUpConfirm from "../../components/SignUpConfirm.jsx";
 import SignUpSuccess from "../../components/SignUpSuccess.jsx";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
+import { registerUser } from "../../api/auth.js";
 import heroBg from "../../assets/images/hero-bg.png";
 import "../../styles/SignUp.css";
 
@@ -497,6 +498,9 @@ function SignUp() {
 
         if (!form.displayName.trim()) {
             next.displayName = "Display name is required.";
+        } else if (!/^[a-zA-Z0-9_]{3,}$/.test(form.displayName.trim())) {
+            next.displayName =
+                "At least 3 characters: letters, numbers, underscore only.";
         }
 
         if (!form.dob) {
@@ -510,6 +514,8 @@ function SignUp() {
 
             if (!/^\d+$/.test(digitsOnly)) {
                 next.phone = "Phone number should contain numbers only.";
+            } else if (!/^9\d{9}$/.test(digitsOnly)) {
+                next.phone = "Enter the 10 digits after +63, starting with 9.";
             }
         }
 
@@ -540,31 +546,21 @@ function SignUp() {
         setSubmitError("");
 
         try {
-            const res = await fetch("http://localhost:5000/api/auth/register", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    firstName: form.firstName.trim(),
-                    lastName: form.lastName.trim(),
-                    email: form.email.trim(),
-                    password: form.password,
-                    username: form.displayName.trim(),
-                    phoneNum: form.phone
-                        ? PH_COUNTRY_CODE + form.phone.replace(/\s/g, "")
-                        : null,
-                }),
+            await registerUser({
+                firstName: form.firstName.trim(),
+                lastName: form.lastName.trim(),
+                email: form.email.trim(),
+                password: form.password,
+                username: form.displayName.trim(),
+                // The +63 prefix is shown in the UI; the backend stores 09XXXXXXXXX.
+                phone: form.phone ? PH_COUNTRY_CODE + form.phone.replace(/\s/g, "") : null,
             });
-            const data = await res.json().catch(() => ({}));
 
-            if (res.ok && data.success) {
-                setErrors({});
-                setStep(4);
-            } else {
-                setSubmitError(data.message || "Sign up failed.");
-            }
+            setErrors({});
+            setStep(4);
         } catch (err) {
-            console.error("Signup request failed:", err);
-            setSubmitError("Unable to reach the server. Please try again.");
+            // ApiError.status is 0 for a network failure; its message is already user-friendly.
+            setSubmitError(err.message || "Sign up failed. Please try again.");
         }
     };
 

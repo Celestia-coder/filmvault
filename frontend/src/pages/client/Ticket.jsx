@@ -3,32 +3,15 @@
 // successful payment; the Tickets list links here too. Loads GET /api/bookings/:id.
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
-import { Film } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
+import ETicket from "../../components/ETicket.jsx";
+import DownloadTicketButton from "../../components/DownloadTicketButton.jsx";
 import { fetchBooking } from "../../api/bookings.js";
-import { formatDate, formatTime } from "../../api/movies.js";
 import { getUser } from "../../api/session.js";
+import { useTicketQr } from "../../utils/ticket.js";
 import "../../styles/Tickets.css";
 import "../../styles/Ticket.css";
-
-const peso = (amount) => `₱${Number(amount).toFixed(2)}`;
-
-const STATUS_LABELS = { confirmed: "Confirmed", pending: "Pending", cancelled: "Cancelled" };
-const PAYMENT_LABELS = { paid: "Paid", pending: "Payment pending", failed: "Payment failed" };
-const DISCOUNT_LABELS = { none: null, senior: "Senior Citizen discount", pwd: "PWD discount", mixed: "Senior/PWD discount" };
-
-function Poster({ src, title }) {
-  const [failed, setFailed] = useState(false);
-  if (!src || failed) {
-    return (
-      <div className="eticket-poster eticket-poster--placeholder" aria-hidden="true">
-        <Film size={28} />
-      </div>
-    );
-  }
-  return <img className="eticket-poster" src={src} alt={`${title} poster`} onError={() => setFailed(true)} />;
-}
 
 // key={bookingId} gives each ticket a fresh page state (loading, error) when the URL changes.
 export default function Ticket() {
@@ -45,6 +28,7 @@ function TicketView({ bookingId }) {
   const [loading, setLoading] = useState(Boolean(userId));
   const [error, setError] = useState(null); // { message, notFound }
   const [reloadKey, setReloadKey] = useState(0);
+  const qrSrc = useTicketQr(booking);
 
   useEffect(() => {
     if (!userId) return undefined;
@@ -98,8 +82,6 @@ function TicketView({ bookingId }) {
       </div>
     );
   } else {
-    const [showDate, showTime] = booking.showDateTime.split("T");
-    const discountLabel = DISCOUNT_LABELS[booking.discountType];
     const cancelled = booking.status === "cancelled";
 
     body = (
@@ -110,83 +92,11 @@ function TicketView({ bookingId }) {
           </p>
         )}
 
-        <article className={`eticket ${cancelled ? "eticket--cancelled" : ""}`}>
-          <div className="eticket-top">
-            <Poster src={booking.poster} title={booking.title} />
-            <div className="eticket-heading">
-              <span className={`booking-badge booking-badge--${booking.status}`}>
-                {STATUS_LABELS[booking.status] ?? booking.status}
-              </span>
-              <h2 className="eticket-title">{booking.title}</h2>
-              <p className="eticket-sub">
-                {booking.rating ? `${booking.rating} · ` : ""}
-                {booking.runtimeMins ? `${booking.runtimeMins} min` : ""}
-              </p>
-            </div>
-          </div>
+        <ETicket booking={booking} qrSrc={qrSrc} />
 
-          <div className="eticket-ref">
-            <span>Reference code</span>
-            <strong>{booking.referenceNo}</strong>
-          </div>
-
-          <dl className="eticket-grid">
-            <div>
-              <dt>Branch</dt>
-              <dd>{booking.branchName}</dd>
-            </div>
-            <div>
-              <dt>Cinema</dt>
-              <dd>Cinema {booking.cinemaNum}</dd>
-            </div>
-            <div>
-              <dt>Date</dt>
-              <dd>{formatDate(showDate)}</dd>
-            </div>
-            <div>
-              <dt>Time</dt>
-              <dd>{formatTime(showTime)}</dd>
-            </div>
-            <div className="eticket-grid-wide">
-              <dt>Seats</dt>
-              <dd>{booking.seats.join(", ")}</dd>
-            </div>
-          </dl>
-
-          <ul className="eticket-lines">
-            {booking.tickets.map((t) => (
-              <li key={t.id}>
-                <span>
-                  Seat {t.seat} · {t.type}
-                </span>
-                <span>{peso(t.price)}</span>
-              </li>
-            ))}
-            {booking.snacks.map((x) => (
-              <li key={x.id}>
-                <span>
-                  {x.name} × {x.quantity}
-                </span>
-                <span>{peso(x.subtotal)}</span>
-              </li>
-            ))}
-            <li>
-              <span>Booking fee</span>
-              <span>{peso(booking.bookingFee)}</span>
-            </li>
-            <li className="eticket-total">
-              <span>Total</span>
-              <span>{peso(booking.totalPrice)}</span>
-            </li>
-          </ul>
-
-          <p className="eticket-foot">
-            {PAYMENT_LABELS[booking.paymentStatus] ?? booking.paymentStatus} via {booking.paymentMethod}
-            {discountLabel ? ` · ${discountLabel} (ID checked at the cinema)` : ""}
-            <br />
-            Booked on {booking.purchasedAt}
-          </p>
-        </article>
+        <div className="eticket-actions">
+          <DownloadTicketButton booking={booking} />
+        </div>
 
         <p className="eticket-back">
           <Link className="booking-view-link" to="/tickets">
@@ -203,7 +113,7 @@ function TicketView({ bookingId }) {
       <main className="tickets-page">
         <header className="tickets-header">
           <h1>Your Ticket</h1>
-          <p>Show this reference code at the cinema.</p>
+          <p>Show this QR code or reference code at the cinema.</p>
         </header>
         {body}
       </main>

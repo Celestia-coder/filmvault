@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Search, Film } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
+import DownloadTicketButton from "../../components/DownloadTicketButton.jsx";
 import { fetchBookings } from "../../api/bookings.js";
 import { getUser } from "../../api/session.js";
 import "../../styles/Tickets.css";
@@ -108,6 +109,7 @@ function BookingCard({ booking }) {
         <Link className="booking-view-link" to={`/tickets/${id}`}>
           View ticket
         </Link>
+        <DownloadTicketButton booking={booking} />
       </div>
     </li>
   );

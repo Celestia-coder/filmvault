@@ -8,7 +8,7 @@ import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
 import moviePoster from "../../assets/images/movie-poster.webp";
 import { getUser } from "../../api/session.js";
-import { createBooking, fetchSnacks, NEEDS_NEW_SEATS } from "../../api/bookings.js";
+import { createBooking, fetchSnacks, NEEDS_NEW_SEATS, PAYMENT_METHODS } from "../../api/bookings.js";
 import "../../styles/Checkout.css";
 
 /* ---------------------------------------------------------------- */
@@ -48,13 +48,6 @@ const TICKET_TYPES = {
   senior: { label: "Senior Citizen", discounted: true },
   pwd: { label: "PWD", discounted: true },
 };
-
-const PAYMENT_METHODS = [
-  { id: "gcash", logo: "GCash", name: "GCash", desc: "e-Wallet", color: "#0a73e8" },
-  { id: "maya", logo: "Maya", name: "Maya", desc: "e-Wallet", color: "#1fc16b" },
-  { id: "card", logo: "card", name: "Credit / Debit Card", desc: "Visa · Mastercard", color: "#23232e" },
-  { id: "bpi", logo: "BPI", name: "BPI Online", desc: "Online Banking", color: "#a4161a" },
-];
 
 const HOLD_SECONDS = 10 * 60; // used only when the page has no real hold expiry
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB

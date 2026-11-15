@@ -33,23 +33,38 @@ const A4 = { w: 210, h: 297, margin: 15 }; // mm
 export async function saveTicketPdf(node, filename) {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import("html2canvas"), import("jspdf")]);
 
+  // Cross-site posters (TMDB) can't be drawn if the browser reuses a non-CORS cached copy,
+  // so re-fetch them with CORS and point the off-screen copy at a same-origin blob URL.
+  const blobUrls = [];
+  await Promise.all(
+    [...node.querySelectorAll("img")].map(async (img) => {
+      if (!/^https?:/.test(img.src) || new URL(img.src).origin === location.origin) return;
+      try {
+        const res = await fetch(img.src, { mode: "cors", cache: "no-cache" });
+        if (!res.ok) return;
+        img.src = URL.createObjectURL(await res.blob());
+        blobUrls.push(img.src);
+      } catch {
+        // host without CORS: leave it; the poster is just missing from the PDF
+      }
+    })
+  );
   await Promise.all([...node.querySelectorAll("img")].map((img) => img.decode().catch(() => {})));
   await document.fonts.ready;
 
   const canvas = await html2canvas(node, {
     scale: 3,
     useCORS: true,
-    backgroundColor: "#191919",
+    backgroundColor: "#ffffff",
     windowWidth: 800, // desktop layout even on a phone
     // the node sits off-screen in the page; bring the copy into view so it isn't blank
     onclone: (doc) => {
       doc.querySelector(".eticket-pdf-stage").style.left = "0";
     },
   });
+  blobUrls.forEach((url) => URL.revokeObjectURL(url));
 
-  const pdf = new jsPDF({ unit: "mm", format: "a4" });
-  pdf.setFillColor(25, 25, 25);
-  pdf.rect(0, 0, A4.w, A4.h, "F");
+  const pdf = new jsPDF({ unit: "mm", format: "a4" }); // pages are white by default
 
   const maxW = A4.w - A4.margin * 2;
   const maxH = A4.h - A4.margin * 2;

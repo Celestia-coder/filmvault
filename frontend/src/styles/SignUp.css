@@ -352,6 +352,26 @@
 
 .form-input[type="date"] {
 	color-scheme: dark;
+	min-width: 0; /* let the field shrink inside its column instead of clipping the year */
+	padding-right: 10px;
+}
+
+/* Browsers add their own padding inside a date field and a fixed-size picker icon.
+   Together they can push the last digits of the year out of view on narrower fields
+   or with display scaling, so trim them. */
+.form-input[type="date"]::-webkit-datetime-edit,
+.form-input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+	padding: 0;
+}
+
+.form-input[type="date"]::-webkit-datetime-edit-text {
+	padding: 0 1px;
+}
+
+.form-input[type="date"]::-webkit-calendar-picker-indicator {
+	margin: 0 0 0 4px;
+	padding: 0;
+	cursor: pointer;
 }
 
 .field-error {

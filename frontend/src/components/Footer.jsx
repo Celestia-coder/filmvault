@@ -2,9 +2,21 @@
 // Shared footer used across all CLIENT pages.
 // Import wherever needed: import Footer from '../../components/Footer';
 
+import { Link } from "react-router";
 import "../styles/Footer.css";
 
+// Footer links open the new page at the top instead of where the footer was
+function FooterLink({ to, children }) {
+	return (
+		<Link to={to} onClick={() => window.scrollTo(0, 0)}>
+			{children}
+		</Link>
+	);
+}
+
 function Footer() {
+	const year = new Date().getFullYear();
+
 	return (
 		<footer className="footer">
 			<div className="footer-top">
@@ -20,33 +32,34 @@ function Footer() {
 
 				<div className="footer-column">
 					<h4>Home</h4>
-					<a href="/now-showing">Now Showing</a>
-					<a href="/coming-soon">Coming Soon</a>
+					<FooterLink to="/movies">Now Showing</FooterLink>
+					<FooterLink to="/movies">Coming Soon</FooterLink>
 				</div>
 
 				<div className="footer-column">
 					<h4>Cinemas</h4>
-					<a href="/cinemas">Search Branches</a>
+					<FooterLink to="/cinemas">Search Branches</FooterLink>
 				</div>
 
 				<div className="footer-column">
 					<h4>Tickets</h4>
-					<a href="/tickets/active">Active Tickets</a>
-					<a href="/tickets/past">Past Transactions</a>
+					<FooterLink to="/tickets">Active Tickets</FooterLink>
+					<FooterLink to="/tickets">Past Transactions</FooterLink>
 				</div>
 
 				<div className="footer-column">
 					<h4>Support</h4>
-					<a href="/contact">Contact Us</a>
+					<FooterLink to="/profile">My Account</FooterLink>
+					<FooterLink to="/terms">Terms &amp; Conditions</FooterLink>
 				</div>
 			</div>
 
 			<div className="footer-bottom">
-				<span>@2026 FilmVault, All Rights Reserved</span>
+				<span>© {year} FilmVault. All Rights Reserved.</span>
 				<div className="footer-legal">
-					<a href="/terms">Terms of Use</a>
-					<a href="/privacy">Privacy Policy</a>
-					<a href="/cookies">Cookie Policy</a>
+					<FooterLink to="/terms">Terms of Use</FooterLink>
+					<FooterLink to="/privacy">Privacy Policy</FooterLink>
+					<FooterLink to="/cookies">Cookie Policy</FooterLink>
 				</div>
 			</div>
 		</footer>

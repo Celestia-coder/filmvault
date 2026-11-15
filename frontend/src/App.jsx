@@ -15,6 +15,7 @@ import Tickets from "./pages/client/Tickets.jsx";
 import Ticket from "./pages/client/Ticket.jsx";
 import Checkout from "./pages/client/Checkout.jsx";
 import Profile from "./pages/client/Profile.jsx"; // NEW
+import Policies from "./pages/client/Policies.jsx";
 
 {
 	/* ADMIN SIDE */
@@ -42,6 +43,9 @@ function App() {
 			<Route path="/checkout" element={<Checkout />} />
 			<Route path="/tickets" element={<Tickets />} />
 			<Route path="/profile" element={<Profile />} />
+			<Route path="/terms" element={<Policies />} />
+			<Route path="/privacy" element={<Policies />} />
+			<Route path="/cookies" element={<Policies />} />
 			
 			{/* ADMIN SIDE */}
 			<Route path="/admin/login" element={<AdminLogin />} />

@@ -1,0 +1,274 @@
+@import "./variables.css";
+
+/* Terms & Conditions, Privacy Policy, Cookie Policy (Policies.jsx) */
+
+.policy-page {
+	--policy-border: rgba(255, 255, 255, 0.08);
+
+	max-width: 1180px;
+	margin: 0 auto;
+	/* Navbar is position:absolute and ~114px tall */
+	padding: 128px 24px 72px;
+	font-family: var(--font-main);
+	color: var(--color-white);
+}
+
+/* ---------- Header ---------- */
+.policy-header {
+	text-align: center;
+	padding: 24px 0 8px;
+}
+
+.policy-eyebrow {
+	margin: 0 0 6px;
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--color-red);
+}
+
+.policy-title {
+	margin: 0;
+	font-size: clamp(1.9rem, 4vw, 2.6rem);
+	font-weight: 800;
+	letter-spacing: -0.01em;
+}
+
+.policy-updated {
+	margin: 8px 0 0;
+	font-size: 13px;
+	color: var(--color-text-muted);
+}
+
+/* ---------- Tabs ---------- */
+.policy-tabs {
+	display: flex;
+	max-width: 720px;
+	margin: 28px auto 40px;
+}
+
+.policy-tab {
+	flex: 1;
+	padding: 10px 8px;
+	border-bottom: 2px solid #3a3a3a;
+	color: var(--color-white);
+	font-size: 15px;
+	font-weight: 600;
+	text-align: center;
+	text-decoration: none;
+	text-transform: uppercase;
+	letter-spacing: 0.02em;
+	transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.policy-tab:hover {
+	color: var(--color-red);
+}
+
+.policy-tab.is-active {
+	color: var(--color-red);
+	border-bottom-color: var(--color-red);
+}
+
+.policy-tab:focus-visible,
+.policy-toc a:focus-visible {
+	outline: 2px solid var(--color-red);
+	outline-offset: 2px;
+}
+
+/* ---------- Layout ---------- */
+.policy-layout {
+	display: grid;
+	grid-template-columns: 260px minmax(0, 1fr);
+	gap: 48px;
+	align-items: start;
+}
+
+/* ---------- Table of contents ---------- */
+.policy-toc {
+	position: sticky;
+	top: 24px;
+	padding: 20px;
+	border: 1px solid var(--policy-border);
+	border-radius: 12px;
+	background-color: var(--color-bg-dark2);
+}
+
+.policy-toc-title {
+	margin: 0 0 12px;
+	font-size: 13px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--color-text-muted);
+}
+
+.policy-toc-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.policy-toc a {
+	display: flex;
+	gap: 10px;
+	padding: 7px 8px;
+	border-radius: 6px;
+	color: var(--color-text-muted);
+	font-size: 14px;
+	line-height: 1.4;
+	text-decoration: none;
+	transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.policy-toc a:hover {
+	color: var(--color-white);
+	background-color: var(--color-surface);
+}
+
+.policy-toc-number {
+	color: var(--color-red);
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Content ---------- */
+.policy-content {
+	max-width: 760px;
+}
+
+.policy-intro {
+	margin: 0 0 36px;
+	padding: 18px 20px;
+	border-left: 3px solid var(--color-red);
+	border-radius: 0 10px 10px 0;
+	background-color: var(--color-bg-dark2);
+	font-size: 15px;
+	line-height: 1.7;
+	color: #d6d6d6;
+}
+
+.policy-section {
+	padding-bottom: 28px;
+	margin-bottom: 28px;
+	border-bottom: 1px solid var(--policy-border);
+	scroll-margin-top: 24px;
+}
+
+.policy-section:last-child {
+	border-bottom: none;
+	margin-bottom: 0;
+}
+
+.policy-section-title {
+	display: flex;
+	align-items: baseline;
+	gap: 12px;
+	margin: 0 0 12px;
+	font-size: 20px;
+	font-weight: 700;
+}
+
+.policy-section-number {
+	color: var(--color-red);
+	font-size: 15px;
+	font-weight: 600;
+	font-variant-numeric: tabular-nums;
+}
+
+.policy-text {
+	margin: 0 0 12px;
+	font-size: 15px;
+	line-height: 1.75;
+	color: #d6d6d6;
+}
+
+.policy-text:last-child {
+	margin-bottom: 0;
+}
+
+.policy-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.policy-list li {
+	position: relative;
+	padding-left: 20px;
+	font-size: 15px;
+	line-height: 1.7;
+	color: #d6d6d6;
+}
+
+.policy-list li::before {
+	content: "";
+	position: absolute;
+	left: 2px;
+	top: 0.72em;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background-color: var(--color-red);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+	.policy-layout {
+		grid-template-columns: 1fr;
+		gap: 28px;
+	}
+
+	/* On smaller screens the contents box sits above the text and doesn't stick */
+	.policy-toc {
+		position: static;
+	}
+
+	.policy-content {
+		max-width: none;
+	}
+}
+
+@media (max-width: 600px) {
+	.policy-page {
+		padding: 112px 16px 56px;
+	}
+
+	.policy-tabs {
+		margin: 22px auto 28px;
+	}
+
+	.policy-tab {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 10px 4px;
+		font-size: 12px;
+	}
+
+	/* The contents list is too long for a phone screen, so readers just scroll */
+	.policy-toc {
+		display: none;
+	}
+
+	.policy-intro {
+		padding: 16px;
+		font-size: 14px;
+	}
+
+	.policy-section-title {
+		font-size: 18px;
+	}
+
+	.policy-text,
+	.policy-list li {
+		font-size: 14px;
+	}
+}

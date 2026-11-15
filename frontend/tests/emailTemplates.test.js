@@ -134,6 +134,21 @@ test("optional poster URLs are escaped and unsafe poster URLs are rejected", () 
   assert.throws(() => buildBookingConfirmationEmail({ ...base, cinemaNumber: 2, posterUrl: "javascript:alert(1)" }), /posterUrl/);
 });
 
+test("confirmation can show an inline ticket QR while plain text retains the verification URL", () => {
+  const ticketUrl = "https://tickets.example.com/verify/0123456789abcdef0123456789abcdef";
+  const email = buildBookingConfirmationEmail({ ...base, cinemaNumber: 2,
+    ticketUrl, qrImageCid: "filmvault-ticket-qr@filmvault.invalid" });
+  assert.match(email.html, /src="cid:filmvault-ticket-qr@filmvault\.invalid"/);
+  assert.match(email.html, /alt="QR code to verify booking FV-ABCD2345"/);
+  assert.match(email.html, /Verify your ticket/);
+  assert.match(email.text, new RegExp(ticketUrl));
+  assert.doesNotMatch(email.text, /cid:|image\/png/);
+  assert.throws(() => buildBookingConfirmationEmail({ ...base, cinemaNumber: 2,
+    qrImageCid: "filmvault-ticket-qr@filmvault.invalid" }), /qrImageCid/);
+  assert.throws(() => buildBookingConfirmationEmail({ ...base, cinemaNumber: 2,
+    ticketUrl, qrImageCid: 'bad" onerror="alert(1)' }), /qrImageCid/);
+});
+
 test("the tracked FilmVault logo can be supplied over HTTPS with text fallback", () => {
   const logoUrl = "https://example.com/filmvault-logo.png?edition=1&size=330";
   const emails = [

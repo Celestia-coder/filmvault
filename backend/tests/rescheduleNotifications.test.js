@@ -11,6 +11,7 @@ const previous = {
 };
 const updated = { ...previous, show_date: "2026-12-06", show_time: "19:00:00" };
 const admin = { verified: true, role: "admin", branchId: 3 };
+const authAdmin = { userId: 9, role: "admin", branchId: 3 };
 const bookingRows = [
   { purchase_id: 10, reference_code: "FV-AAAA2222", customer_email: "one@example.invalid", customer_name: "One Example", movie_title: "A Fictional Film", row_num: 1, seat_num: 1 },
   { purchase_id: 10, reference_code: "FV-AAAA2222", customer_email: "one@example.invalid", customer_name: "One Example", movie_title: "A Fictional Film", row_num: 1, seat_num: 2 },
@@ -73,10 +74,10 @@ function fakeResponse() {
   };
 }
 
-const request = (verifiedAdmin = admin) => ({
+const request = (auth = authAdmin) => ({
   params: { id: "7" },
   body: { cinemaId: 5, showDate: "2026-12-06", showTime: "19:00" },
-  authenticatedAdmin: verifiedAdmin,
+  auth,
 });
 
 test("recipient query is scoped to one screening, branch, confirmed and paid purchases", () => {
@@ -144,7 +145,7 @@ test("invalid address is skipped; duplicate event and failed send are not retrie
   assert.deepEqual(first, { status: "partial_failure", sent: 0, failed: 1, skipped: 1 });
   assert.equal((await notifier.notify({ prepared, committed: true })).status, "duplicate");
   assert.equal(sends, 1);
-  assert.match(logs[0], /1 booking/);
+  assert.match(logs[0], /0 definite, 1 uncertain/);
   assert.doesNotMatch(logs[0], /private|SMTP detail|example\.invalid/);
 });
 
@@ -167,6 +168,38 @@ test("overlapping calls for one event attempt each purchase only once", async ()
   assert.equal(duplicate.status, "duplicate");
   assert.equal((await first).sent, 2);
   assert.deepEqual(attempts, ["FV-AAAA2222", "FV-BBBB3333"]);
+});
+
+test("only definitely rejected purchases appear in the in-memory retry handoff", async () => {
+  const db = fakeDb();
+  const logs = [];
+  const notifier = createRescheduleNotifier({ env, log: (message) => logs.push(message),
+    send: async ({ data }) => data.referenceCode === "FV-AAAA2222"
+      ? { status: "failed", outcome: "definite" }
+      : { status: "failed", outcome: "uncertain" } });
+  const prepared = await notifier.prepare(event(db));
+  assert.equal((await notifier.notify({ prepared, committed: true })).failed, 2);
+  assert.deepEqual(notifier.retryCandidates("event-1"), [10]);
+  assert.deepEqual(notifier.retryCandidates("missing"), []);
+  assert.equal((await notifier.notify({ prepared, committed: true })).status, "duplicate");
+  assert.doesNotMatch(logs[0], /example\.invalid|FV-AAAA/);
+});
+
+test("a later real reschedule has a distinct event and can notify the same purchase", async () => {
+  const db = fakeDb(bookingRows.slice(0, 2));
+  const sent = [];
+  const notifier = createRescheduleNotifier({ env, send: async ({ data }) => {
+    sent.push(data.referenceCode);
+    return { status: "sent" };
+  } });
+  const first = await notifier.prepare(event(db));
+  const later = await notifier.prepare(event(db, {
+    eventId: "event-2", previous: updated,
+    updated: { ...updated, show_date: "2026-12-07" },
+  }));
+  assert.equal((await notifier.notify({ prepared: first, committed: true })).sent, 1);
+  assert.equal((await notifier.notify({ prepared: later, committed: true })).sent, 1);
+  assert.deepEqual(sent, ["FV-AAAA2222", "FV-AAAA2222"]);
 });
 
 test("a booking added after commit is absent from the pre-change snapshot", async () => {
@@ -205,6 +238,31 @@ test("controller without verified admin still updates but never queries customer
   const notifier = createRescheduleNotifier({ env, send: () => { throw new Error("must not send"); } });
   const response = fakeResponse();
   await createUpdateShowtime({ db, notifier })(request(null), response);
+  assert.equal(response.code, 200);
+  assert.equal(response.body.notification.status, "unauthorized");
+  assert.ok(!db.events.includes("affected_read"));
+});
+
+test("browser-supplied role and branch cannot authorize reschedule mail", async () => {
+  const db = fakeDb();
+  const notifier = createRescheduleNotifier({ env, send: () => { throw new Error("must not send"); } });
+  const response = fakeResponse();
+  const untrusted = request(null);
+  untrusted.body.role = "admin";
+  untrusted.body.branchId = 3;
+  untrusted.query = { branchId: 3 };
+  untrusted.authenticatedAdmin = admin;
+  await createUpdateShowtime({ db, notifier })(untrusted, response);
+  assert.equal(response.code, 200);
+  assert.equal(response.body.notification.status, "unauthorized");
+  assert.ok(!db.events.includes("affected_read"));
+});
+
+test("server-populated admin context must match both schedule branches", async () => {
+  const db = fakeDb();
+  const notifier = createRescheduleNotifier({ env, send: () => { throw new Error("must not send"); } });
+  const response = fakeResponse();
+  await createUpdateShowtime({ db, notifier })(request({ ...authAdmin, branchId: 4 }), response);
   assert.equal(response.code, 200);
   assert.equal(response.body.notification.status, "unauthorized");
   assert.ok(!db.events.includes("affected_read"));

@@ -11,6 +11,7 @@
 const pool = require("../config/database");
 const { randomUUID } = require("node:crypto");
 const { createRescheduleNotifier, sameSchedule } = require("../services/rescheduleNotificationService");
+const { notificationAdmin } = require("../utils/notificationAuth");
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/;
@@ -256,7 +257,7 @@ const createUpdateShowtime = ({ db = pool, notifier = createRescheduleNotifier()
       // Backend Team concurrency dependency before live delivery.
       prepared = await notifier.prepare({
         connection: conn, eventId: randomUUID(), screeningId: id,
-        previous, updated, admin: req.authenticatedAdmin,
+        previous, updated, admin: notificationAdmin(req),
       });
     } catch {
       console.error("Reschedule notification preparation failed.");
@@ -276,7 +277,7 @@ const createUpdateShowtime = ({ db = pool, notifier = createRescheduleNotifier()
 
     let notification;
     try {
-      // No middleware currently sets authenticatedAdmin, so this integration
+      // No middleware currently sets req.auth, so this integration
       // remains unable to send until the Backend Team supplies verified auth.
       notification = await notifier.notify({ prepared, committed: true });
     } catch {

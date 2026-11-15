@@ -54,16 +54,23 @@ function createMailer({ env = process.env, transport, transportFactory = nodemai
   let sender = transport;
   return {
     enabled: config.enabled,
-    async send({ to, subject, html, text }) {
+    async send({ to, subject, html, text, attachments }) {
       if (!config.enabled) return { status: "disabled" };
       if (!isValidRecipient(to)) return { status: "invalid_recipient" };
       try {
         sender ??= transportFactory(config.transportOptions);
-        const result = await sender.sendMail({ from: config.from, to, subject, html, text });
+        const result = await sender.sendMail({ from: config.from, to, subject, html, text,
+          ...(attachments?.length ? { attachments } : {}) });
         return { status: "sent", messageId: result.messageId ?? null };
-      } catch {
+      } catch (error) {
         // SMTP errors may contain addresses, credentials, or server details.
-        return { status: "failed", reason: "transport_error" };
+        // Only an explicit permanent rejection before message DATA is a
+        // definite non-delivery. A timeout/disconnect may follow acceptance.
+        const rejectedBeforeData = Number.isInteger(error?.responseCode) &&
+          error.responseCode >= 500 && error.responseCode < 600 &&
+          (error.command === "MAIL FROM" || error.command === "RCPT TO");
+        return { status: "failed", reason: "transport_error",
+          outcome: rejectedBeforeData ? "definite" : "uncertain" };
       }
     },
   };

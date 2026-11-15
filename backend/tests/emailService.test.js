@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const nodemailer = require("nodemailer");
 const { createMailer, readMailConfig, EmailConfigurationError } = require("../utils/mailer");
 const { createEmailService } = require("../services/emailService");
 
@@ -76,6 +77,46 @@ test("poster and logo are optional, escaped, and never default to local paths", 
   assert.match(captured[1].html, /alt="FILMVAULT"/);
 });
 
+test("only confirmation forwards an inline attachment to the fake transport", async () => {
+  const captured = [];
+  const service = createEmailService({ env: enabledEnv,
+    transport: { async sendMail(message) { captured.push(message); return {}; } } });
+  const attachment = { cid: "filmvault-ticket-qr@filmvault.invalid", content: Buffer.from("fake"),
+    contentType: "image/png", contentDisposition: "inline" };
+  const ticketUrl = "https://tickets.example.com/verify/0123456789abcdef0123456789abcdef";
+  assert.equal((await service.sendBookingConfirmation({ to: "alex@example.invalid",
+    data: { ...confirmation, ticketUrl, qrImageCid: attachment.cid }, attachments: [attachment] })).status, "sent");
+  assert.deepEqual(captured[0].attachments, [attachment]);
+  assert.match(captured[0].html, /src="cid:filmvault-ticket-qr@filmvault\.invalid"/);
+  assert.match(captured[0].text, /tickets\.example\.com\/verify\//);
+  assert.equal((await service.sendCancellationNotice({ to: "alex@example.invalid",
+    data: confirmation, attachments: [attachment] })).status, "sent");
+  assert.equal(captured[1].attachments, undefined);
+});
+
+test("Nodemailer's offline stream contains a matching inline QR Content-ID", async () => {
+  const stream = nodemailer.createTransport({ streamTransport: true, buffer: true });
+  let mime;
+  const transport = { async sendMail(message) {
+    const result = await stream.sendMail(message);
+    mime = result.message.toString();
+    return result;
+  } };
+  const mailer = createMailer({ env: enabledEnv, transport });
+  const cid = "filmvault-ticket-qr@filmvault.invalid";
+  const ticketUrl = "https://tickets.example.com/verify/0123456789abcdef0123456789abcdef";
+  const rendered = (await import("../../frontend/src/email/emailTemplates.js"))
+    .buildBookingConfirmationEmail({ ...confirmation, ticketUrl, qrImageCid: cid });
+  const result = await mailer.send({ to: "alex@example.invalid",
+    ...rendered, attachments: [{ filename: "ticket.png", content: Buffer.from("fake-png"),
+      contentType: "image/png", contentDisposition: "inline", cid }] });
+  assert.equal(result.status, "sent");
+  assert.match(mime, /Content-ID: <filmvault-ticket-qr@filmvault\.invalid>/);
+  assert.match(mime, /Content-Disposition: inline/);
+  assert.match(rendered.html, /src="cid:filmvault-ticket-qr@filmvault\.invalid"/);
+  assert.equal(mailer.enabled, true);
+});
+
 test("invalid recipient and template data never reach transport", async () => {
   let count = 0;
   const service = createEmailService({ env: enabledEnv, transport: { async sendMail() { count++; return {}; } } });
@@ -87,7 +128,7 @@ test("invalid recipient and template data never reach transport", async () => {
 test("transport failure returns a safe result without throwing or leaking secrets", async () => {
   const service = createEmailService({ env: enabledEnv, transport: { async sendMail() { throw new Error("secret account password"); } } });
   const result = await service.sendRescheduleNotice({ to: "alex@example.invalid", data: reschedule });
-  assert.deepEqual(result, { status: "failed", reason: "transport_error" });
+  assert.deepEqual(result, { status: "failed", reason: "transport_error", outcome: "uncertain" });
   assert.doesNotMatch(JSON.stringify(result), /secret|password/);
 });
 
@@ -98,6 +139,20 @@ test("SMTP timeout from an injected transport is reported without exposing detai
     transport: { async sendMail() { throw timeout; } },
   });
   const result = await service.sendBookingConfirmation({ to: "alex@example.invalid", data: confirmation });
-  assert.deepEqual(result, { status: "failed", reason: "transport_error" });
+  assert.deepEqual(result, { status: "failed", reason: "transport_error", outcome: "uncertain" });
   assert.doesNotMatch(JSON.stringify(result), /private|example\.invalid|ETIMEDOUT/);
+});
+
+test("only a permanent SMTP rejection before DATA is a definite non-delivery", async () => {
+  const transport = { async sendMail() {
+    throw Object.assign(new Error("private recipient and server detail"),
+      { responseCode: 550, command: "RCPT TO" });
+  } };
+  const service = createEmailService({ env: enabledEnv, transport });
+  const result = await service.sendBookingConfirmation({ to: "alex@example.invalid", data: confirmation });
+  assert.deepEqual(result, { status: "failed", reason: "transport_error", outcome: "definite" });
+  assert.doesNotMatch(JSON.stringify(result), /private|alex@example/);
+  transport.sendMail = async () => { throw Object.assign(new Error("private"),
+    { responseCode: 550, command: "DATA" }); };
+  assert.equal((await service.sendBookingConfirmation({ to: "alex@example.invalid", data: confirmation })).outcome, "uncertain");
 });

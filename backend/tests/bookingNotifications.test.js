@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createEmailService } = require("../services/emailService");
 const { createBookingNotifier, BOOKING_NOTIFICATION_SQL, BOOKING_SNACKS_SQL } = require("../services/bookingNotificationService");
+const { createTicketQrService } = require("../services/ticketQrService");
 
 const rows = [
   { purchase_id: 42, reference_code: "FV-TEST1234", status: "confirmed", payment_status: "paid",
@@ -106,6 +107,7 @@ test("cancelled booking is prepared only for a verified admin of its branch", as
     committed: true, admin });
   assert.equal(prepared.status, "ready");
   assert.equal((await notifier.notify(prepared)).status, "sent");
+  assert.equal((await notifier.notify(prepared)).status, "duplicate");
   assert.equal(delivered.length, 1);
   assert.match(delivered[0].subject, /FilmVault booking cancelled.*FV-TEST1234/);
   assert.match(delivered[0].text, /A1, A2/);
@@ -161,10 +163,117 @@ test("transport failure does not change the committed event or retry the purchas
   assert.doesNotMatch(logs[0], /private|SMTP detail|example\.invalid/);
 });
 
+test("explicit booking retry rechecks paid ownership and caps definite rejection attempts", async () => {
+  const db = fakeDb();
+  const logs = [];
+  let sends = 0;
+  const event = { type: "confirmation", purchaseId: 42, committed: true,
+    paymentVerified: true, customer };
+  const notifier = createBookingNotifier({ db, log: (message) => logs.push(message),
+    sendConfirmation: async () => {
+      sends++;
+      return { status: "failed", outcome: "definite", reason: "transport_error" };
+    } });
+  assert.equal((await notifier.notifyCommitted(event)).outcome, "definite");
+  assert.equal((await notifier.notifyCommitted(event)).status, "duplicate");
+  assert.equal((await notifier.retryDefiniteFailure({ ...event, customer: { ...customer, userId: 9 } })).status, "unauthorized");
+  assert.equal((await notifier.retryDefiniteFailure({ ...event, paymentVerified: false })).status, "unverified_event");
+  assert.equal(sends, 1);
+  assert.equal((await notifier.retryDefiniteFailure(event)).outcome, "definite");
+  assert.equal((await notifier.retryDefiniteFailure(event)).status, "duplicate");
+  assert.equal(sends, 2);
+  assert.equal(logs.length, 2);
+  assert.ok(logs.every((line) => !/customer@|private|SMTP/.test(line)));
+});
+
+test("ambiguous outcome and changed recipient cannot be retried", async () => {
+  const data = rows.map((row) => ({ ...row }));
+  const db = fakeDb(data);
+  const event = { type: "cancellation", purchaseId: 42, committed: true, admin };
+  let sends = 0;
+  const notifier = createBookingNotifier({ db, log() {}, sendCancellation: async () => {
+    sends++;
+    return { status: "failed", outcome: "definite" };
+  } });
+  data.forEach((row) => { row.status = "cancelled"; });
+  assert.equal((await notifier.notifyCommitted(event)).outcome, "definite");
+  data.forEach((row) => { row.customer_email = "other@example.invalid"; });
+  assert.equal((await notifier.retryDefiniteFailure(event)).status, "duplicate");
+  assert.equal(sends, 1);
+
+  const uncertain = createBookingNotifier({ db: fakeDb(rows), log() {},
+    sendConfirmation: async () => { sends++; throw new Error("private timeout"); } });
+  const confirmationEvent = { type: "confirmation", purchaseId: 42, committed: true,
+    paymentVerified: true, customer };
+  assert.equal((await uncertain.notifyCommitted(confirmationEvent)).outcome, "uncertain");
+  assert.equal((await uncertain.retryDefiniteFailure(confirmationEvent)).status, "duplicate");
+  assert.equal(sends, 2);
+});
+
+test("successful booking retry is not repeated and retains optional QR attachment", async () => {
+  const attachment = { cid: "filmvault-ticket-qr@filmvault.invalid", content: Buffer.from("fictional") };
+  let sends = 0;
+  const notifier = createBookingNotifier({ db: fakeDb(),
+    ticketQr: { async prepareForPurchase() { return {
+      ticketUrl: "https://tickets.example.com/verify/0123456789abcdef0123456789abcdef",
+      qrImageCid: attachment.cid, attachment,
+    }; } },
+    sendConfirmation: async ({ attachments }) => {
+      sends++;
+      assert.deepEqual(attachments, [attachment]);
+      return sends === 1 ? { status: "failed", outcome: "definite" } : { status: "sent" };
+    }, log() {} });
+  const event = { type: "confirmation", purchaseId: 42, committed: true,
+    paymentVerified: true, customer };
+  assert.equal((await notifier.notifyCommitted(event)).outcome, "definite");
+  assert.equal((await notifier.retryDefiniteFailure(event)).status, "sent");
+  assert.equal((await notifier.retryDefiniteFailure(event)).status, "duplicate");
+  assert.equal(sends, 2);
+});
+
+test("a disabled retry does not erase the previous definite-failure claim", async () => {
+  let attempt = 0;
+  const notifier = createBookingNotifier({ db: fakeDb(), log() {},
+    sendConfirmation: async () => {
+      attempt++;
+      return attempt === 2 ? { status: "disabled" } : { status: "failed", outcome: "definite" };
+    } });
+  const event = { type: "confirmation", purchaseId: 42, committed: true,
+    paymentVerified: true, customer };
+  assert.equal((await notifier.notifyCommitted(event)).outcome, "definite");
+  assert.equal((await notifier.retryDefiniteFailure(event)).status, "disabled");
+  assert.equal((await notifier.notifyCommitted(event)).status, "duplicate");
+  assert.equal((await notifier.retryDefiniteFailure(event)).outcome, "definite");
+  assert.equal((await notifier.retryDefiniteFailure(event)).status, "duplicate");
+  assert.equal(attempt, 3); // Only two actual transport attempts; disabled made none.
+});
+
 test("default delivery remains disabled even for a valid prepared event", async () => {
   const service = createEmailService({ mailer: { enabled: false, send() { throw new Error("must not send"); } } });
   const notifier = createBookingNotifier({ db: fakeDb(), sendConfirmation: service.sendBookingConfirmation });
   const prepared = await notifier.prepare({ type: "confirmation", purchaseId: 42,
     committed: true, paymentVerified: true, customer });
   assert.equal((await notifier.notify(prepared)).status, "disabled");
+});
+
+test("a missing verification column still delivers the ordinary confirmation", async () => {
+  const captured = [];
+  const email = createEmailService({ env: { EMAIL_DELIVERY_ENABLED: "true", MAIL_FROM: "FilmVault <test@example.invalid>" },
+    transport: { async sendMail(message) { captured.push(message); return {}; } } });
+  const qr = createTicketQrService({
+    db: { async query() { throw new Error("private unknown column detail"); } },
+    env: { EMAIL_TICKET_QR_ENABLED: "true", EMAIL_TICKET_QR_PRIVACY_APPROVED: "true",
+      PUBLIC_APP_ORIGIN: "https://tickets.example.com" },
+    log() {},
+  });
+  const notifier = createBookingNotifier({ db: fakeDb(), ticketQr: qr, sendConfirmation: email.sendBookingConfirmation });
+  const prepared = await notifier.prepare({ type: "confirmation", purchaseId: 42,
+    committed: true, paymentVerified: true, customer });
+  assert.equal(prepared.status, "ready");
+  assert.equal(prepared.data.ticketUrl, undefined);
+  assert.equal((await notifier.notify(prepared)).status, "sent");
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].attachments, undefined);
+  assert.doesNotMatch(captured[0].html, /cid:|\/verify\//);
+  assert.match(captured[0].text, /FV-TEST1234/);
 });

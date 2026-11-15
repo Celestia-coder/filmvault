@@ -39,7 +39,7 @@ function bookingsFromRows(rows) {
 }
 
 function createRescheduleNotifier({ env = process.env, send = sendRescheduleNotice, log = console.error } = {}) {
-  const events = new Set();
+  const events = new Map();
 
   // Called on the showtime transaction's connection before the UPDATE. This
   // snapshot excludes purchases made after the change. It does not serialize
@@ -85,10 +85,16 @@ function createRescheduleNotifier({ env = process.env, send = sendRescheduleNoti
     }
     const { eventId, previous, updated, bookings } = prepared;
     if (events.has(eventId)) return { status: "duplicate", sent: 0 };
-    events.add(eventId);
+    const attempts = new Map();
+    events.set(eventId, attempts); // Claim before awaiting any transport.
 
     const results = await Promise.all(bookings.map(async (booking) => {
+      const purchaseId = Number(booking.purchase_id);
+      if (!Number.isSafeInteger(purchaseId) || purchaseId < 1 || attempts.has(purchaseId)) {
+        return { status: "invalid_data" };
+      }
       if (!isValidRecipient(booking.customer_email)) return { status: "invalid_recipient" };
+      attempts.set(purchaseId, { status: "in_flight", to: booking.customer_email, count: 1 });
       try {
         const result = await send({
           to: booking.customer_email,
@@ -107,10 +113,20 @@ function createRescheduleNotifier({ env = process.env, send = sendRescheduleNoti
             },
           },
         });
-        return result?.status === "sent" || result?.status === "invalid_data"
-          ? result : { status: "failed" };
+        if (result?.status === "sent") {
+          attempts.set(purchaseId, { status: "sent", to: booking.customer_email, count: 1 });
+          return result;
+        }
+        if (["invalid_data", "invalid_recipient", "disabled", "template_unavailable"].includes(result?.status)) {
+          attempts.delete(purchaseId); // No transport attempt occurred.
+          return result;
+        }
+        const status = result?.outcome === "definite" ? "definite_failure" : "uncertain";
+        attempts.set(purchaseId, { status, to: booking.customer_email, count: 1 });
+        return { status: "failed", outcome: status === "definite_failure" ? "definite" : "uncertain" };
       } catch {
-        return { status: "failed" };
+        attempts.set(purchaseId, { status: "uncertain", to: booking.customer_email, count: 1 });
+        return { status: "failed", outcome: "uncertain" };
       }
     }));
     const sent = results.filter((result) => result.status === "sent").length;
@@ -118,13 +134,25 @@ function createRescheduleNotifier({ env = process.env, send = sendRescheduleNoti
       status: sent === results.length ? "sent" : "partial_failure",
       sent,
       failed: results.filter((result) => result.status === "failed").length,
-      skipped: results.filter((result) => result.status === "invalid_recipient" || result.status === "invalid_data").length,
+      skipped: results.filter((result) => ["invalid_recipient", "invalid_data", "disabled", "template_unavailable"].includes(result.status)).length,
     };
-    if (summary.failed > 0) log(`Reschedule email delivery failed for ${summary.failed} booking(s).`);
+    if (summary.failed > 0) {
+      const definite = results.filter((result) => result.outcome === "definite").length;
+      log(`Reschedule email failure in event ${eventId}: ${definite} definite, ${summary.failed - definite} uncertain.`);
+    }
     return summary;
   }
 
-  return { prepare, notify };
+  // Inspection-only retry handoff. A durable outbox and fresh eligibility
+  // check are still required before any reschedule resend can be safe.
+  function retryCandidates(eventId) {
+    const attempts = events.get(eventId);
+    if (!attempts) return [];
+    return [...attempts].filter(([, attempt]) => attempt.status === "definite_failure")
+      .map(([purchaseId]) => purchaseId);
+  }
+
+  return { prepare, notify, retryCandidates };
 }
 
 module.exports = { createRescheduleNotifier, sameSchedule, AFFECTED_BOOKINGS_SQL };

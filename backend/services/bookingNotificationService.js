@@ -1,6 +1,7 @@
 const pool = require("../config/database");
 const { isValidRecipient } = require("../utils/mailer");
 const { sendBookingConfirmation, sendCancellationNotice } = require("./emailService");
+const { createTicketQrService } = require("./ticketQrService");
 
 // One row per ticket. Read the recipient and booking facts from committed
 // server records, never from the request that initiated the operation.
@@ -46,8 +47,11 @@ const DISCOUNT_NOTES = {
 const positiveId = (value) => Number.isInteger(value) && value > 0;
 
 function createBookingNotifier({ db = pool, sendConfirmation = sendBookingConfirmation,
-  sendCancellation = sendCancellationNotice, log = console.error } = {}) {
-  const attempted = new Set();
+  sendCancellation = sendCancellationNotice, ticketQr, log = console.error } = {}) {
+  // Process-local safety only. A durable outbox is required across restarts
+  // and instances. At most one explicit retry follows a definite rejection.
+  const attempts = new Map();
+  const qr = ticketQr ?? createTicketQrService({ db, log });
 
   async function prepare({ type, purchaseId, committed, paymentVerified, customer, admin }) {
     if (!committed) return { status: "not_committed" };
@@ -92,6 +96,7 @@ function createBookingNotifier({ db = pool, sendConfirmation = sendBookingConfir
       seats: rows.map((row) => `${String.fromCharCode(64 + Number(row.row_num))}${row.seat_num}`),
     };
     let data = common;
+    let qrAttachment;
     if (type === "confirmation") {
       const [snacks] = await db.query(BOOKING_SNACKS_SQL, [purchaseId]);
       const ticketItems = rows.map((row) => ({
@@ -127,28 +132,86 @@ function createBookingNotifier({ db = pool, sendConfirmation = sendBookingConfir
         discountNote: DISCOUNT_NOTES[first.discount_type] ?? undefined,
         bookedAt: first.purchased_at || undefined,
       };
+      // Optional, separately gated read: the main query remains compatible
+      // with databases that do not yet have verification_token.
+      try {
+        const ticketQr = await qr.prepareForPurchase(purchaseId);
+        if (ticketQr) {
+          data.ticketUrl = ticketQr.ticketUrl;
+          data.qrImageCid = ticketQr.qrImageCid;
+          qrAttachment = ticketQr.attachment;
+        }
+      } catch {
+        log("Ticket QR preparation unavailable; confirmation will omit the QR.");
+      }
     }
-    return { status: "ready", type, purchaseId, to: first.customer_email, data };
+    return { status: "ready", type, purchaseId, to: first.customer_email, data, qrAttachment };
   }
 
-  async function notify(prepared) {
+  async function deliver(prepared, retry = false) {
     if (prepared?.status !== "ready") return { status: prepared?.status ?? "invalid_event" };
     const key = `${prepared.type}:${prepared.purchaseId}`;
-    if (attempted.has(key)) return { status: "duplicate" };
-    attempted.add(key); // Claim before awaiting transport; uncertain sends are not retried.
+    const prior = attempts.get(key);
+    if (prior && (!retry || prior.status !== "definite_failure" ||
+        prior.count >= 2 || prior.to !== prepared.to)) return { status: "duplicate" };
+    if (retry && !prior) return { status: "not_retryable" };
+    attempts.set(key, { status: "in_flight", count: (prior?.count ?? 0) + 1, to: prepared.to });
     try {
       const send = prepared.type === "confirmation" ? sendConfirmation : sendCancellation;
-      const result = await send({ to: prepared.to, data: prepared.data });
-      if (result?.status === "sent" || result?.status === "disabled" ||
-          result?.status === "invalid_data" || result?.status === "invalid_recipient") return result;
+      const result = await send({ to: prepared.to, data: prepared.data,
+        ...(prepared.type === "confirmation" && prepared.qrAttachment ? { attachments: [prepared.qrAttachment] } : {}) });
+      if (result?.status === "sent") {
+        attempts.set(key, { status: "sent", count: (prior?.count ?? 0) + 1, to: prepared.to });
+        return result;
+      }
+      if (["disabled", "invalid_data", "invalid_recipient", "template_unavailable"].includes(result?.status)) {
+        // No transport attempt was made; a later authorized event may prepare again.
+        if (prior) attempts.set(key, prior);
+        else attempts.delete(key);
+        return result;
+      }
+      if (result?.status === "failed" && result.outcome === "definite") {
+        attempts.set(key, { status: "definite_failure", count: (prior?.count ?? 0) + 1, to: prepared.to });
+        log(`Booking ${prepared.type} email definitely rejected for purchase ${prepared.purchaseId}.`);
+        return result;
+      }
     } catch {
       // The database operation already committed. Keep its outcome successful.
     }
-    log(`Booking ${prepared.type} email delivery failed.`);
-    return { status: "failed" };
+    attempts.set(key, { status: "uncertain", count: (prior?.count ?? 0) + 1, to: prepared.to });
+    log(`Booking ${prepared.type} email outcome uncertain for purchase ${prepared.purchaseId}.`);
+    return { status: "failed", outcome: "uncertain" };
   }
 
-  return { prepare, notify };
+  const notify = (prepared) => deliver(prepared);
+
+  // Guarded controller hooks call this only after their transaction commits.
+  // Preparation reads the committed purchase, not request data.
+  async function notifyCommitted(event) {
+    let prepared;
+    try {
+      prepared = await prepare(event);
+    } catch {
+      log(`Booking ${event?.type === "cancellation" ? "cancellation" : "confirmation"} email preparation failed.`);
+      return { status: "preparation_failed" };
+    }
+    return notify(prepared);
+  }
+
+  // Internal, manual-only retry interface. Reprepare from committed records
+  // and recheck verified actor, payment/status, branch and current recipient.
+  // Never call for an SMTP timeout or from a public route.
+  async function retryDefiniteFailure(event) {
+    let prepared;
+    try { prepared = await prepare(event); }
+    catch {
+      log(`Booking ${event?.type === "cancellation" ? "cancellation" : "confirmation"} retry preparation failed.`);
+      return { status: "preparation_failed" };
+    }
+    return deliver(prepared, true);
+  }
+
+  return { prepare, notify, notifyCommitted, retryDefiniteFailure };
 }
 
 module.exports = { createBookingNotifier, BOOKING_NOTIFICATION_SQL, BOOKING_SNACKS_SQL };

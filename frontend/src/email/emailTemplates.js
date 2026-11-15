@@ -223,7 +223,7 @@ function renderConfirmationSections(ticketRows, paymentRows) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">${paymentHtml}</table>`;
 }
 
-function renderEmail({ subject, heading, intro, rows, note, link, poster, logo, status, detailHtml, showStatus = true }) {
+function renderEmail({ subject, heading, intro, rows, note, link, qrCid, poster, logo, status, detailHtml, showStatus = true }) {
   const reference = rows.find(({ label }) => label === "Booking reference")?.value;
   const movie = rows.find(({ label }) => label === "Movie")?.value;
   const detailRows = detailHtml ?? renderDetails(rows.filter(({ label }) => label !== "Booking reference" && label !== "Movie"));
@@ -234,7 +234,11 @@ function renderEmail({ subject, heading, intro, rows, note, link, poster, logo, 
     ? `<img src="${escapeHtml(logo)}" alt="FILMVAULT" width="220" height="74" style="display:block;width:220px;max-width:100%;height:auto;border:0;color:#ee112b;font-size:24px;font-weight:800;line-height:1.2;">`
     : `<span style="color:#ee112b;font-size:24px;font-weight:800;line-height:1.2;">FILMVAULT</span>`;
   const posterHtml = poster ? `<td width="90" valign="top" style="width:90px;padding:0 16px 0 0;vertical-align:top;"><img src="${escapeHtml(poster)}" alt="${escapeHtml(movie)} poster" width="90" height="135" style="display:block;width:90px;height:135px;border:0;border-radius:6px;object-fit:cover;background:#2a2a2a;"></td>` : "";
-  const linkHtml = link ? `<p style="margin:18px 0 0;"><a href="${escapeHtml(link)}" style="color:#ee112b;font-size:14px;font-weight:600;line-height:1.5;text-decoration:underline;">View your ticket</a></p>` : "";
+  const qrHtml = qrCid ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0 0;border-collapse:collapse;">
+    <tr><td style="padding:0 0 8px;color:#ffffff;font-size:13px;font-weight:600;line-height:1.5;">Scan to verify your ticket</td></tr>
+    <tr><td><img src="cid:${escapeHtml(qrCid)}" alt="QR code to verify booking ${escapeHtml(reference)}" width="120" height="120" style="display:block;width:120px;height:120px;border:0;background:#ffffff;"></td></tr>
+  </table>` : "";
+  const linkHtml = link ? `<p style="margin:18px 0 0;"><a href="${escapeHtml(link)}" style="color:#ee112b;font-size:14px;font-weight:600;line-height:1.5;text-decoration:underline;">${qrCid ? "Verify your ticket" : "View your ticket"}</a></p>` : "";
   const noteHtml = note ? `<p style="margin:20px 0 0;padding:12px 16px;border-left:3px solid #ee112b;background:#2a2a2a;color:#ffffff;font-size:13px;line-height:1.6;">${escapeHtml(note)}</p>` : "";
   const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(subject)}</title></head>
@@ -263,7 +267,7 @@ function renderEmail({ subject, heading, intro, rows, note, link, poster, logo, 
                 </td></tr>
               </table>
               ${detailHtml ? detailRows : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">${detailRows}</table>`}
-              ${noteHtml}${linkHtml}
+              ${noteHtml}${qrHtml}${linkHtml}
             </td></tr>
           </table>
         </td></tr>
@@ -320,6 +324,11 @@ export function buildBookingConfirmationEmail(data) {
   if (purchaseTime) paymentRows.push({ label: "Booked on", value: purchaseTime });
   const paid = amountPaid(data.amountPaid);
   if (paid) paymentRows.push({ label: "Amount paid", value: paid });
+  const link = secureUrl(data.ticketUrl, "ticketUrl");
+  const qrCid = data.qrImageCid == null ? null : requiredText(data.qrImageCid, "qrImageCid");
+  if (qrCid && (!link || !/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/.test(qrCid))) {
+    throw new TypeError("qrImageCid requires a valid ticketUrl and CID.");
+  }
   const rows = [{ label: "Booking reference", value: code }, { label: "Movie", value: movie }, ...ticketRows, ...paymentRows];
   return renderEmail({
     subject: `FilmVault booking confirmed · ${code}`,
@@ -327,7 +336,8 @@ export function buildBookingConfirmationEmail(data) {
     intro: `${greeting(name)} your booking is confirmed. Your ticket details are below.`,
     rows,
     detailHtml: renderConfirmationSections(ticketRows, paymentRows),
-    link: secureUrl(data.ticketUrl, "ticketUrl"),
+    link,
+    qrCid,
     poster: secureUrl(data.posterUrl, "posterUrl"),
     logo: secureUrl(data.logoUrl, "logoUrl"),
     status: "confirmed",

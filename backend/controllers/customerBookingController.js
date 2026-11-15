@@ -26,7 +26,11 @@ const fs = require("fs");
 const crypto = require("crypto");
 const pool = require("../config/database");
 const paymentService = require("../services/paymentService");
+const { createBookingNotifier } = require("../services/bookingNotificationService");
+const { notificationCustomer } = require("../utils/notificationAuth");
 const { calculatePrice, toCents } = require("../utils/pricing");
+
+const bookingNotifier = createBookingNotifier();
 
 const MAX_SEATS_PER_BOOKING = 8; // SRS: 1 to 8 tickets per transaction
 const MAX_SNACK_QUANTITY = 10; // per snack, matches the Checkout page
@@ -310,7 +314,7 @@ const releaseHolds = async (conn, { showtimeId, userId, seatIds, onlyExpired }) 
 //   idImage                       the ID photo (file). Required when any seat is discounted.
 //   snacks                        optional JSON [{ "snackId": 1, "quantity": 2 }]. Priced from
 //                                 the SNACK table and added to the total (never discounted).
-const createBooking = async (req, res) => {
+const createCreateBooking = ({ db = pool, paymentVerifier = paymentService, notifier = bookingNotifier } = {}) => async (req, res) => {
   const file = req.file;
   let fileKept = false; // true only once a booking that references the ID photo is saved
   const fail = (status, code, message, extra = {}) =>
@@ -376,7 +380,9 @@ const createBooking = async (req, res) => {
       }
     }
 
-    const conn = await pool.getConnection();
+    const conn = await db.getConnection();
+    let connectionReleased = false;
+    let committed = false;
     try {
       await conn.beginTransaction();
 
@@ -510,7 +516,7 @@ const createBooking = async (req, res) => {
       // Payment: the single hook. Anything but { ok: true } stops the booking.
       let payment;
       try {
-        payment = await paymentService.verifyPayment({ userId, amount: price.total, paymentMethod });
+        payment = await paymentVerifier.verifyPayment({ userId, amount: price.total, paymentMethod });
       } catch (paymentError) {
         console.error("verifyPayment threw:", paymentError);
         payment = { ok: false, reason: "Payment could not be processed." };
@@ -588,15 +594,32 @@ const createBooking = async (req, res) => {
       }
 
       await conn.commit();
+      committed = true;
       fileKept = idImageUrl !== null;
 
-      const booking = await loadBooking(purchaseId, conn);
+      connectionReleased = true;
+      try { conn.release(); }
+      catch { console.error("Booking connection release failed after commit."); }
+
+      const customer = notificationCustomer(req);
+      if (customer?.userId === userId) {
+        try {
+          await notifier.notifyCommitted({ type: "confirmation", purchaseId, committed: true,
+            paymentVerified: payment.ok === true, customer });
+        } catch {
+          // Purchase already committed; delivery must not change its result.
+          console.error("Booking confirmation notification failed after commit.");
+        }
+      }
+      const booking = await loadBooking(purchaseId, db);
       return res.status(201).json({ success: true, message: "Booking confirmed.", booking });
     } catch (error) {
-      try {
-        await conn.rollback();
-      } catch {
-        // nothing to roll back
+      if (!committed) {
+        try {
+          await conn.rollback();
+        } catch {
+          // nothing to roll back
+        }
       }
 
       if (error instanceof BookingError) {
@@ -612,7 +635,7 @@ const createBooking = async (req, res) => {
       console.error("createBooking error:", error);
       return fail(500, "SERVER_ERROR", "Failed to create booking.");
     } finally {
-      conn.release();
+      if (!connectionReleased) conn.release();
     }
   } finally {
     // Every other outcome (validation error, taken seat, failed payment, or a
@@ -621,4 +644,6 @@ const createBooking = async (req, res) => {
   }
 };
 
-module.exports = { createBooking, getUserBookings, getBookingById };
+const createBooking = createCreateBooking();
+
+module.exports = { createBooking, createCreateBooking, getUserBookings, getBookingById };

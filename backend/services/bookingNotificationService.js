@@ -14,7 +14,7 @@ const BOOKING_NOTIFICATION_SQL = `
          t.ticket_price,
          DATE_FORMAT(s.show_date, '%Y-%m-%d') AS show_date,
          TIME_FORMAT(s.show_time, '%H:%i:%s') AS show_time,
-         m.title AS movie_title, m.age_rating, m.duration,
+         m.title AS movie_title, m.poster, m.age_rating, m.duration,
          c.cinema_id, c.cinema_num,
          b.branch_id, b.branch_name, se.row_num, se.seat_num,
          tt.type AS ticket_type
@@ -45,6 +45,22 @@ const DISCOUNT_NOTES = {
 };
 
 const positiveId = (value) => Number.isInteger(value) && value > 0;
+
+// Seeded movie posters use TMDB's public image CDN. Local/bundled filenames
+// have no verified HTTPS asset origin for email, so omit them rather than
+// guessing a deployment URL or embedding an unsafe third-party image.
+function emailPosterUrl(value) {
+  if (typeof value !== "string" || value !== value.trim()) return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.hostname !== "image.tmdb.org" ||
+        url.username || url.password || url.port || url.search || url.hash ||
+        !/^\/t\/p\/[^/]+\/[A-Za-z0-9._-]+\.(?:jpe?g|png|webp)$/i.test(url.pathname)) return undefined;
+    return url.href;
+  } catch {
+    return undefined;
+  }
+}
 
 function createBookingNotifier({ db = pool, sendConfirmation = sendBookingConfirmation,
   sendCancellation = sendCancellationNotice, ticketQr, log = console.error } = {}) {
@@ -127,6 +143,7 @@ function createBookingNotifier({ db = pool, sendConfirmation = sendBookingConfir
         bookingFee: feeCents / 100,
         amountPaid: total,
         movieRating: first.age_rating || undefined,
+        posterUrl: emailPosterUrl(first.poster),
         runtimeMinutes: Number(first.duration) || undefined,
         paymentMethod: PAYMENT_METHODS[first.payment_method] ?? first.payment_method,
         discountNote: DISCOUNT_NOTES[first.discount_type] ?? undefined,

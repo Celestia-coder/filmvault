@@ -7,6 +7,10 @@ import {
 // Vite serves /dev/email-preview.html during development. It is not an App
 // route or an entry in the production Vite build.
 if (import.meta.env.DEV) {
+  const previewToken = "0123456789abcdef0123456789abcdef";
+  const previewQrCid = "filmvault-ticket-qr@filmvault.invalid";
+  const previewQrImage = "/dev/fictional-ticket-qr.png";
+  const previewTicketUrl = `https://tickets.example.com/verify/${previewToken}`;
   // Public HTTPS copy of the Home page's tracked logo, used only by this
   // fictional preview. Real delivery should use a controlled asset URL or CID.
   const logoUrl = "https://raw.githubusercontent.com/Celestia-coder/filmvault/4d36ca48e8fcbae493294673633ad0c561502185/frontend/src/assets/images/logo.png";
@@ -36,6 +40,8 @@ if (import.meta.env.DEV) {
       amountPaid: 620,
       paymentMethod: "GCash",
       bookedAt: "2026-11-15 14:20:00",
+      ticketUrl: previewTicketUrl,
+      qrImageCid: previewQrCid,
     })],
     ["Booking cancellation", buildBookingCancellationEmail({
       ...common,
@@ -104,6 +110,10 @@ if (import.meta.env.DEV) {
     card.append(title, subject, frame, details);
     container.append(card);
     frames.push(frame);
-    frame.srcdoc = email.html;
+    // Browsers cannot resolve Nodemailer's CID attachments. Only the fictional
+    // confirmation preview swaps that image source for a local development asset.
+    frame.srcdoc = label === "Booking confirmation"
+      ? email.html.replace(`src="cid:${previewQrCid}"`, `src="${previewQrImage}"`)
+      : email.html;
   }
 }

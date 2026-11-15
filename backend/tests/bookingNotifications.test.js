@@ -77,6 +77,52 @@ test("paid, committed booking uses trusted records and existing templates with f
   assert.doesNotMatch(delivered[0].html, /\/verify\/|View your ticket/);
 });
 
+test("confirmation uses only a trusted HTTPS poster from its committed movie row", async () => {
+  const poster = "https://image.tmdb.org/t/p/w500/fictional-poster.jpg";
+  const delivered = [];
+  const service = createEmailService({ mailer: {
+    enabled: true,
+    async send(message) { delivered.push(message); return { status: "sent" }; },
+  } });
+  const db = fakeDb(rows.map((row) => ({ ...row, poster })));
+  const notifier = createBookingNotifier({ db, sendConfirmation: service.sendBookingConfirmation });
+  const prepared = await notifier.prepare({ type: "confirmation", purchaseId: 42,
+    committed: true, paymentVerified: true, customer });
+  assert.match(BOOKING_NOTIFICATION_SQL, /m\.poster/);
+  assert.equal(prepared.data.posterUrl, poster);
+  assert.equal(prepared.to, "customer@example.invalid");
+  assert.equal(prepared.data.referenceCode, "FV-TEST1234");
+  assert.deepEqual(prepared.data.seats, ["A1", "A2"]);
+  assert.equal(prepared.data.amountPaid, 840);
+  assert.equal((await notifier.notify(prepared)).status, "sent");
+  assert.match(delivered[0].html, /src="https:\/\/image\.tmdb\.org\/t\/p\/w500\/fictional-poster\.jpg"/);
+  assert.match(delivered[0].html, /alt="A Fictional Film poster"/);
+  assert.doesNotMatch(delivered[0].text, /fictional-poster/);
+});
+
+test("missing, local, and untrusted poster values keep the text-only confirmation", async () => {
+  const unsafe = [null, "", "/images/film.jpg", "film.jpg", "http://image.tmdb.org/t/p/w500/film.jpg",
+    "https://localhost/film.jpg", "https://image.tmdb.org.evil.example/t/p/w500/film.jpg",
+    "https://image.tmdb.org/t/p/w500/film.jpg?tracking=1", "https://image.tmdb.org/t/p/w500/film.svg"];
+  for (const poster of unsafe) {
+    const delivered = [];
+    const service = createEmailService({ mailer: {
+      enabled: true,
+      async send(message) { delivered.push(message); return { status: "sent" }; },
+    } });
+    const notifier = createBookingNotifier({ db: fakeDb(rows.map((row) => ({ ...row, poster }))),
+      sendConfirmation: service.sendBookingConfirmation });
+    const prepared = await notifier.prepare({ type: "confirmation", purchaseId: 42,
+      committed: true, paymentVerified: true, customer });
+    assert.equal(prepared.status, "ready");
+    assert.equal(prepared.data.posterUrl, undefined);
+    assert.equal((await notifier.notify(prepared)).status, "sent");
+    assert.equal(delivered.length, 1);
+    assert.doesNotMatch(delivered[0].html, /A Fictional Film poster/);
+    assert.match(delivered[0].text, /FV-TEST1234/);
+  }
+});
+
 test("failed payment, uncommitted booking, and unverified customer cannot prepare mail", async () => {
   const db = fakeDb();
   const notifier = createBookingNotifier({ db });

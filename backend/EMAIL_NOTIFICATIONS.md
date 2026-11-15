@@ -10,7 +10,12 @@ Start with `EMAIL_DELIVERY_ENABLED=false` and
 settings and `MAIL_FROM` are validated only when real delivery is enabled.
 `npm test` uses a fake mail transport and mocked database; it needs neither
 SMTP credentials nor MySQL. A future trusted caller may pass an approved
-public HTTPS `logoUrl` or `posterUrl`. The QR integration below supplies a
+public HTTPS `logoUrl`. Confirmation preparation selects `MOVIE.poster` from
+the committed booking's movie and uses it only when it is a direct HTTPS image
+URL on the seeded `image.tmdb.org` CDN. Local filenames and other hosts omit
+the image; no deployment asset origin has been approved for them. An email
+client can also block or fail to fetch a remote poster, leaving the movie title
+readable. The QR integration below supplies a
 verification `ticketUrl` only from committed purchase data. No local asset path is
 embedded in outgoing mail.
 

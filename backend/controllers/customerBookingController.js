@@ -4,6 +4,7 @@
 //   POST /api/bookings        finalize a booking from the user's held seats
 //   GET  /api/bookings?userId=  the user's bookings, newest first
 //   GET  /api/bookings/:id?userId=  one booking, with everything the e-ticket needs
+//   GET  /api/tickets/verify/:token  public: what the e-ticket QR code opens (no login)
 //
 // A "booking" is one TOTAL_PURCHASE row; each seat is a TICKET row.
 // "showtime" in the API = SCREENING in the database.
@@ -98,6 +99,7 @@ const BOOKING_ROWS_SELECT = `
     p.payment_method,
     p.discount_type,
     p.total_price,
+    p.verification_token,
     DATE_FORMAT(p.purchase_datetime, '%Y-%m-%d %H:%i:%s') AS purchase_datetime,
     p.user_id,
     t.ticket_id,
@@ -143,6 +145,7 @@ const buildBookings = (rows) => {
         payment_method: r.payment_method,
         discount_type: r.discount_type,
         total_price: Number(r.total_price),
+        verification_token: r.verification_token,
         tickets_total: 0,
         snacks_total: 0,
         booking_fee: 0,
@@ -270,6 +273,61 @@ const getBookingById = async (req, res) => {
   } catch (error) {
     console.error("getBookingById error:", error);
     return res.status(500).json({ success: false, code: "SERVER_ERROR", message: "Failed to fetch booking." });
+  }
+};
+
+// GET /api/tickets/verify/:token
+// Public (the QR code is scanned without logging in), so it returns only what a
+// ticket check needs: no user id, email, phone, ID photo or purchase id.
+// valid is true only for a confirmed AND paid booking; the status is read live,
+// so a booking cancelled after the QR was issued shows as invalid.
+const VERIFY_TOKEN_PATTERN = /^[0-9a-f]{32}$/;
+const verifyTicket = async (req, res) => {
+  const token = String(req.params.token ?? "").toLowerCase();
+  const notFound = () =>
+    res.status(404).json({ success: false, code: "INVALID_TICKET", message: "This QR code doesn't match any FilmVault ticket." });
+  if (!VERIFY_TOKEN_PATTERN.test(token)) return notFound();
+
+  try {
+    const [purchases] = await pool.query(
+      `SELECT p.purchase_id, p.reference_code, p.status, p.payment_status, p.payment_method, p.total_price, u.name
+       FROM TOTAL_PURCHASE p JOIN \`USER\` u ON u.user_id = p.user_id
+       WHERE p.verification_token = ?`,
+      [token]
+    );
+    if (purchases.length === 0) return notFound();
+    const p = purchases[0];
+
+    // A cancelled booking can lose its TICKET rows once the seats are resold,
+    // so the movie/seat details may be gone; the status still answers the scan.
+    const [rows] = await pool.query(`${BOOKING_ROWS_SELECT} WHERE p.purchase_id = ? ${BOOKING_ROWS_ORDER}`, [p.purchase_id]);
+    const [b] = buildBookings(rows);
+
+    return res.status(200).json({
+      success: true,
+      valid: p.status === "confirmed" && p.payment_status === "paid" && Boolean(b),
+      ticket: {
+        owner_name: p.name,
+        reference_code: p.reference_code,
+        status: p.status,
+        payment_status: p.payment_status,
+        payment_method: p.payment_method,
+        total_price: Number(p.total_price),
+        ...(b && {
+          movie_title: b.movie_title,
+          poster: b.poster,
+          show_date: b.show_date,
+          show_time: b.show_time,
+          branch_name: b.branch_name,
+          cinema_num: b.cinema_num,
+          seats: b.seats,
+          tickets: b.tickets.map(({ seat, ticket_type }) => ({ seat, ticket_type })),
+        }),
+      },
+    });
+  } catch (error) {
+    console.error("verifyTicket error:", error);
+    return res.status(500).json({ success: false, code: "SERVER_ERROR", message: "Failed to verify ticket." });
   }
 };
 
@@ -532,9 +590,9 @@ const createBooking = async (req, res) => {
           const [result] = await conn.query(
             `INSERT INTO TOTAL_PURCHASE
                (user_id, payment_method, total_price, purchase_datetime, status, reference_code,
-                payment_status, discount_type, id_image_url)
-             VALUES (?, ?, ?, NOW(), 'confirmed', ?, 'paid', ?, ?)`,
-            [userId, paymentMethod, price.total, referenceCode, discountType, idImageUrl]
+                payment_status, discount_type, id_image_url, verification_token)
+             VALUES (?, ?, ?, NOW(), 'confirmed', ?, 'paid', ?, ?, ?)`,
+            [userId, paymentMethod, price.total, referenceCode, discountType, idImageUrl, crypto.randomBytes(16).toString("hex")]
           );
           purchaseId = result.insertId;
           break;
@@ -621,4 +679,4 @@ const createBooking = async (req, res) => {
   }
 };
 
-module.exports = { createBooking, getUserBookings, getBookingById };
+module.exports = { createBooking, getUserBookings, getBookingById, verifyTicket };

@@ -14,8 +14,9 @@ import SeatSelection from "./pages/client/SeatSelection.jsx";
 import Tickets from "./pages/client/Tickets.jsx";
 import Ticket from "./pages/client/Ticket.jsx";
 import Checkout from "./pages/client/Checkout.jsx";
-import Profile from "./pages/client/Profile.jsx"; // NEW
+import Profile from "./pages/client/Profile.jsx"; 
 import Policies from "./pages/client/Policies.jsx";
+import VerifyTicket from "./pages/client/VerifyTicket.jsx";
 
 {
 	/* ADMIN SIDE */
@@ -43,7 +44,7 @@ function App() {
 			<Route path="/tickets/:bookingId" element={<Ticket />} />
 			<Route path="/checkout" element={<Checkout />} />
 			<Route path="/tickets" element={<Tickets />} />
-			
+			<Route path="/verify/:token" element={<VerifyTicket />} />
 			<Route path="/profile" element={<Profile />} />
 			<Route path="/terms" element={<Policies />} />
 			<Route path="/privacy" element={<Policies />} />

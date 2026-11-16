@@ -15,6 +15,7 @@
 //   total_price, tickets_total, snacks_total, booking_fee -> totalPrice, ticketsTotal, snacksTotal, bookingFee
 //   snacks[].name/quantity/unit_price/subtotal -> snacks[].name/quantity/unitPrice/subtotal
 //   status: confirmed | pending | cancelled      payment_status: pending | paid | failed
+//   verification_token          ->  verificationToken (what the e-ticket QR code points to)
 
 import { request, resolvePoster } from "./movies.js";
 
@@ -44,6 +45,7 @@ function mapBooking(raw) {
     paymentMethod: raw.payment_method,
     discountType: raw.discount_type,
     totalPrice: raw.total_price,
+    verificationToken: raw.verification_token,
     ticketsTotal: raw.tickets_total,
     snacksTotal: raw.snacks_total,
     bookingFee: raw.booking_fee,
@@ -65,6 +67,49 @@ function mapBooking(raw) {
       unitPrice: x.unit_price,
       subtotal: x.subtotal,
     })),
+  };
+}
+
+// Checkout's payment options. `id` is what gets saved in TOTAL_PURCHASE.payment_method.
+export const PAYMENT_METHODS = [
+  { id: "gcash", logo: "GCash", name: "GCash", desc: "e-Wallet", color: "#0a73e8" },
+  { id: "maya", logo: "Maya", name: "Maya", desc: "e-Wallet", color: "#1fc16b" },
+  { id: "card", logo: "card", name: "Credit / Debit Card", desc: "Visa · Mastercard", color: "#23232e" },
+  { id: "bpi", logo: "BPI", name: "BPI Online", desc: "Online Banking", color: "#a4161a" },
+];
+
+// "gcash" -> "GCash". Unknown/old values (e.g. "simulated") are shown as saved.
+export const paymentMethodName = (id) => PAYMENT_METHODS.find((m) => m.id === id)?.name ?? id;
+
+// Only a confirmed, paid booking gets a QR code and a downloadable ticket.
+export const isValidTicket = (booking) =>
+  booking?.status === "confirmed" && booking.paymentStatus === "paid" && Boolean(booking.verificationToken);
+
+// The page the QR code opens. Phones can't reach "localhost", so set VITE_PUBLIC_URL
+// (e.g. http://192.168.1.20:5173) when the site is opened on localhost.
+export const ticketVerifyUrl = (token) =>
+  `${import.meta.env.VITE_PUBLIC_URL ?? window.location.origin}/verify/${token}`;
+
+// GET /api/tickets/verify/:token  (public). Rejects with a 404 ApiError for an unknown token.
+// Movie/seat fields can be missing for a cancelled booking whose seats were resold.
+export async function verifyTicket(token, { signal } = {}) {
+  const { valid, ticket: t } = await request(`/api/tickets/verify/${encodeURIComponent(token)}`, { signal });
+  return {
+    valid,
+    ownerName: t.owner_name,
+    referenceNo: t.reference_code,
+    status: t.status,
+    paymentStatus: t.payment_status,
+    paymentMethod: t.payment_method,
+    totalPrice: t.total_price,
+    title: t.movie_title ?? null,
+    poster: t.movie_title ? resolvePoster(t.poster) : null,
+    showDate: t.show_date ?? null,
+    showTime: t.show_time ?? null,
+    branchName: t.branch_name ?? null,
+    cinemaNum: t.cinema_num ?? null,
+    seats: t.seats ?? [],
+    tickets: (t.tickets ?? []).map((x) => ({ seat: x.seat, type: x.ticket_type })),
   };
 }
 

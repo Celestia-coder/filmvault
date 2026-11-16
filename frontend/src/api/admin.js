@@ -9,7 +9,7 @@
 // TODO (before real deployment): the backend trusts ?branchId= from the URL.
 // Swap it for the branch on a verified session/token.
 
-import { request } from "./movies.js";
+import { request, resolvePoster } from "./movies.js";
 import { getUser } from "./session.js";
 
 /* --------------------------------- session --------------------------------- */
@@ -37,12 +37,7 @@ export async function fetchBranchShowtimes(branchId, signal) {
   ]);
 
   const titles = new Map(movieBody.movies.map((movie) => [movie.movie_id, movie.title]));
-  const posters = new Map(
-    movieBody.movies.map((movie) => [
-      movie.movie_id,
-      /^https?:\/\//i.test(movie.poster ?? "") ? movie.poster : null,
-    ])
-  );
+  const moviesById = new Map(movieBody.movies.map((movie) => [movie.movie_id, movie]));
 
   const showtimes = showtimeBody.showtimes
     .filter((showtime) => showtime.branch_id === branchId)
@@ -50,7 +45,8 @@ export async function fetchBranchShowtimes(branchId, signal) {
       id: showtime.showtime_id,
       movieId: showtime.movie_id,
       movieTitle: titles.get(showtime.movie_id) ?? `Movie #${showtime.movie_id}`,
-      poster: posters.get(showtime.movie_id) ?? null,
+      poster: resolvePoster(moviesById.get(showtime.movie_id)?.poster),
+      price: Number(moviesById.get(showtime.movie_id)?.base_price ?? 0),
       cinemaId: showtime.cinema_id,
       cinemaNum: showtime.cinema_num,
       date: showtime.show_date, // "YYYY-MM-DD"

@@ -50,7 +50,6 @@ function Footer() {
 				<div className="footer-column">
 					<h4>Support</h4>
 					<FooterLink to="/profile">My Account</FooterLink>
-					<FooterLink to="/terms">Terms &amp; Conditions</FooterLink>
 				</div>
 			</div>
 

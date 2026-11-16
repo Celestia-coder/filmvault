@@ -1,6 +1,6 @@
 // server.js — entry point, starts the server
 
-require("dotenv").config();
+require("dotenv").config(); // must stay first so .env values are loaded before anything else
 const express = require("express");
 const cors = require("cors");
 
@@ -13,51 +13,55 @@ const seatRoutes = require("./routes/seatRoutes");
 const seatHoldRoutes = require("./routes/seatHoldRoutes");
 const customerBookingRoutes = require("./routes/customerBookingRoutes");
 const snackRoutes = require("./routes/snackRoutes");
+const uploadRoutes = require("./routes/upload");
 
 const app = express();
 
-// Allow the React frontend (running on a different port) to call this API
+// Allow the React frontend (different port) to call this API
 app.use(cors());
 
-// Allow Express to read JSON request bodies (req.body)
+// Read JSON request bodies (req.body)
 app.use(express.json());
 
-// Simple test route to confirm the server is alive
+// Health check
 app.get("/", (req, res) => {
-  res.send("FilmVault backend server is running.");
+	res.send("FilmVault backend server is running.");
 });
 
-// Connect the auth routes — anything hitting /api/... goes here
+// Auth: /api/auth/register, /api/auth/login
 app.use("/api/auth", authRoutes);
 
-// Search routes: MUST be mounted before movieRoutes, or Express will match
-// GET /api/movies/search against movieRoutes' GET /movies/:id first and try
-// to treat "search" as a movie ID.
+// Search: must be mounted BEFORE movieRoutes, or GET /api/movies/search
+// would match GET /movies/:id and treat "search" as a movie ID.
 app.use("/api", searchRoutes);
 
-// Movie routes: public (/api/movies) and admin (/api/admin/movies)
+// Movies: public (/api/movies) and admin (/api/admin/movies)
 app.use("/api", movieRoutes);
 
-// Showtime routes: public (/api/showtimes, /api/movies/:id/showtimes) and admin (/api/admin/showtimes)
+// Showtimes: public (/api/showtimes, /api/movies/:id/showtimes) and admin (/api/admin/showtimes)
 app.use("/api", showtimeRoutes);
 
-// Admin booking routes: /api/admin/bookings
+// Admin bookings: /api/admin/bookings (list, cancel, view ID photo)
 app.use("/api", bookingRoutes);
 
-// Admin seat routes: seat map + Seat Inspector block/release
+// Admin seats: seat map and Seat Inspector block/release
 app.use("/api", seatRoutes);
 
-// Customer seat routes: seat map for a showtime + temporary seat holds
+// Customer seats: seat map for a showtime and temporary seat holds
 app.use("/api", seatHoldRoutes);
 
-// Customer booking routes: POST /api/bookings (checkout), GET /api/bookings, GET /api/bookings/:id
+// Customer bookings: POST /api/bookings (checkout, ID photo upload), GET /api/bookings, GET /api/bookings/:id
 app.use("/api", customerBookingRoutes);
 
-// Snacks: GET /api/snacks (the food menu Checkout shows)
+// Snacks: GET /api/snacks (food menu shown at Checkout)
 app.use("/api", snackRoutes);
+
+// Image uploads to Cloudinary: POST /api/upload/poster and /api/upload/profile.
+// ID photos are not uploaded here; they go through POST /api/bookings.
+app.use("/api/upload", uploadRoutes);
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+	console.log(`Server is running on http://localhost:${PORT}`);
 });

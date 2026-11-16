@@ -1,9 +1,10 @@
 // ListOfBookings.jsx — Admin list of bookings
 // Route: "/admin/bookings"
 //
-// Real data:
+// Data:
 //   bookings            -> GET /api/admin/bookings?branchId=&date=&movieId=
 //   cancel + free seats -> PATCH /api/admin/bookings/:id?branchId=
+//   ID photo (private)  -> GET /api/admin/bookings/:id/id-image?branchId=
 //   movie/date options  -> GET /api/showtimes + GET /api/movies (this branch only)
 //
 // The movie and date filters run on the server. The status tabs and the search
@@ -26,6 +27,7 @@ import {
 	fetchBranchShowtimes,
 	fetchAdminBookings,
 	cancelBooking,
+	fetchBookingIdImage,
 } from "../../api/admin.js";
 
 const PAGE_SIZE = 10;
@@ -56,7 +58,9 @@ function getInitials(name) {
 	return `${parts[0][0]}${parts[parts.length - 1][0]}`;
 }
 
-const idStatusText = (booking) => booking.idStatus ?? "Not recorded";
+// "Uploaded" when an ID photo exists, otherwise the backend's id_status (if any).
+const idStatusText = (booking) =>
+	booking.hasIdImage ? "Uploaded" : (booking.idStatus ?? "Not recorded");
 
 const IconSearch = () => (
 	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -109,7 +113,10 @@ function ListOfBookings({ branchId }) {
 	const [cancelError, setCancelError] = useState("");
 	const [notice, setNotice] = useState("");
 
-	// Any filter change goes back to page 1 — otherwise you can land on a
+	// ID photo viewer: { bookingId, status: "loading" | "ready" | "error", url?, message? }
+	const [idView, setIdView] = useState(null);
+
+	// Any filter change goes back to page 1, otherwise you can land on a
 	// page that no longer exists for the smaller result set.
 	const updateFilter = (setter) => (value) => {
 		setter(value);
@@ -209,10 +216,14 @@ function ListOfBookings({ branchId }) {
 
 	const selectedBooking = selectedId !== null ? bookings.find((booking) => booking.id === selectedId) : null;
 
+	// The ID viewer state for the open booking (ignores a slow response for another booking).
+	const idViewForSelected = selectedBooking && idView?.bookingId === selectedBooking.id ? idView : null;
+
 	function closeDetail() {
 		setSelectedId(null);
 		setConfirmingCancel(false);
 		setCancelError("");
+		setIdView(null); // never keep the signed ID link after the window closes
 	}
 
 	// Escape closes the detail view.
@@ -223,6 +234,7 @@ function ListOfBookings({ branchId }) {
 				setSelectedId(null);
 				setConfirmingCancel(false);
 				setCancelError("");
+				setIdView(null);
 			}
 		};
 		document.addEventListener("keydown", handleKeyDown);
@@ -243,6 +255,19 @@ function ListOfBookings({ branchId }) {
 			setCancelError(error.message);
 		} finally {
 			setCancelling(false);
+		}
+	}
+
+	// Loads a signed link to the private ID photo. bookingId is stored with the
+	// result so a slow response can't show up under a different booking.
+	async function handleViewId() {
+		const bookingId = selectedBooking.id;
+		setIdView({ bookingId, status: "loading" });
+		try {
+			const url = await fetchBookingIdImage({ bookingId, branchId });
+			setIdView({ bookingId, status: "ready", url });
+		} catch (error) {
+			setIdView({ bookingId, status: "error", message: error.message });
 		}
 	}
 
@@ -554,6 +579,49 @@ function ListOfBookings({ branchId }) {
 								<dd>{formatBookedAt(selectedBooking.bookedAt)}</dd>
 							</div>
 						</dl>
+
+						{/* Senior/PWD ID photo: loaded only when the admin asks for it */}
+						{selectedBooking.hasIdImage && (
+							<div className="adm-id-section">
+								{idViewForSelected?.status === "ready" ? (
+									<>
+										<img
+											className="adm-id-preview"
+											src={idViewForSelected.url}
+											alt={`ID submitted for booking ${selectedBooking.reference}`}
+											onError={() =>
+												setIdView({
+													bookingId: selectedBooking.id,
+													status: "error",
+													message: "Couldn't load the ID photo.",
+												})
+											}
+										/>
+										<button
+											type="button"
+											className="modal-btn modal-btn--ghost"
+											onClick={() => setIdView(null)}
+										>
+											Hide ID photo
+										</button>
+									</>
+								) : (
+									<button
+										type="button"
+										className="modal-btn modal-btn--ghost"
+										onClick={handleViewId}
+										disabled={idViewForSelected?.status === "loading"}
+									>
+										{idViewForSelected?.status === "loading" ? "Loading ID photo…" : "View ID photo"}
+									</button>
+								)}
+								{idViewForSelected?.status === "error" && (
+									<p className="adm-id-error" role="alert">
+										{idViewForSelected.message}
+									</p>
+								)}
+							</div>
+						)}
 
 						{confirmingCancel && (
 							<div className="adm-cancel-confirm" role="alert">

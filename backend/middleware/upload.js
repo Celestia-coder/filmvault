@@ -51,4 +51,5 @@ module.exports = {
 	profileUpload: make(2),
 	idUpload: make(5),
 	checkRealImage,
+	looksLikeImage,
 };

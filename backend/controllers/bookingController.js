@@ -7,7 +7,11 @@
 // the API speaks "booking" (same idea as showtime_id in showtimeController).
 
 const pool = require("../config/database");
+const { createBookingNotifier } = require("../services/bookingNotificationService");
 const { parseBranchId } = require("../utils/branchScope");
+const { notificationAdmin } = require("../utils/notificationAuth");
+
+const bookingNotifier = createBookingNotifier();
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const VALID_STATUSES = ["pending", "confirmed", "cancelled"];
@@ -123,7 +127,7 @@ const getAdminBookings = async (req, res) => {
 // Cancels the booking and releases its seats. The purchase and its tickets
 // are kept (status = 'cancelled') as a record; seat availability ignores
 // tickets on cancelled purchases, so the seats become sellable again.
-const cancelBooking = async (req, res) => {
+const createCancelBooking = ({ db = pool, notifier = bookingNotifier } = {}) => async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ success: false, message: "Invalid booking ID." });
@@ -142,7 +146,9 @@ const cancelBooking = async (req, res) => {
     });
   }
 
-  const conn = await pool.getConnection();
+  const conn = await db.getConnection();
+  let committed = false;
+  let connectionReleased = false;
   try {
     await conn.beginTransaction();
 
@@ -197,8 +203,22 @@ const cancelBooking = async (req, res) => {
     }
 
     await conn.commit();
+    committed = true;
 
-    const [rows] = await pool.query(
+    connectionReleased = true;
+    try { conn.release(); }
+    catch { console.error("Cancellation connection release failed after commit."); }
+
+    const admin = notificationAdmin(req);
+    if (admin && tickets.length > 0 && tickets.every((ticket) => Number(ticket.branch_id) === admin.branchId)) {
+      try {
+        await notifier.notifyCommitted({ type: "cancellation", purchaseId: id, committed: true, admin });
+      } catch {
+        // Cancellation already committed; delivery must not change its result.
+        console.error("Booking cancellation notification failed after commit.");
+      }
+    }
+    const [rows] = await db.query(
       `${BOOKING_SELECT} WHERE p.purchase_id = ? ${BOOKING_GROUP_BY}`,
       [id]
     );
@@ -209,12 +229,14 @@ const cancelBooking = async (req, res) => {
       booking: rows.length ? formatBooking(rows[0]) : null,
     });
   } catch (error) {
-    await conn.rollback();
+    if (!committed) await conn.rollback();
     console.error("cancelBooking error:", error);
     return res.status(500).json({ success: false, message: "Failed to cancel booking." });
   } finally {
-    conn.release();
+    if (!connectionReleased) conn.release();
   }
 };
 
-module.exports = { getAdminBookings, cancelBooking };
+const cancelBooking = createCancelBooking();
+
+module.exports = { getAdminBookings, cancelBooking, createCancelBooking };

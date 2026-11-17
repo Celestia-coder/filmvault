@@ -1,15 +1,11 @@
-// The e-ticket card. Shown on the Ticket page and rendered off-screen for the PDF download.
+// The e-ticket card, rendered off-screen for the PDF download (DownloadTicketButton).
+// The Ticket page itself shows BookingTearTicket + OrderDetails instead.
 // qrSrc: the QR image (data URL); omit it for tickets that aren't valid.
 import { useState } from "react";
 import { Film } from "lucide-react";
 import { formatDate, formatTime } from "../api/movies.js";
 import { paymentMethodName } from "../api/bookings.js";
-
-const peso = (amount) => `₱${Number(amount).toFixed(2)}`;
-
-const STATUS_LABELS = { confirmed: "Confirmed", pending: "Pending", cancelled: "Cancelled" };
-const PAYMENT_LABELS = { paid: "Paid", pending: "Payment pending", failed: "Payment failed" };
-const DISCOUNT_LABELS = { none: null, senior: "Senior Citizen discount", pwd: "PWD discount", mixed: "Senior/PWD discount" };
+import { DISCOUNT_LABELS, PAYMENT_LABELS, STATUS_LABELS, peso } from "../utils/ticket.js";
 
 export function Poster({ src, title }) {
   const [failed, setFailed] = useState(false);

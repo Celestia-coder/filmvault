@@ -344,3 +344,365 @@
     align-items: center;
   }
 }
+
+/* ===== Ticket page: tear-off ticket (BookingTearTicket) ===== */
+.fvtt-wrap {
+  max-width: 600px;
+  margin: 24px auto 0;
+}
+
+.fvtt {
+  margin: 0 auto;
+  font-family: "Poppins", system-ui, sans-serif;
+}
+
+/* posters are portrait: keep the top (faces, title art) in the landscape crop */
+.fvtt .tear-ticket__image {
+  object-position: center 25%;
+}
+
+.fvtt-body {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px 22px 20px;
+}
+
+.fvtt-badge {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(12, 12, 12, 0.8); /* solid enough to read over any poster */
+  color: #f5f5f5;
+}
+
+.fvtt-badge::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.fvtt-badge--confirmed {
+  color: #7be0b3;
+}
+
+.fvtt-badge--pending {
+  color: #f5c66b;
+}
+
+.fvtt-badge--cancelled {
+  color: #f3a0a3;
+}
+
+.fvtt-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6);
+}
+
+.fvtt-sub {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: #cfcfcf;
+}
+
+.fvtt-facts {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.fvtt-facts li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fvtt-facts svg {
+  flex-shrink: 0;
+  color: var(--fv-red-hover);
+}
+
+/* stub: stacked on the right (wide), side by side at the bottom (phones) */
+.fvtt-stub {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+  padding: 20px 18px 20px 26px;
+  background: var(--color-surface);
+  color: #ffffff;
+}
+
+.fvtt-label {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.fvtt-stub strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.fvtt-stub .fvtt-admit-num {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.fvtt-stub .fvtt-ref {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+}
+
+.fvtt[data-orientation="vertical"] .fvtt-stub {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-content: center;
+  gap: 10px 22px;
+  padding: 26px 24px 20px;
+}
+
+.fvtt[data-orientation="vertical"] .fvtt-admit {
+  grid-row: span 2;
+  align-self: center;
+  padding-right: 22px;
+  border-right: 1px dashed rgba(255, 255, 255, 0.4);
+}
+
+.fvtt-hint {
+  margin: 18px 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--fv-muted);
+}
+
+.fvtt-hint button {
+  margin-left: 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--fv-red-hover);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* ===== Ticket page: order details (OrderDetails) ===== */
+.order-card {
+  max-width: 600px;
+  margin: 28px auto 0;
+  padding: 22px 24px 24px;
+  background: #222222;
+  border: 1px solid #3a3a3a;
+  border-radius: 14px;
+  color: var(--fv-text);
+  line-height: 1.5;
+}
+
+.order-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.order-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.order-card-title svg {
+  color: var(--fv-red-hover);
+}
+
+.order-card-ref {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--fv-muted);
+}
+
+.order-card-ref strong {
+  margin-left: 4px;
+  color: var(--fv-text);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+}
+
+.order-card-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: start;
+}
+
+.order-group {
+  margin: 18px 0 2px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fv-muted);
+}
+
+.order-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.order-lines li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 9px 0;
+  border-bottom: 1px solid #303030;
+  font-size: 0.95rem;
+}
+
+.order-lines li:last-child {
+  border-bottom: none;
+}
+
+.order-item small {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--fv-muted);
+}
+
+.order-price {
+  white-space: nowrap;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.order-summary {
+  margin-top: 8px;
+  border-top: 1px solid #3a3a3a;
+}
+
+.order-lines .order-total {
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(229, 9, 20, 0.1);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.order-total .order-price {
+  font-weight: 700;
+}
+
+.order-pay {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 18px 0 0;
+  font-size: 0.88rem;
+}
+
+.order-pay dt {
+  color: var(--fv-muted);
+}
+
+.order-pay dd {
+  margin: 0;
+  font-weight: 500;
+}
+
+.order-qr {
+  margin: 18px 0 0;
+  text-align: center;
+}
+
+.order-qr img {
+  display: block;
+  width: 168px;
+  height: 168px;
+  padding: 8px;
+  background: #fff; /* scanners need a light quiet zone on the dark card */
+  border-radius: 10px;
+  image-rendering: pixelated;
+}
+
+.order-qr figcaption {
+  margin-top: 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fv-muted);
+}
+
+.order-qr-note {
+  width: 168px;
+  margin: 18px 0 0;
+  padding: 16px 12px;
+  border: 1px dashed #3a3a3a;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--fv-muted);
+}
+
+@media (max-width: 640px) {
+  .order-card {
+    padding: 18px 16px 20px;
+  }
+
+  .order-card-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .order-qr,
+  .order-qr-note {
+    justify-self: center;
+  }
+
+  .order-qr-note {
+    width: 100%;
+  }
+}

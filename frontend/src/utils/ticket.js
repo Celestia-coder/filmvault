@@ -1,8 +1,15 @@
 // utils/ticket.js
-// QR code + PDF helpers for the e-ticket.
+// QR code + PDF helpers for the e-ticket, plus the labels the ticket screens share.
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { isValidTicket, ticketVerifyUrl } from "../api/bookings.js";
+
+// Shared by ETicket (PDF), BookingTearTicket and OrderDetails (Ticket page).
+export const peso = (amount) => `₱${Number(amount).toFixed(2)}`;
+
+export const STATUS_LABELS = { confirmed: "Confirmed", pending: "Pending", cancelled: "Cancelled" };
+export const PAYMENT_LABELS = { paid: "Paid", pending: "Payment pending", failed: "Payment failed" };
+export const DISCOUNT_LABELS = { none: null, senior: "Senior Citizen discount", pwd: "PWD discount", mixed: "Senior/PWD discount" };
 
 // 512px source shown at ~120px (and captured at 3x for the PDF) keeps the modules sharp.
 export const ticketQrDataUrl = (token) =>

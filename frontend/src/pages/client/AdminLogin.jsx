@@ -147,10 +147,11 @@ function AdminLogin() {
     setSubmitting(true);
     try {
       // POST /api/auth/login -> { user: { userId, username, name, email, role, branchId } }
-      const { user } = await request("/api/auth/login", {
+      const { user, token } = await request("/api/auth/login", {
         method: "POST",
         body: { email: email.trim(), password },
       });
+      if (!token) throw new Error("Secure sign-in is unavailable.");
 
       if (user.role !== "admin") {
         setStatus({ type: "error", message: "This account is not an admin account." });
@@ -169,7 +170,7 @@ function AdminLogin() {
         return;
       }
 
-      saveUser(user);
+      saveUser(user, token);
       const name = BRANCHES.find((b) => b.id === branchId).name;
       setStatus({ type: "success", message: `Login successful! Redirecting to the ${name} dashboard...` });
       navigate(afterLogin);

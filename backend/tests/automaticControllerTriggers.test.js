@@ -147,7 +147,7 @@ test("actual checkout handler sends one fake confirmation after paid commit and 
   assert.ok(f.events.indexOf("read_committed_purchase") < f.events.indexOf("fake_send"));
 });
 
-test("checkout ignores missing, mismatched, or browser-only identity", async () => {
+test("checkout rejects missing, mismatched, or browser-only identity before payment", async () => {
   for (const auth of [null, { userId: 9, role: "customer", branchId: null },
     { userId: 8, role: "admin", branchId: 3 },
     { userId: "8", role: "customer", branchId: null },
@@ -160,8 +160,9 @@ test("checkout ignores missing, mismatched, or browser-only identity", async () 
     req.headers = { authorization: "unverified" };
     const res = response();
     await f.handler(req, res);
-    assert.equal(res.code, 201);
+    assert.ok([401, 403].includes(res.code));
     assert.equal(f.messages.length, 0);
+    assert.ok(!f.events.includes("verify_payment"));
   }
 });
 
@@ -218,7 +219,7 @@ test("actual cancellation handler sends one fake notice after commit and connect
   assert.ok(f.events.indexOf("read_committed_purchase") < f.events.indexOf("fake_send"));
 });
 
-test("cancellation ignores missing, wrong-role, and wrong-branch auth despite browser branch", async () => {
+test("cancellation rejects missing, wrong-role, and wrong-branch auth despite browser branch", async () => {
   for (const auth of [null, customerAuth, { ...adminAuth, branchId: 4 },
     { ...adminAuth, branchId: "3" }]) {
     const f = cancellationFixture();
@@ -227,7 +228,7 @@ test("cancellation ignores missing, wrong-role, and wrong-branch auth despite br
     req.body.auth = adminAuth;
     const res = response();
     await f.handler(req, res);
-    assert.equal(res.code, 200);
+    assert.ok([403, 404].includes(res.code));
     assert.equal(f.messages.length, 0);
   }
 });
@@ -242,7 +243,7 @@ test("committed purchase branch mismatch and invalid recipient suppress cancella
   }
 });
 
-test("failed cancellation transaction or client branch mismatch sends no notice", async () => {
+test("failed cancellation transaction or target in another branch sends no notice", async () => {
   const failed = cancellationFixture({ failCommit: true });
   const failedResponse = response();
   const originalError = console.error;
@@ -253,7 +254,7 @@ test("failed cancellation transaction or client branch mismatch sends no notice"
   assert.equal(failed.messages.length, 0);
   assert.ok(failed.events.includes("rollback"));
 
-  const scoped = cancellationFixture();
+  const scoped = cancellationFixture({ branchId: 4 });
   const scopedResponse = response();
   await scoped.handler(scoped.request(adminAuth, 4), scopedResponse);
   assert.equal(scopedResponse.code, 404);

@@ -6,11 +6,11 @@
 // Every admin endpoint is scoped with ?branchId=, taken from the logged-in admin
 // (POST /api/auth/login returns it as user.branchId).
 //
-// TODO (before real deployment): the backend trusts ?branchId= from the URL.
-// Swap it for the branch on a verified session/token.
+// The backend takes authorization scope from its verified USER record; the
+// browser branchId is retained for page filters and API compatibility only.
 
 import { request, resolvePoster } from "./movies.js";
-import { getUser } from "./session.js";
+import { authHeaders, getUser } from "./session.js";
 
 /* --------------------------------- session --------------------------------- */
 
@@ -193,5 +193,12 @@ export async function fetchBookingIdImage({ bookingId, branchId }, signal) {
 		params: { branchId },
 		signal,
 	});
-	return body.url;
+	// Local private files now require the same authenticated request as the
+	// metadata route. An <img> cannot attach a Bearer header, so view a short-
+	// lived browser blob instead. Cloudinary signed URLs remain unchanged.
+	if (!/^\/api\/admin\/bookings\/\d+\/id-image\/file$/.test(body.url)) return body.url;
+	const apiBase = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
+	const response = await fetch(`${apiBase}${body.url}`, { signal, headers: authHeaders() });
+	if (!response.ok) throw new Error("Failed to load the ID image.");
+	return URL.createObjectURL(await response.blob());
 }

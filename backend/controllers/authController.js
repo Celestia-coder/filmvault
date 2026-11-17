@@ -5,6 +5,7 @@
 const bcrypt = require("bcryptjs");
 const pool = require("../config/database");
 const { normalizePhone } = require("../utils/phone");
+const { issueAuthToken, signingSecret } = require("../utils/authToken");
 
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,}$/;
@@ -99,7 +100,7 @@ const register = async (req, res) => {
 };
 
 // POST /api/auth/login
-const login = async (req, res) => {
+const createLogin = ({ db = pool, env = process.env } = {}) => async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -109,8 +110,12 @@ const login = async (req, res) => {
     });
   }
 
+  if (!signingSecret(env)) {
+    return res.status(503).json({ success: false, message: "Authentication is unavailable." });
+  }
+
   try {
-    const [rows] = await pool.query(
+    const [rows] = await db.query(
       "SELECT * FROM `USER` WHERE email = ?",
       [email]
     );
@@ -135,13 +140,15 @@ const login = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Login successful.",
+      token: issueAuthToken(matchedUser, env),
       user: {
         userId: matchedUser.user_id,
         username: matchedUser.username,
         name: matchedUser.name,
         email: matchedUser.email,
         role: matchedUser.role,
-        // Admins manage one branch; the admin pages send this as ?branchId=.
+        // The admin UI may filter by this branch; backend access checks read
+        // the assigned branch from USER on each protected request.
         branchId: matchedUser.branch_id ?? null,
       },
     });
@@ -153,11 +160,10 @@ const login = async (req, res) => {
     });
   }
 };
+const login = createLogin();
 
 /* -------------------------------- profile --------------------------------- */
-// TODO (before real deployment): like the booking endpoints, these trust the
-// userId sent by the client. Once real sessions/tokens exist, read the user
-// from the verified token instead.
+// Profile identity comes from authenticated req.auth, not a browser userId.
 
 const parseUserId = (raw) => {
   const userId = Number(raw);
@@ -214,7 +220,7 @@ const buildProfile = async (row) => {
 
 // GET /api/auth/profile?userId=
 const getProfile = async (req, res) => {
-  const userId = parseUserId(req.query.userId);
+  const userId = parseUserId(req.auth?.userId);
   if (!userId) {
     return res.status(400).json({ success: false, message: "userId is required and must be a positive integer." });
   }
@@ -235,7 +241,7 @@ const getProfile = async (req, res) => {
 // body: { userId, firstName, lastName, email, phone, username, currentPassword?, newPassword? }
 const updateProfile = async (req, res) => {
   const { firstName, lastName, email, phone, username, currentPassword, newPassword } = req.body ?? {};
-  const userId = parseUserId(req.body?.userId);
+  const userId = parseUserId(req.auth?.userId);
   if (!userId) {
     return res.status(400).json({ success: false, message: "userId is required and must be a positive integer." });
   }
@@ -285,11 +291,12 @@ const updateProfile = async (req, res) => {
     );
 
     const [updated] = await pool.query("SELECT * FROM `USER` WHERE user_id = ?", [userId]);
-    return res.status(200).json({ success: true, message: "Profile updated.", profile: await buildProfile(updated[0]) });
+    return res.status(200).json({ success: true, message: "Profile updated.",
+      profile: await buildProfile(updated[0]), token: issueAuthToken(updated[0]) });
   } catch (error) {
     console.error("updateProfile error:", error);
     return res.status(500).json({ success: false, message: "Failed to update the profile." });
   }
 };
 
-module.exports = { register, login, getProfile, updateProfile };
+module.exports = { register, login, createLogin, getProfile, updateProfile };

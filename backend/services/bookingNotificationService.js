@@ -49,13 +49,19 @@ const positiveId = (value) => Number.isInteger(value) && value > 0;
 // Seeded movie posters use TMDB's public image CDN. Local/bundled filenames
 // have no verified HTTPS asset origin for email, so omit them rather than
 // guessing a deployment URL or embedding an unsafe third-party image.
-function emailPosterUrl(value) {
+function emailPosterUrl(value, cloudName) {
   if (typeof value !== "string" || value !== value.trim()) return undefined;
   try {
     const url = new URL(value);
-    if (url.protocol !== "https:" || url.hostname !== "image.tmdb.org" ||
-        url.username || url.password || url.port || url.search || url.hash ||
-        !/^\/t\/p\/[^/]+\/[A-Za-z0-9._-]+\.(?:jpe?g|png|webp)$/i.test(url.pathname)) return undefined;
+    if (url.protocol !== "https:" || url.username || url.password ||
+        url.port || url.search || url.hash) return undefined;
+    const tmdb = url.hostname === "image.tmdb.org" &&
+      /^\/t\/p\/[^/]+\/[A-Za-z0-9._-]+\.(?:jpe?g|png|webp)$/i.test(url.pathname);
+    const ownCloud = /^[A-Za-z0-9_-]+$/.test(cloudName || "") &&
+      url.hostname === "res.cloudinary.com" &&
+      url.pathname.startsWith(`/${cloudName}/image/upload/`) &&
+      /\.(?:jpe?g|png|webp)$/i.test(url.pathname);
+    if (!tmdb && !ownCloud) return undefined;
     return url.href;
   } catch {
     return undefined;
@@ -63,7 +69,8 @@ function emailPosterUrl(value) {
 }
 
 function createBookingNotifier({ db = pool, sendConfirmation = sendBookingConfirmation,
-  sendCancellation = sendCancellationNotice, ticketQr, log = console.error } = {}) {
+  sendCancellation = sendCancellationNotice, ticketQr, log = console.error,
+  posterCloudName = process.env.CLOUDINARY_CLOUD_NAME } = {}) {
   // Process-local safety only. A durable outbox is required across restarts
   // and instances. At most one explicit retry follows a definite rejection.
   const attempts = new Map();
@@ -143,7 +150,7 @@ function createBookingNotifier({ db = pool, sendConfirmation = sendBookingConfir
         bookingFee: feeCents / 100,
         amountPaid: total,
         movieRating: first.age_rating || undefined,
-        posterUrl: emailPosterUrl(first.poster),
+        posterUrl: emailPosterUrl(first.poster, posterCloudName),
         runtimeMinutes: Number(first.duration) || undefined,
         paymentMethod: PAYMENT_METHODS[first.payment_method] ?? first.payment_method,
         discountNote: DISCOUNT_NOTES[first.discount_type] ?? undefined,

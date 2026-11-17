@@ -116,6 +116,7 @@ const getShowtimesForMovie = async (req, res) => {
 
 // POST /api/admin/showtimes  ("Add Showtime")
 const createShowtime = async (req, res) => {
+  if (!notificationAdmin(req)) return res.status(403).json({ success: false, message: "Access denied." });
   const { movieId, cinemaId, showDate, showTime, totalSeats, status } = req.body;
 
   if (!isPositiveInt(movieId) || !isPositiveInt(cinemaId) || !isPositiveInt(totalSeats)) {
@@ -143,9 +144,9 @@ const createShowtime = async (req, res) => {
     if (movieRows.length === 0) {
       return res.status(400).json({ success: false, message: "Movie does not exist." });
     }
-    const [cinemaRows] = await pool.query("SELECT cinema_id FROM CINEMA WHERE cinema_id = ?", [cinemaId]);
-    if (cinemaRows.length === 0) {
-      return res.status(400).json({ success: false, message: "Cinema does not exist." });
+    const [cinemaRows] = await pool.query("SELECT cinema_id, branch_id FROM CINEMA WHERE cinema_id = ?", [cinemaId]);
+    if (cinemaRows.length === 0 || Number(cinemaRows[0].branch_id) !== req.auth?.branchId) {
+      return res.status(404).json({ success: false, message: "Cinema not found." });
     }
 
     // Guard against double-booking the same cinema at the same date/time.
@@ -180,6 +181,8 @@ const createShowtime = async (req, res) => {
 
 // PUT /api/admin/showtimes/:id  ("Reschedule" — date/time/cinema only)
 const createUpdateShowtime = ({ db = pool, notifier = createRescheduleNotifier() } = {}) => async (req, res) => {
+  const admin = notificationAdmin(req);
+  if (!admin) return res.status(403).json({ success: false, message: "Access denied." });
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ success: false, message: "Invalid showtime ID." });
@@ -218,6 +221,11 @@ const createUpdateShowtime = ({ db = pool, notifier = createRescheduleNotifier()
       await conn.rollback();
       return res.status(400).json({ success: false, message: "Cinema does not exist." });
     }
+	if (Number(existing[0].branch_id) !== req.auth?.branchId ||
+	    Number(cinemaRows[0].branch_id) !== req.auth.branchId) {
+	  await conn.rollback();
+	  return res.status(404).json({ success: false, message: "Showtime not found." });
+	}
 
     const previous = existing[0];
     const nextTime = showTime.length === 5 ? `${showTime}:00` : showTime;
@@ -257,7 +265,7 @@ const createUpdateShowtime = ({ db = pool, notifier = createRescheduleNotifier()
       // Backend Team concurrency dependency before live delivery.
       prepared = await notifier.prepare({
         connection: conn, eventId: randomUUID(), screeningId: id,
-        previous, updated, admin: notificationAdmin(req),
+        previous, updated, admin,
       });
     } catch {
       console.error("Reschedule notification preparation failed.");
@@ -277,8 +285,8 @@ const createUpdateShowtime = ({ db = pool, notifier = createRescheduleNotifier()
 
     let notification;
     try {
-      // No middleware currently sets req.auth, so this integration
-      // remains unable to send until the Backend Team supplies verified auth.
+      // The route's middleware supplies req.auth; delivery still obeys its
+      // separate disabled-by-default safety gates.
       notification = await notifier.notify({ prepared, committed: true });
     } catch {
       // A committed schedule change must stay successful even if mail fails.
@@ -310,6 +318,7 @@ const updateShowtime = createUpdateShowtime();
 // holder's booking would point at nothing. Admin must handle
 // cancellation/refunds through a separate flow first.
 const deleteShowtime = async (req, res) => {
+  if (!notificationAdmin(req)) return res.status(403).json({ success: false, message: "Access denied." });
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ success: false, message: "Invalid showtime ID." });
@@ -317,10 +326,12 @@ const deleteShowtime = async (req, res) => {
 
   try {
     const [existing] = await pool.query(
-      "SELECT screening_id, booked_seats FROM SCREENING WHERE screening_id = ?",
+      `SELECT s.screening_id, s.booked_seats, c.branch_id
+       FROM SCREENING s JOIN CINEMA c ON c.cinema_id = s.cinema_id
+       WHERE s.screening_id = ?`,
       [id]
     );
-    if (existing.length === 0) {
+    if (existing.length === 0 || Number(existing[0].branch_id) !== req.auth?.branchId) {
       return res.status(404).json({ success: false, message: "Showtime not found." });
     }
     if (existing[0].booked_seats > 0) {

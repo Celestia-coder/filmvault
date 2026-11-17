@@ -10,7 +10,7 @@
 // stored on the purchase: they come from its TICKETs, so queries join
 // TICKET -> SCREENING -> CINEMA. purchase_id is returned as booking_id.
 //
-// TODO: no auth yet. Branch scoping relies on ?branchId= from the client.
+// Admin branch scope comes from the verified USER record via req.auth.
 
 const path = require("path");
 const pool = require("../config/database");
@@ -94,9 +94,10 @@ const isPositiveInt = (value) =>
 // date filters on the showtime date (show_date), not the purchase date.
 // Results are newest booking first.
 const getAdminBookings = async (req, res) => {
+	if (!notificationAdmin(req)) return res.status(403).json({ success: false, message: "Access denied." });
 	const { status, date, movieId } = req.query;
 
-	const scope = parseBranchId(req.query.branchId, { required: true });
+	const scope = parseBranchId(req.auth?.branchId, { required: true });
 	if (scope.error) {
 		return res.status(400).json({ success: false, message: scope.error });
 	}
@@ -162,6 +163,8 @@ const getAdminBookings = async (req, res) => {
 const createCancelBooking =
 	({ db = pool, notifier = bookingNotifier } = {}) =>
 	async (req, res) => {
+		const trustedAdmin = notificationAdmin(req);
+		if (!trustedAdmin) return res.status(403).json({ success: false, message: "Access denied." });
 		const id = Number(req.params.id);
 		if (!Number.isInteger(id) || id <= 0) {
 			return res
@@ -169,7 +172,7 @@ const createCancelBooking =
 				.json({ success: false, message: "Invalid booking ID." });
 		}
 
-		const scope = parseBranchId(req.query.branchId);
+		const scope = parseBranchId(req.auth?.branchId, { required: true });
 		if (scope.error) {
 			return res
 				.status(400)
@@ -266,7 +269,7 @@ const createCancelBooking =
 			}
 
 			// Notify only when every ticket belongs to the admin's own branch.
-			const admin = notificationAdmin(req);
+			const admin = trustedAdmin;
 			if (
 				admin &&
 				tickets.length > 0 &&
@@ -351,7 +354,7 @@ const getBookingIdImage = async (req, res) => {
 			.json({ success: false, message: "Invalid booking ID." });
 	}
 
-	const scope = parseBranchId(req.query.branchId, { required: true });
+	const scope = parseBranchId(req.auth?.branchId, { required: true });
 	if (scope.error) {
 		return res.status(400).json({ success: false, message: scope.error });
 	}
@@ -370,8 +373,9 @@ const getBookingIdImage = async (req, res) => {
 		}
 
 		if (stored?.startsWith(LOCAL_ID_PREFIX)) {
-			// Absolute URL: the admin page runs on a different port than this server.
-			const url = `${req.protocol}://${req.get("host")}/api/admin/bookings/${id}/id-image/file?branchId=${scope.branchId}`;
+			// A request Host header must never determine where the browser sends
+			// its bearer token for a private image.
+			const url = `/api/admin/bookings/${id}/id-image/file`;
 			return res.status(200).json({ success: true, url });
 		}
 
@@ -398,7 +402,7 @@ const getBookingIdImageFile = async (req, res) => {
 			.json({ success: false, message: "Invalid booking ID." });
 	}
 
-	const scope = parseBranchId(req.query.branchId, { required: true });
+	const scope = parseBranchId(req.auth?.branchId, { required: true });
 	if (scope.error) {
 		return res.status(400).json({ success: false, message: scope.error });
 	}

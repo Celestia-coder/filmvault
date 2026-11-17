@@ -219,6 +219,10 @@ function ListOfBookings({ branchId }) {
 	// The ID viewer state for the open booking (ignores a slow response for another booking).
 	const idViewForSelected = selectedBooking && idView?.bookingId === selectedBooking.id ? idView : null;
 
+	useEffect(() => () => {
+		if (idView?.url?.startsWith("blob:")) URL.revokeObjectURL(idView.url);
+	}, [idView]);
+
 	function closeDetail() {
 		setSelectedId(null);
 		setConfirmingCancel(false);

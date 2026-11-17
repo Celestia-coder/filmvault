@@ -8,6 +8,7 @@ const {
 	getBookingById,
 	verifyTicket,
 } = require("../controllers/customerBookingController");
+const { requireCustomer } = require("../middleware/authenticate");
 
 // ID photo storage: ID_STORAGE=cloud uses Cloudinary (private), anything else uses local disk.
 const useCloudIds =
@@ -19,10 +20,10 @@ console.log(
 	`ID photo storage: ${useCloudIds ? "Cloudinary (private)" : "local disk"}`,
 );
 
-// No auth middleware yet: userId is sent by the client (see the TODO in the controller).
-router.post("/bookings", uploadIdImage, createBooking); // multipart: optional "idImage" file
-router.get("/bookings", getUserBookings); // ?userId=
-router.get("/bookings/:id", getBookingById); // ?userId=
+// Customer routes require a verified token; QR verification remains public.
+router.post("/bookings", ...requireCustomer, uploadIdImage, createBooking); // multipart: optional "idImage" file
+router.get("/bookings", ...requireCustomer, getUserBookings);
+router.get("/bookings/:id", ...requireCustomer, getBookingById);
 router.get("/tickets/verify/:token", verifyTicket); // public: opened by the e-ticket QR code
 
 module.exports = router;

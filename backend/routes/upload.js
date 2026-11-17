@@ -7,8 +7,7 @@
 // Both return { url } with the permanent Cloudinary URL to save in the database.
 // ID photos are not handled here: they go through POST /api/bookings.
 //
-// TODO: no auth yet. Once login issues tokens, protect /poster with requireAdmin
-// and /profile with requireAuth (put them before the multer middleware).
+// Authenticate before accepting image data or contacting Cloudinary.
 
 const express = require("express");
 const cloudinary = require("../config/cloudinary");
@@ -17,7 +16,7 @@ const {
 	profileUpload,
 	checkRealImage,
 } = require("../middleware/upload");
-// const { requireAuth, requireAdmin } = require("../middleware/auth");
+const { authenticate, requireAdmin } = require("../middleware/authenticate");
 
 const router = express.Router();
 
@@ -32,10 +31,10 @@ const uploadBuffer = (buffer, options) =>
 			.end(buffer);
 	});
 
-// Poster (admin only once auth exists)
+// Poster (admin only)
 router.post(
 	"/poster",
-	/* requireAdmin, */
+	...requireAdmin,
 	posterUpload.single("image"),
 	checkRealImage,
 	async (req, res) => {
@@ -53,10 +52,10 @@ router.post(
 	},
 );
 
-// Profile picture (any logged-in user once auth exists), cropped to a 400x400 square
+// Profile picture (any logged-in user), cropped to a 400x400 square
 router.post(
 	"/profile",
-	/* requireAuth, */
+	authenticate,
 	profileUpload.single("image"),
 	checkRealImage,
 	async (req, res) => {

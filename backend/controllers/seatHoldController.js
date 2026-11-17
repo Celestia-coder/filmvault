@@ -42,13 +42,8 @@ const getSeatMap = async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid showtime ID." });
   }
 
-  let userId = null;
-  if (req.query.userId !== undefined) {
-    userId = Number(req.query.userId);
-    if (!isPositiveInt(userId)) {
-      return res.status(400).json({ success: false, message: "userId must be a positive integer." });
-    }
-  }
+  const userId = Number(req.auth?.userId);
+  if (!isPositiveInt(userId)) return res.status(401).json({ success: false, message: "Please sign in." });
 
   try {
     const [screenings] = await pool.query(
@@ -119,18 +114,20 @@ const getSeatMap = async (req, res) => {
 // POST /api/showtimes/:id/seats/hold
 // Body: { userId, seatIds: [12, 13] }
 //
-// TODO (must fix before real deployment): userId comes from the request body
-// because there is no real auth yet. Anyone can claim to be any user.
+// The signed-in customer owns the hold; a conflicting browser userId is rejected.
 const holdSeats = async (req, res) => {
   const showtimeId = Number(req.params.id);
-  const userId = Number(req.body?.userId);
+  const userId = Number(req.auth?.userId);
   const seatIds = req.body?.seatIds;
 
   if (!isPositiveInt(showtimeId)) {
     return res.status(400).json({ success: false, message: "Invalid showtime ID." });
   }
   if (!isPositiveInt(userId)) {
-    return res.status(400).json({ success: false, message: "userId is required." });
+    return res.status(401).json({ success: false, message: "Please sign in." });
+  }
+  if (req.body?.userId !== undefined && Number(req.body.userId) !== userId) {
+    return res.status(403).json({ success: false, message: "Seat hold account does not match the signed-in customer." });
   }
   if (!Array.isArray(seatIds) || seatIds.length === 0) {
     return res.status(400).json({ success: false, message: "seatIds must be a non-empty array." });

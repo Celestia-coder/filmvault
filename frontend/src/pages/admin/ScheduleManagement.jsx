@@ -6,7 +6,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
-import { clearUser } from "../../api/session.js";
+import { authHeaders, clearUser } from "../../api/session.js";
+import { getAdminSession } from "../../api/admin.js";
 import "../../styles/ScheduleManagement.css";
 
 import AdminSidebar from "../../components/AdminSidebar";
@@ -14,12 +15,10 @@ import AdminSidebar from "../../components/AdminSidebar";
 import navSchedule from "../../assets/images/dashboard/nav-schedule.svg";
 
 // Set this to wherever your backend actually runs.
-const API_BASE = "http://localhost:5000/api";
+const API_BASE = `${import.meta.env.VITE_API_URL ?? ""}/api`;
 
-// TEMP: the branch this admin owns. Replace with the logged-in admin's
-// branch_id (USER.branch_id) once the login session is available here.
-// 1 = Vista Mall Taguig, 2 = Market! Market!, 3 = Venice McKinley.
-const ADMIN_BRANCH_ID = 1;
+// Cinema choices are filtered for the logged-in admin's assigned branch.
+// The backend separately checks the branch from the verified USER record.
 
 // Placeholder cinema list until a real /api/cinemas (or /api/branches)
 // endpoint exists — that's the Week 3 Search & Filter ticket, not this one.
@@ -38,9 +37,6 @@ const CINEMA_OPTIONS = [
 ];
 
 // Only the cinemas of the admin's own branch.
-const BRANCH_CINEMAS = CINEMA_OPTIONS.filter(
-	(cinema) => cinema.branchId === ADMIN_BRANCH_ID,
-);
 
 // Seat count for newly-added showtimes. Real per-cinema capacity (from the
 // SEAT table) isn't wired up yet — that's a separate ticket — so every new
@@ -389,8 +385,8 @@ function getOccupancyPercent(row) {
 // `catch`.
 async function apiRequest(path, options = {}) {
 	const response = await fetch(`${API_BASE}${path}`, {
-		headers: { "Content-Type": "application/json" },
 		...options,
+		headers: { "Content-Type": "application/json", ...options.headers, ...authHeaders() },
 	});
 	let body = null;
 	try {
@@ -407,6 +403,8 @@ async function apiRequest(path, options = {}) {
 }
 
 function ScheduleManagement() {
+	const branchId = getAdminSession()?.branchId;
+	const BRANCH_CINEMAS = CINEMA_OPTIONS.filter((cinema) => cinema.branchId === branchId);
 	const [movies, setMovies] = useState([]);
 	const [schedule, setSchedule] = useState([]);
 	const [isLoading, setIsLoading] = useState(true);
@@ -422,13 +420,13 @@ function ScheduleManagement() {
 	const [addForm, setAddForm] = useState({
 		movieId: null,
 		datetime: "",
-		cinemaId: BRANCH_CINEMAS[0].value,
+		cinemaId: BRANCH_CINEMAS[0]?.value ?? null,
 	});
 
 	const [editingId, setEditingId] = useState(null);
 	const [editForm, setEditForm] = useState({
 		datetime: "",
-		cinemaId: BRANCH_CINEMAS[0].value,
+		cinemaId: BRANCH_CINEMAS[0]?.value ?? null,
 	});
 
 	const [deletingId, setDeletingId] = useState(null);
@@ -498,7 +496,7 @@ function ScheduleManagement() {
 		setAddForm({
 			movieId: addMovieOptions[0]?.value ?? null,
 			datetime: "",
-			cinemaId: BRANCH_CINEMAS[0].value,
+			cinemaId: BRANCH_CINEMAS[0]?.value ?? null,
 		});
 		setIsAddOpen(true);
 	};

@@ -19,8 +19,7 @@
 //   SHOWTIME_UNAVAILABLE (409)
 //   PAYMENT_FAILED (402)      payment failed; seats were released
 //
-// TODO: userId comes from the request because there is no real auth yet.
-// Take it from the session once login sessions exist.
+// Customer identity comes from the verified backend token on protected routes.
 
 const fs = require("fs");
 const crypto = require("crypto");
@@ -244,7 +243,9 @@ const withSnacks = async (bookings, db) => {
 
 // GET /api/bookings?userId=
 const getUserBookings = async (req, res) => {
-	const userId = Number(req.query.userId);
+	const customer = notificationCustomer(req);
+	if (!customer) return res.status(403).json({ success: false, message: "Access denied." });
+	const userId = customer.userId;
 	if (!isPositiveInt(userId)) {
 		return res.status(400).json({
 			success: false,
@@ -280,11 +281,12 @@ const loadBooking = async (bookingId, db = pool) => {
 };
 
 // GET /api/bookings/:id?userId=
-// The booking must belong to userId, otherwise it is a 404 (so IDs can't be
-// guessed to read other people's bookings). Stand-in until real auth.
+// The booking must belong to the verified customer, otherwise it is a 404.
 const getBookingById = async (req, res) => {
+	const customer = notificationCustomer(req);
+	if (!customer) return res.status(403).json({ success: false, message: "Access denied." });
 	const bookingId = Number(req.params.id);
-	const userId = Number(req.query.userId);
+	const userId = customer.userId;
 	if (!isPositiveInt(bookingId)) {
 		return res.status(400).json({
 			success: false,
@@ -467,7 +469,13 @@ const createCreateBooking =
 		try {
 			const body = req.body || {};
 
-			const userId = Number(pick(body, "userId", "user_id"));
+			const trustedCustomer = notificationCustomer(req);
+			const userId = trustedCustomer?.userId;
+			const requestedUserId = pick(body, "userId", "user_id");
+			if (!trustedCustomer)
+				return fail(401, "UNAUTHENTICATED", "Please sign in.");
+			if (requestedUserId !== undefined && Number(requestedUserId) !== userId)
+				return fail(403, "FORBIDDEN", "Booking account does not match the signed-in customer.");
 			const showtimeId = Number(pick(body, "showtimeId", "showtime_id"));
 			const paymentMethod = String(
 				pick(body, "paymentMethod", "payment_method") ?? "simulated",
@@ -478,8 +486,6 @@ const createCreateBooking =
 				pick(body, "discountType", "discount_type") ?? "none",
 			).toLowerCase();
 
-			if (!isPositiveInt(userId))
-				return fail(400, "VALIDATION_ERROR", "userId is required.");
 			if (!isPositiveInt(showtimeId))
 				return fail(400, "VALIDATION_ERROR", "showtimeId is required.");
 			if (!paymentMethod)
@@ -947,7 +953,7 @@ const createCreateBooking =
 					);
 				}
 
-				const customer = notificationCustomer(req);
+				const customer = trustedCustomer;
 				if (customer?.userId === userId) {
 					try {
 						await notifier.notifyCommitted({

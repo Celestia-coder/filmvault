@@ -208,6 +208,7 @@ function Login() {
 				method: "POST",
 				body: { email: email.trim(), password },
 			});
+			if (!data.token) throw new Error("Secure sign-in is unavailable.");
 
 			// Admins sign in on their own page. Stop here so no admin session is
 			// created from the customer login.
@@ -222,7 +223,7 @@ function Login() {
 			}
 
 			// Remember who logged in. Seat Selection, Checkout, Tickets and Profile all read this.
-			saveUser(data.user);
+			saveUser(data.user, data.token);
 			navigate(from ?? "/movies", {
 				replace: true,
 				state: from ? fromState : undefined,

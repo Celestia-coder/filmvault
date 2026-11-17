@@ -233,13 +233,13 @@ test("controller releases the database connection before mail; failure does not 
   assert.equal(logs.length, 1);
 });
 
-test("controller without verified admin still updates but never queries customer records", async () => {
+test("controller without verified admin rejects before updating or reading customers", async () => {
   const db = fakeDb();
   const notifier = createRescheduleNotifier({ env, send: () => { throw new Error("must not send"); } });
   const response = fakeResponse();
   await createUpdateShowtime({ db, notifier })(request(null), response);
-  assert.equal(response.code, 200);
-  assert.equal(response.body.notification.status, "unauthorized");
+  assert.equal(response.code, 403);
+  assert.ok(!db.events.includes("update"));
   assert.ok(!db.events.includes("affected_read"));
 });
 
@@ -253,8 +253,8 @@ test("browser-supplied role and branch cannot authorize reschedule mail", async 
   untrusted.query = { branchId: 3 };
   untrusted.authenticatedAdmin = admin;
   await createUpdateShowtime({ db, notifier })(untrusted, response);
-  assert.equal(response.code, 200);
-  assert.equal(response.body.notification.status, "unauthorized");
+  assert.equal(response.code, 403);
+  assert.ok(!db.events.includes("update"));
   assert.ok(!db.events.includes("affected_read"));
 });
 
@@ -263,8 +263,8 @@ test("server-populated admin context must match both schedule branches", async (
   const notifier = createRescheduleNotifier({ env, send: () => { throw new Error("must not send"); } });
   const response = fakeResponse();
   await createUpdateShowtime({ db, notifier })(request({ ...authAdmin, branchId: 4 }), response);
-  assert.equal(response.code, 200);
-  assert.equal(response.body.notification.status, "unauthorized");
+  assert.equal(response.code, 404);
+  assert.ok(!db.events.includes("update"));
   assert.ok(!db.events.includes("affected_read"));
 });
 

@@ -126,7 +126,7 @@ const getSeatMap = async (req, res) => {
     });
   }
 
-  const scope = parseBranchId(req.query.branchId);
+  const scope = parseBranchId(req.auth?.branchId, { required: true });
   if (scope.error) {
     return res.status(400).json({ success: false, message: scope.error });
   }
@@ -175,7 +175,7 @@ const updateSeatStatus = async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid seat ID." });
   }
 
-  const scope = parseBranchId(req.query.branchId);
+  const scope = parseBranchId(req.auth?.branchId, { required: true });
   if (scope.error) {
     return res.status(400).json({ success: false, message: scope.error });
   }

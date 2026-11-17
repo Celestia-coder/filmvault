@@ -8,14 +8,15 @@ const {
   updateShowtime,
   deleteShowtime,
 } = require("../controllers/showtimeController");
+const { requireAdmin } = require("../middleware/authenticate");
 
 // Public
 router.get("/showtimes", getAllShowtimes);
 router.get("/movies/:id/showtimes", getShowtimesForMovie);
 
-// Admin (no auth middleware yet, /admin is just a naming convention — same as movieRoutes)
-router.post("/admin/showtimes", createShowtime);
-router.put("/admin/showtimes/:id", updateShowtime);
-router.delete("/admin/showtimes/:id", deleteShowtime);
+// Admin-only; writes validate the screening and cinema's stored branch.
+router.post("/admin/showtimes", ...requireAdmin, createShowtime);
+router.put("/admin/showtimes/:id", ...requireAdmin, updateShowtime);
+router.delete("/admin/showtimes/:id", ...requireAdmin, deleteShowtime);
 
 module.exports = router;

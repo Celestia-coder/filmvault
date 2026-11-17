@@ -12,19 +12,19 @@ settings and `MAIL_FROM` are validated only when real delivery is enabled.
 SMTP credentials nor MySQL. A future trusted caller may pass an approved
 public HTTPS `logoUrl`. Confirmation preparation selects `MOVIE.poster` from
 the committed booking's movie and uses it only when it is a direct HTTPS image
-URL on the seeded `image.tmdb.org` CDN. Local filenames and other hosts omit
+URL on the seeded `image.tmdb.org` CDN or on this deployment's configured
+`CLOUDINARY_CLOUD_NAME` image host. Local filenames and other hosts omit
 the image; no deployment asset origin has been approved for them. An email
 client can also block or fail to fetch a remote poster, leaving the movie title
 readable. The QR integration below supplies a
 verification `ticketUrl` only from committed purchase data. No local asset path is
 embedded in outgoing mail.
 
-The admin showtime endpoint currently has no authentication middleware. Its
-server-populated `req.auth` field is therefore absent, and the notifier will not
-read customer addresses or send mail. Before enabling live reschedule mail,
-the Backend Team must populate the verified `req.auth` contract below and
-enforce branch access on the route. The browser's `branchId` is not proof of
-authorization.
+The integration branch now verifies a signed token, resolves the current USER
+role and branch, and populates `req.auth` on protected routes. See
+`AUTHENTICATION.md`. The browser's `branchId` is not proof of authorization.
+Live reschedule mail remains disabled pending the concurrency and seat-policy
+work described below.
 
 For a changed schedule, the controller holds the screening's `FOR UPDATE` lock
 and asks the notifier to read confirmed, paid purchases for that screening and
@@ -46,7 +46,8 @@ notice. MySQL's repeatable-read snapshot alone does not prevent this. The
 Booking Backend developer and Email Notifications developer must coordinate a
 shared schedule-validation and locking contract and verify it against an
 isolated MySQL test database. Real reschedule email delivery must remain
-disabled until that work and admin authorization are complete.
+disabled until that work and cinema seat policy are complete. This branch now
+provides verified admin identity and branch checks.
 
 Repeated unchanged schedule requests do not send another notice: the locked
 screening is compared before creating a notification event. A random UUID
@@ -97,20 +98,19 @@ This bounded in-process retry is a development/service interface, not a
 durable production retry mechanism.
 The fake-transport tests exercise both messages without customer data or SMTP.
 
-Both booking controllers now have guarded post-commit notification hooks.
+Both booking controllers have guarded post-commit notification hooks.
 `POST /api/bookings` verifies the simulated payment and commits a confirmed,
-paid purchase, but still accepts `userId` from the request because customer
-authentication is not implemented. The current `verifyPayment()` always
-succeeds. Its hook requires a server-populated customer `req.auth` matching
-that user ID, then the notifier rechecks the committed purchase owner, payment
-and status, and reads `USER.email`. `PATCH /api/admin/bookings/:id` commits
-cancellation but has no server-enforced admin authentication and still uses a
-browser-supplied branch scope for its business operation. Its email hook
-requires a server-populated admin branch matching all affected tickets; the
-notifier also checks the committed purchase branch and status. Without
-`req.auth`, neither hook reads notification recipients or sends mail. These
-email guards do **not** secure the underlying routes: the Backend Team must
-enforce customer ownership and admin branch access independently.
+paid purchase. The route now requires a signed customer token, takes the
+booking owner from `req.auth.userId`, and rejects a conflicting browser
+`userId`. The current `verifyPayment()` always succeeds. The notifier rechecks
+the committed purchase owner, payment and status, and reads `USER.email`.
+`PATCH /api/admin/bookings/:id` requires a signed admin token and uses the
+current `USER.branch_id` to scope the cancellation. Its hook verifies that all
+affected tickets belong to that branch; the notifier also checks the committed
+purchase branch and status. Without valid `req.auth`, the protected routes
+reject the operation before reading recipients or sending mail. These checks
+also passed an isolated MySQL-backed integration run with fictional records and
+captured delivery; that run does not establish live SMTP readiness.
 The notifier's `committed` input is an internal controller contract, not a way
 to authenticate a request. Confirmation must use the existing booking
 reference and a verified successful payment; cancellation must not promise a
@@ -141,14 +141,24 @@ frontend to encode `PUBLIC_APP_ORIGIN/verify/<existing token>` as a PNG. Nodemai
 attaches it inline with a CID; the existing confirmation template shows that
 image and a verification link, and its plain-text part includes the same URL.
 No new token, QR verification format, PDF generator, or PDF attachment exists.
-The verification route, token column, and schema change are still only on
-`FE/ticket-qr`; no migration was run for this email work. The public verifier
+The QA/testing4 foundation already includes Eli's booking token creation and
+public verification route. The isolated test database received the token column
+through test-only setup; every deployment still needs the approved QR schema
+change before relying on this feature. The public verifier
 currently returns the ticket owner's name and payment details to anyone with
 the URL, so the privacy gate must remain false until that response is reviewed.
 The public HTTPS origin must point to a deployed app that serves `/verify/:token`
 and its API; syntactic validation alone cannot prove reachability. The existing
 customer authentication and post-commit delivery gates also remain in force.
 Real automatic token-bearing delivery is not enabled here.
+
+An offline test in `tests/ticketQrService.test.js` uses a fictional paid purchase
+and stored 32-character token with a fake transport. It checks the exact
+`/verify/:token` URL, generated PNG, inline CID attachment, shared confirmation
+HTML, plain-text URL, and duplicate suppression. The isolated MySQL run separately
+verified a committed booking token, public verification behavior, and QR PNG
+generation, but deliberately captured a confirmation **without** a QR attachment.
+Neither test sent SMTP mail or resolved the public verifier's privacy concern.
 
 The schedule fields are MySQL `DATE` and `TIME`; the pool returns `DATE` as a
 `YYYY-MM-DD` string. Pass those date and time strings to the shared template as
@@ -188,30 +198,29 @@ workflow through an injected fake transport and never connects to SMTP. A
 Gmail smoke test uses an IPv4 local binding and requires STARTTLS; on this
 Windows host, run Node with `--use-system-ca` so its certificate validation can
 use the trusted Windows CA store. Neither adjustment disables TLS checks. A
-manual SMTP run checks service-level delivery only. All three controllers now
-have guarded hooks; no request authentication middleware populates `req.auth`
-yet, so automatic customer delivery remains disabled. Reschedule additionally
+manual SMTP run checks service-level delivery only. All three controllers have
+guarded hooks and the new middleware populates `req.auth`. Delivery flags
+remain disabled. Reschedule additionally
 requires branch and seat safety and both delivery flags.
 
 ## Automatic event trigger readiness
 
-The future Backend Team middleware contract is:
+The authenticated request contract is:
 
 ```js
 req.auth = { userId: 8, role: "customer", branchId: null };
 req.auth = { userId: 9, role: "admin", branchId: 3 };
 ```
 
-The middleware must set this property only after verifying a server-issued
-session or signed token and resolving the current `USER.user_id`, `role`, and
-assigned `branch_id` from trusted server records. It must not copy identity
+The new middleware sets this property only after verifying a server-issued
+signed token and resolving the current `USER.user_id`, `role`, and assigned
+`branch_id` from trusted server records. It does not copy identity
 from request body/query parameters, unverified headers, or frontend
 `localStorage`. `utils/notificationAuth.js` validates this shape and creates
-the internal `{ verified: true, ... }` notifier context. It does not perform
-authentication itself and does not make an unprotected route safe. If the
-Backend Team chooses a different context, adapt this one small adapter rather
-than changing the three notification services. Middleware must also enforce
-ownership and branch permissions on the routes themselves.
+the internal `{ verified: true, ... }` notifier context. The route middleware
+performs authentication; customer ownership and admin branch checks are in the
+respective controllers. A future Backend Team change to the auth contract
+should adapt this adapter without rewriting notification services.
 
 `bookingNotificationService.notifyCommitted(event)` prepares from committed
 purchase records and then invokes the existing mail service. It rejects an
@@ -225,18 +234,40 @@ cancellation transactions with verified fictional actors and a fake transport.
 `tests/automaticControllerTriggers.test.js` additionally exercises the actual
 checkout and cancellation handlers with mocked transactions and fake mail.
 They verify post-commit ordering, skipped failed events, branch and recipient
-checks, and mail failure containment. These are not live MySQL integration
-tests. The login response currently returns identity fields to the browser
-but does not authenticate later API requests. The simulated payment service
+checks, and mail failure containment. Those automated tests use mocks; the
+separate isolated MySQL run is described below. The login response includes a short-lived signed token, which the
+backend validates on protected API requests. The simulated payment service
 currently auto-approves; a later payment implementation must preserve its
 `ok` contract.
 
 `updateShowtime` already invokes the reschedule notifier after commit, with
 an affected-booking snapshot before update. Its controller tests use a fake
 database and transport. It now consumes the same `req.auth` adapter as the
-booking hooks. In the running app, no middleware sets `req.auth`; the guard
-therefore suppresses customer mail. Keep `EMAIL_DELIVERY_ENABLED=false` and
+booking hooks. Keep `EMAIL_DELIVERY_ENABLED=false` and
 `RESCHEDULE_NOTIFICATIONS_ENABLED=false` in normal configuration. The deferred
 checkout/reschedule concurrency contract and cinema seat validity issue above
 also block live reschedule delivery. No real SMTP test is part of the automated
 event tests.
+
+## Isolated MySQL integration result
+
+A manually invoked, test-only run completed 17 of 17 checks against
+`filmvault_email_e2e_test` at `127.0.0.1:3307`. The existing database had the
+base 16-table schema and test-only checkout/QR columns, indexes, and foreign
+key. The run verified customer and two branch-admin logins, invalid and expired
+token rejection, customer booking ownership, a committed paid booking, declined
+payment, branch-scoped admin cancellation and same-cinema rescheduling,
+unchanged/repeated actions, stored verification-token lookup, QR PNG rendering,
+and token revocation after a fictional password change. One confirmation, one
+cancellation, and one reschedule notice were captured through an injected fake
+mailer after their corresponding successful commits. The recipient fixtures
+used fictional `.example.com` addresses. No SMTP connection was made.
+
+This run did not prove a QR-bearing confirmation from the same database-backed
+purchase, failed database-commit behavior, overlapping checkout and reschedule
+transactions, repeated successful booking requests, multi-instance deduplication,
+or deployment behavior. The QR-bearing confirmation is covered offline with a
+fake transport and fictional records. Keep automatic delivery disabled until
+the remaining concurrency, cinema-seat, verifier-privacy, and durable retry
+decisions are reviewed. The local MySQL provisioning scripts and result reports
+are inspection artifacts, not application or automated-test dependencies.

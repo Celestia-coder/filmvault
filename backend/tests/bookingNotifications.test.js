@@ -100,6 +100,23 @@ test("confirmation uses only a trusted HTTPS poster from its committed movie row
   assert.doesNotMatch(delivered[0].text, /fictional-poster/);
 });
 
+test("confirmation accepts only this deployment's HTTPS Cloudinary poster", async () => {
+  const poster = "https://res.cloudinary.com/filmvault-test/image/upload/v123/filmvault/posters/movie.jpg";
+  const notifier = createBookingNotifier({
+    db: fakeDb(rows.map((row) => ({ ...row, poster }))),
+    posterCloudName: "filmvault-test",
+  });
+  const prepared = await notifier.prepare({ type: "confirmation", purchaseId: 42,
+    committed: true, paymentVerified: true, customer });
+  assert.equal(prepared.data.posterUrl, poster);
+  const otherCloud = createBookingNotifier({
+    db: fakeDb(rows.map((row) => ({ ...row, poster }))), posterCloudName: "some-other-cloud",
+  });
+  const omitted = await otherCloud.prepare({ type: "confirmation", purchaseId: 42,
+    committed: true, paymentVerified: true, customer });
+  assert.equal(omitted.data.posterUrl, undefined);
+});
+
 test("missing, local, and untrusted poster values keep the text-only confirmation", async () => {
   const unsafe = [null, "", "/images/film.jpg", "film.jpg", "http://image.tmdb.org/t/p/w500/film.jpg",
     "https://localhost/film.jpg", "https://image.tmdb.org.evil.example/t/p/w500/film.jpg",

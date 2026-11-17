@@ -3,8 +3,8 @@
 // Only a logged-in admin (role "admin" with a branch) gets through; anyone else,
 // including someone who just typed the URL, is sent to the admin login.
 //
-// NOTE: this only protects the pages. The session lives in localStorage and the
-// API trusts ?branchId=, so it is not real security (see the TODO in api/session.js).
+// This is a navigation convenience. Backend routes independently verify the
+// signed token and branch from the current USER record.
 
 import { Navigate, Outlet, useLocation } from "react-router";
 import { getAdminSession } from "../api/admin.js";

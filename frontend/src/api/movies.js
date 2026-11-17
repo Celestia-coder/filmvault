@@ -13,6 +13,7 @@
 //   cast (array of names)  ->  cast (array of names)
 
 import placeholderPoster from "../assets/images/movie-poster.webp";
+import { authHeaders } from "./session.js";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
@@ -62,6 +63,7 @@ export async function request(path, { signal, params, method = "GET", body } = {
     init.headers = { "Content-Type": "application/json" };
     init.body = JSON.stringify(body);
   }
+  init.headers = { ...init.headers, ...authHeaders() };
 
   let response;
   try {

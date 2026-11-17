@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
-import { clearUser } from "../../api/session.js";
+import { authHeaders, clearUser } from "../../api/session.js";
 import "../../styles/MovieManagement.css";
 
 import AdminSidebar from "../../components/AdminSidebar";
@@ -61,7 +61,7 @@ const EMPTY_FORM = {
 };
 
 // Backend API base URL.
-const API_URL = "http://localhost:5000";
+const API_URL = import.meta.env.VITE_API_URL ?? "";
 
 // Frees the temporary browser preview URL created by URL.createObjectURL.
 function revokeIfBlob(url) {
@@ -78,6 +78,7 @@ async function uploadPoster(file) {
 	const res = await fetch(`${API_URL}/api/upload/poster`, {
 		method: "POST",
 		body,
+		headers: authHeaders(),
 	});
 
 	let data = {};
@@ -681,7 +682,7 @@ function MovieManagement() {
 
 			const res = await fetch(url, {
 				method,
-				headers: { "Content-Type": "application/json" },
+				headers: { "Content-Type": "application/json", ...authHeaders() },
 				body: JSON.stringify(payload),
 			});
 			const data = await res.json();
@@ -705,7 +706,7 @@ function MovieManagement() {
 		try {
 			const res = await fetch(
 				`${API_URL}/api/admin/movies/${deletingId}`,
-				{ method: "DELETE" },
+				{ method: "DELETE", headers: authHeaders() },
 			);
 			const data = await res.json();
 

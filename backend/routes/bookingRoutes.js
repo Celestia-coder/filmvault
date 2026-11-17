@@ -9,11 +9,12 @@ const {
 	getBookingIdImage,
 	getBookingIdImageFile,
 } = require("../controllers/bookingController");
+const { requireAdmin } = require("../middleware/authenticate");
 
-// No auth middleware yet: branch scoping comes from ?branchId=
-router.get("/admin/bookings", getAdminBookings); // ?branchId=&status=&date=&movieId=
-router.patch("/admin/bookings/:id", cancelBooking); // ?branchId=
-router.get("/admin/bookings/:id/id-image", getBookingIdImage); // ?branchId= -> { url }
-router.get("/admin/bookings/:id/id-image/file", getBookingIdImageFile); // ?branchId= -> image (local fallback)
+// Admin identity and branch scope come from verified backend authentication.
+router.get("/admin/bookings", ...requireAdmin, getAdminBookings);
+router.patch("/admin/bookings/:id", ...requireAdmin, cancelBooking);
+router.get("/admin/bookings/:id/id-image", ...requireAdmin, getBookingIdImage);
+router.get("/admin/bookings/:id/id-image/file", ...requireAdmin, getBookingIdImageFile);
 
 module.exports = router;

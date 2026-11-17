@@ -158,7 +158,9 @@ and stored 32-character token with a fake transport. It checks the exact
 HTML, plain-text URL, and duplicate suppression. The isolated MySQL run separately
 verified a committed booking token, public verification behavior, and QR PNG
 generation, but deliberately captured a confirmation **without** a QR attachment.
-Neither test sent SMTP mail or resolved the public verifier's privacy concern.
+Those offline and captured-mail tests did not send SMTP mail or resolve the
+public verifier's privacy concern. The separate controlled Gmail demonstrations
+below used the same application hooks under test-only configuration.
 
 The schedule fields are MySQL `DATE` and `TIME`; the pool returns `DATE` as a
 `YYYY-MM-DD` string. Pass those date and time strings to the shared template as
@@ -263,11 +265,45 @@ cancellation, and one reschedule notice were captured through an injected fake
 mailer after their corresponding successful commits. The recipient fixtures
 used fictional `.example.com` addresses. No SMTP connection was made.
 
-This run did not prove a QR-bearing confirmation from the same database-backed
-purchase, failed database-commit behavior, overlapping checkout and reschedule
-transactions, repeated successful booking requests, multi-instance deduplication,
-or deployment behavior. The QR-bearing confirmation is covered offline with a
-fake transport and fictional records. Keep automatic delivery disabled until
+The initial 17-check run did not prove a QR-bearing confirmation from the same
+database-backed purchase, failed database-commit behavior, overlapping checkout
+and reschedule transactions, repeated successful booking requests, multi-instance deduplication,
+or deployment behavior. The QR-bearing confirmation was covered offline with a
+fake transport and fictional records, then separately exercised in the
+display-only Gmail test below. Keep automatic delivery disabled until
 the remaining concurrency, cinema-seat, verifier-privacy, and durable retry
 decisions are reviewed. The local MySQL provisioning scripts and result reports
 are inspection artifacts, not application or automated-test dependencies.
+
+## Controlled automatic Gmail demonstrations
+
+A manually approved, isolated test used the real booking, showtime update, and
+admin cancellation controllers against fictional records in
+`filmvault_email_e2e_test`. Each transaction committed before its notification
+hook invoked the existing mail service. The test made exactly three SMTP send
+attempts to one explicitly authorized test inbox: Booking Confirmation,
+Showtime Reschedule, and Booking Cancellation. Gmail SMTP accepted all three,
+and the tester personally confirmed receiving all three with the same fictional
+booking reference. The booking used simulated payment. A temporary authorized
+Gmail sender was used only for this controlled test; Ralph's official FilmVault
+SMTP configuration is still pending. This test did not activate normal
+customer-facing email delivery.
+
+A separate, manually approved **QR email display-only** test created another
+fictional, committed booking through the real customer booking controller.
+The post-commit confirmation hook used the stored verification token and Eli's
+existing QR generator to produce a PNG, attached inline with the template's
+CID image reference. Gmail SMTP accepted its single send attempt, and the
+tester confirmed that the Booking Confirmation and QR image appeared in Gmail.
+The QR encoded a deliberately unreachable `.invalid` verification URL. Phone
+scanning, public ticket verification, and verifier privacy were not tested or
+approved. No real customer data or payment was used in either demonstration.
+
+These were test-only runs with an authorized recipient and process-scoped
+delivery configuration. The committed application defaults remain
+`EMAIL_DELIVERY_ENABLED=false`, `RESCHEDULE_NOTIFICATIONS_ENABLED=false`,
+`EMAIL_TICKET_QR_ENABLED=false`, and
+`EMAIL_TICKET_QR_PRIVACY_APPROVED=false`. Customer-facing delivery and
+token-bearing QR activation require team review and explicit approval, a
+reviewed public HTTPS verification origin and verifier privacy policy, and the
+remaining transaction, seat-validity, and durable delivery decisions above.

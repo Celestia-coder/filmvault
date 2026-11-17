@@ -776,6 +776,41 @@
 	color: var(--color-red);
 }
 
+/* ---------- Poster ---------- */
+
+.poster-box {
+	position: relative;
+}
+
+.poster-loading {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0, 0, 0, 0.65);
+	color: #fff;
+	font-size: 0.85rem;
+}
+
+.admin-movie-poster--fallback {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	background: #1c1c24; /* swap for your variables.css card background */
+	color: #8a8a99;
+	font-size: 0.75rem;
+}
+
+.form-btn:disabled,
+.poster-replace-btn:disabled,
+.poster-remove-btn:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 1180px) {

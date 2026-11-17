@@ -1,6 +1,6 @@
 // Route: "/admin/login"
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
@@ -118,6 +118,9 @@ const BRANCHES = [
 
 function AdminLogin() {
   const navigate = useNavigate();
+  // RequireAdmin sends people here with { from } so they land back on the admin page they asked for
+  const requested = useLocation().state?.from;
+  const afterLogin = typeof requested === "string" && requested.startsWith("/admin/") ? requested : "/admin/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [branchId, setBranchId] = useState(BRANCHES[0].id);
@@ -169,7 +172,7 @@ function AdminLogin() {
       saveUser(user);
       const name = BRANCHES.find((b) => b.id === branchId).name;
       setStatus({ type: "success", message: `Login successful! Redirecting to the ${name} dashboard...` });
-      navigate("/admin/dashboard");
+      navigate(afterLogin);
     } catch (error) {
       setStatus({ type: "error", message: error.message });
     } finally {

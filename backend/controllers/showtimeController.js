@@ -9,6 +9,9 @@
 // which queries a nonexistent `SHOWTIME` table — worth fixing separately.)
 
 const pool = require("../config/database");
+const { randomUUID } = require("node:crypto");
+const { createRescheduleNotifier, sameSchedule } = require("../services/rescheduleNotificationService");
+const { notificationAdmin } = require("../utils/notificationAuth");
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/;
@@ -176,7 +179,7 @@ const createShowtime = async (req, res) => {
 };
 
 // PUT /api/admin/showtimes/:id  ("Reschedule" — date/time/cinema only)
-const updateShowtime = async (req, res) => {
+const createUpdateShowtime = ({ db = pool, notifier = createRescheduleNotifier() } = {}) => async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ success: false, message: "Invalid showtime ID." });
@@ -193,44 +196,112 @@ const updateShowtime = async (req, res) => {
     return res.status(400).json({ success: false, message: "showTime must be in HH:MM or HH:MM:SS format." });
   }
 
+  let conn;
+  let committed = false;
   try {
-    const [existing] = await pool.query("SELECT screening_id FROM SCREENING WHERE screening_id = ?", [id]);
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+    // Lock the schedule before comparing it, so concurrent identical requests
+    // cannot each produce a separate notification event.
+    const [existing] = await conn.query(`${SHOWTIME_SELECT} WHERE s.screening_id = ? FOR UPDATE`, [id]);
     if (existing.length === 0) {
+      await conn.rollback();
       return res.status(404).json({ success: false, message: "Showtime not found." });
     }
 
-    const [cinemaRows] = await pool.query("SELECT cinema_id FROM CINEMA WHERE cinema_id = ?", [cinemaId]);
+    const [cinemaRows] = await conn.query(
+      `SELECT c.cinema_id, c.cinema_num, c.branch_id, b.branch_name
+       FROM CINEMA c JOIN BRANCH b ON b.branch_id = c.branch_id WHERE c.cinema_id = ?`,
+      [cinemaId]
+    );
     if (cinemaRows.length === 0) {
+      await conn.rollback();
       return res.status(400).json({ success: false, message: "Cinema does not exist." });
     }
 
-    const [conflicts] = await pool.query(
+    const previous = existing[0];
+    const nextTime = showTime.length === 5 ? `${showTime}:00` : showTime;
+    const updated = {
+      ...previous,
+      cinema_id: Number(cinemaId),
+      show_date: showDate,
+      show_time: nextTime,
+      cinema_num: cinemaRows[0].cinema_num,
+      branch_id: cinemaRows[0].branch_id,
+      branch_name: cinemaRows[0].branch_name,
+    };
+    if (sameSchedule(previous, updated)) {
+      await conn.rollback();
+      return res.status(200).json({
+        success: true, message: "Showtime unchanged.", showtime: formatShowtime(previous),
+        notification: { status: "unchanged", sent: 0 },
+      });
+    }
+
+    const [conflicts] = await conn.query(
       "SELECT screening_id FROM SCREENING WHERE cinema_id = ? AND show_date = ? AND show_time = ? AND screening_id != ?",
       [cinemaId, showDate, showTime, id]
     );
     if (conflicts.length > 0) {
+      await conn.rollback();
       return res.status(409).json({
         success: false,
         message: "This cinema already has a showtime scheduled at that date and time.",
       });
     }
 
-    await pool.query(
+    let prepared;
+    try {
+      // Capture a pre-update recipient snapshot. Checkout does not yet lock
+      // the screening on its initial read, so in-flight bookings remain a
+      // Backend Team concurrency dependency before live delivery.
+      prepared = await notifier.prepare({
+        connection: conn, eventId: randomUUID(), screeningId: id,
+        previous, updated, admin: notificationAdmin(req),
+      });
+    } catch {
+      console.error("Reschedule notification preparation failed.");
+      prepared = { status: "preparation_failed", sent: 0 };
+    }
+
+    await conn.query(
       "UPDATE SCREENING SET cinema_id = ?, show_date = ?, show_time = ? WHERE screening_id = ?",
       [cinemaId, showDate, showTime, id]
     );
+    await conn.commit();
+    committed = true;
+    const completedConnection = conn;
+    conn = null;
+    try { completedConnection.release(); }
+    catch { console.error("Showtime connection release failed after commit."); }
 
-    const [rows] = await pool.query(`${SHOWTIME_SELECT} WHERE s.screening_id = ?`, [id]);
+    let notification;
+    try {
+      // No middleware currently sets req.auth, so this integration
+      // remains unable to send until the Backend Team supplies verified auth.
+      notification = await notifier.notify({ prepared, committed: true });
+    } catch {
+      // A committed schedule change must stay successful even if mail fails.
+      console.error("Reschedule notification delivery failed after schedule commit.");
+      notification = { status: "failed", sent: 0 };
+    }
     return res.status(200).json({
       success: true,
       message: "Showtime rescheduled.",
-      showtime: formatShowtime(rows[0]),
+      showtime: formatShowtime(updated),
+      notification,
     });
   } catch (error) {
+    if (conn && !committed) {
+      try { await conn.rollback(); } catch { /* connection may already be lost */ }
+    }
     console.error("updateShowtime error:", error);
     return res.status(500).json({ success: false, message: "Failed to reschedule showtime." });
+  } finally {
+    conn?.release();
   }
 };
+const updateShowtime = createUpdateShowtime();
 
 // DELETE /api/admin/showtimes/:id
 //
@@ -272,5 +343,6 @@ module.exports = {
   getShowtimesForMovie,
   createShowtime,
   updateShowtime,
+  createUpdateShowtime,
   deleteShowtime,
 };

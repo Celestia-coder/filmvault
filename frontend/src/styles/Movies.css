@@ -143,7 +143,6 @@
   margin: 0;
 }
 
-
 .movies-btn {
   height: 44px;
   padding: 0 22px;
@@ -162,7 +161,6 @@
 }
 
 /* ---------- Loading / empty / error ---------- */
-
 .movie-grid.is-refreshing {
   opacity: 0.5;
   transition: opacity 0.2s ease;
@@ -208,4 +206,66 @@
 .movies-message p {
   color: var(--color-text-muted);
   margin: 0 0 24px;
+}
+
+/* ---------- Responsive ---------- */
+
+/* Prevent grid items from overflowing their column */
+.movie-card,
+.movie-card-skeleton {
+  min-width: 0;
+}
+
+.movie-title-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Mobile */
+@media (max-width: 600px) {
+  .movies-section {
+    padding: 28px 16px;
+  }
+
+  .movies-section:first-of-type {
+    padding-top: 130px;
+  }
+
+  .section-title {
+    font-size: 1.4rem;
+    margin-bottom: 20px;
+  }
+
+  .movie-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 16px;
+  }
+
+  .movie-poster,
+  .movie-info,
+  .movie-card-skeleton {
+    width: 100%;
+  }
+
+  .movie-info h3 {
+    font-size: 14px;
+    gap: 6px;
+  }
+
+  .rating-badge {
+    font-size: 10px;
+    padding: 1px 5px;
+  }
+
+  .movie-genre {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .soon-badge {
+    top: 8px;
+    right: 8px;
+    font-size: 9px;
+    padding: 3px 6px;
+  }
 }

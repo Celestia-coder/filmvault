@@ -14,7 +14,9 @@ import SeatSelection from "./pages/client/SeatSelection.jsx";
 import Tickets from "./pages/client/Tickets.jsx";
 import Ticket from "./pages/client/Ticket.jsx";
 import Checkout from "./pages/client/Checkout.jsx";
-import Profile from "./pages/client/Profile.jsx"; // NEW
+import Profile from "./pages/client/Profile.jsx"; 
+import Policies from "./pages/client/Policies.jsx";
+import VerifyTicket from "./pages/client/VerifyTicket.jsx";
 
 {
 	/* ADMIN SIDE */
@@ -25,6 +27,7 @@ import ScheduleManagement from "./pages/admin/ScheduleManagement.jsx";
 import MovieManagement from "./pages/admin/MovieManagement.jsx";
 import SeatSelectionManagement from "./pages/admin/SeatSelectionManagement";
 import ListOfBookings from "./pages/admin/ListOfBookings.jsx";
+import RequireAdmin from "./components/RequireAdmin.jsx";
 
 function App() {
 	return (
@@ -41,15 +44,23 @@ function App() {
 			<Route path="/tickets/:bookingId" element={<Ticket />} />
 			<Route path="/checkout" element={<Checkout />} />
 			<Route path="/tickets" element={<Tickets />} />
+			<Route path="/verify/:token" element={<VerifyTicket />} />
 			<Route path="/profile" element={<Profile />} />
+			<Route path="/terms" element={<Policies />} />
+			<Route path="/privacy" element={<Policies />} />
+			<Route path="/cookies" element={<Policies />} />
 			
+
 			{/* ADMIN SIDE */}
 			<Route path="/admin/login" element={<AdminLogin />} />
-			<Route path="/admin/dashboard" element={<Dashboard />} />
-			<Route path="/admin/movies" element={<MovieManagement />} />
-			<Route path="/admin/schedule" element={<ScheduleManagement />} />
-			<Route path="/admin/seats" element={<SeatSelectionManagement />} />
-			<Route path="/admin/bookings" element={<ListOfBookings />} />
+			{/* Everything below needs a logged-in admin (RequireAdmin redirects to /admin/login) */}
+			<Route element={<RequireAdmin />}>
+				<Route path="/admin/dashboard" element={<Dashboard />} />
+				<Route path="/admin/movies" element={<MovieManagement />} />
+				<Route path="/admin/schedule" element={<ScheduleManagement />} />
+				<Route path="/admin/seats" element={<SeatSelectionManagement />} />
+				<Route path="/admin/bookings" element={<ListOfBookings />} />
+			</Route>
 		</Routes>
 	);
 }

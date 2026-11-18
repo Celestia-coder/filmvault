@@ -16,21 +16,14 @@ import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import { fetchProfile, saveProfile } from "../../api/auth.js";
 import { clearUser, getUser, saveUser } from "../../api/session.js";
+import {
+	checkAvatarFile,
+	uploadProfilePhoto,
+} from "../../utils/uploadImage.js";
 import heroBg from "../../assets/images/hero-bg.png";
 import "../../styles/Profile.css";
 
 const EMPTY_PASSWORDS = { current: "", next: "", confirm: "" };
-
-const AVATAR_TYPES = [
-	"image/jpeg",
-	"image/pjpeg",
-	"image/png",
-	"image/webp",
-	"image/gif",
-];
-const AVATAR_EXTENSIONS = /\.(jpe?g|jfif|png|webp|gif)$/i; // fallback when the browser gives no MIME type
-const AVATAR_MAX_MB = 10;
-const AVATAR_MAX_BYTES = AVATAR_MAX_MB * 1024 * 1024;
 
 /* ---------- Validation ---------- */
 
@@ -207,6 +200,11 @@ function ProfileView({ initialProfile }) {
 	// Picked-but-not-saved profile picture: { file, preview }
 	const [avatarDraft, setAvatarDraft] = useState(null);
 	const [avatarError, setAvatarError] = useState("");
+	const [avatarBroken, setAvatarBroken] = useState(false); // saved photo failed to load
+
+	// A photo that is already on Cloudinary but whose profile save failed.
+	// Reused on retry so the same file isn't uploaded twice: { file, url }
+	const uploadedAvatar = useRef(null);
 
 	// Hide the success message after a few seconds
 	useEffect(() => {
@@ -215,6 +213,11 @@ function ProfileView({ initialProfile }) {
 		return () => clearTimeout(timer);
 	}, [notice]);
 
+	// A new photo URL gets a fresh chance to load
+	useEffect(() => {
+		setAvatarBroken(false);
+	}, [profile.avatarUrl, avatarDraft]);
+
 	const setField = (key) => (e) =>
 		setForm((f) => ({ ...f, [key]: e.target.value }));
 	const setPassword = (key) => (e) =>
@@ -222,6 +225,7 @@ function ProfileView({ initialProfile }) {
 
 	const discardAvatarDraft = () => {
 		if (avatarDraft) URL.revokeObjectURL(avatarDraft.preview);
+		uploadedAvatar.current = null;
 		setAvatarDraft(null);
 		setAvatarError("");
 	};
@@ -231,19 +235,14 @@ function ProfileView({ initialProfile }) {
 		e.target.value = ""; // lets the user pick the same file again later
 		if (!file) return;
 
-		if (
-			!AVATAR_TYPES.includes(file.type) &&
-			!AVATAR_EXTENSIONS.test(file.name)
-		) {
-			setAvatarError("Use a JPG, PNG, WebP or GIF image.");
-			return;
-		}
-		if (file.size > AVATAR_MAX_BYTES) {
-			setAvatarError(`Image must be ${AVATAR_MAX_MB} MB or smaller.`);
+		const problem = checkAvatarFile(file);
+		if (problem) {
+			setAvatarError(problem);
 			return;
 		}
 
 		if (avatarDraft) URL.revokeObjectURL(avatarDraft.preview);
+		uploadedAvatar.current = null;
 		setAvatarError("");
 		setAvatarDraft({ file, preview: URL.createObjectURL(file) });
 	};
@@ -274,16 +273,13 @@ function ProfileView({ initialProfile }) {
 		if (Object.keys(found).length > 0) return;
 
 		const passwordChanged = Boolean(passwords.next);
+		const avatarChanged = Boolean(avatarDraft);
 		const profileChanged = Object.keys(form).some(
 			(key) => form[key] !== profile[key],
 		);
 
-		// Nothing to send: leave edit mode quietly (a picked photo is still kept locally)
-		if (!passwordChanged && !profileChanged) {
-			if (avatarDraft) {
-				setProfile((p) => ({ ...p, avatarUrl: avatarDraft.preview }));
-				setAvatarDraft(null);
-			}
+		// Nothing to send: leave edit mode quietly
+		if (!passwordChanged && !profileChanged && !avatarChanged) {
 			setPasswords(EMPTY_PASSWORDS);
 			setEditing(false);
 			return;
@@ -291,12 +287,38 @@ function ProfileView({ initialProfile }) {
 
 		setSaving(true);
 		try {
+			// 1. Upload the new photo first (kept in the form if it fails, so the user can retry)
+			let avatarUrl;
+			if (avatarDraft) {
+				if (uploadedAvatar.current?.file === avatarDraft.file) {
+					avatarUrl = uploadedAvatar.current.url;
+				} else {
+					try {
+						avatarUrl = await uploadProfilePhoto(avatarDraft.file);
+						uploadedAvatar.current = {
+							file: avatarDraft.file,
+							url: avatarUrl,
+						};
+					} catch (err) {
+						setAvatarError(
+							err.message === "Failed to fetch"
+								? "Couldn't reach the server. Check your connection and try again."
+								: err.message ||
+										"Photo upload failed. Please try again.",
+						);
+						return;
+					}
+				}
+			}
+
+			// 2. Save the profile. avatarUrl is sent only when the photo changed.
 			const saved = await saveProfile(profile.userId, {
 				firstName: form.firstName.trim(),
 				lastName: form.lastName.trim(),
 				email: form.email.trim(),
 				phone: form.phone.trim(),
 				username: form.username.trim(),
+				...(avatarUrl ? { avatarUrl } : {}),
 				// Only sent when the user is changing their password
 				...(passwordChanged
 					? {
@@ -317,24 +339,22 @@ function ProfileView({ initialProfile }) {
 				});
 			}
 
-			// TODO: the profile picture is not stored by the backend yet, so it only
-			// lasts until the page is refreshed. Upload avatarDraft.file once there is an endpoint.
-			setProfile({
-				...saved,
-				avatarUrl: avatarDraft
-					? avatarDraft.preview
-					: profile.avatarUrl,
-			});
-			setAvatarDraft(null); // preview URL now belongs to the saved profile
+			if (avatarDraft) URL.revokeObjectURL(avatarDraft.preview);
+			uploadedAvatar.current = null;
+			setProfile(saved); // includes the saved avatarUrl
+			setAvatarDraft(null);
+			setAvatarError("");
 			setPasswords(EMPTY_PASSWORDS);
 			setEditing(false);
-			if (passwordChanged && profileChanged)
+			if (passwordChanged && (profileChanged || avatarChanged))
 				setNotice("Your profile and password were updated.");
 			else if (passwordChanged) setNotice("Your password was changed.");
 			else setNotice("Your profile was updated.");
 		} catch (err) {
 			// The API names the field that failed (email taken, wrong current password...)
-			if (err.data?.field) setErrors({ [err.data.field]: err.message });
+			if (err.data?.field === "avatar") setAvatarError(err.message);
+			else if (err.data?.field)
+				setErrors({ [err.data.field]: err.message });
 			else setErrors({ form: err.message });
 		} finally {
 			setSaving(false);
@@ -370,10 +390,11 @@ function ProfileView({ initialProfile }) {
 					>
 						<div className="profile-avatar-wrap">
 							<div className="profile-avatar">
-								{avatarSrc ? (
+								{avatarSrc && !avatarBroken ? (
 									<img
 										src={avatarSrc}
 										alt={`${fullName} profile photo`}
+										onError={() => setAvatarBroken(true)}
 									/>
 								) : (
 									<User
@@ -384,6 +405,12 @@ function ProfileView({ initialProfile }) {
 								)}
 							</div>
 
+							{saving && avatarDraft && (
+								<div className="profile-avatar-loading">
+									Uploading...
+								</div>
+							)}
+
 							{editing && (
 								<>
 									<button
@@ -392,6 +419,7 @@ function ProfileView({ initialProfile }) {
 										onClick={() =>
 											fileInputRef.current?.click()
 										}
+										disabled={saving}
 										aria-label="Upload profile photo"
 										title="Upload profile photo"
 									>
@@ -400,7 +428,7 @@ function ProfileView({ initialProfile }) {
 									<input
 										ref={fileInputRef}
 										type="file"
-										accept="image/jpeg,image/png,image/webp,image/gif,.jfif"
+										accept="image/jpeg,image/png,image/webp"
 										onChange={handleAvatarChange}
 										hidden
 									/>
@@ -465,6 +493,7 @@ function ProfileView({ initialProfile }) {
 										type="button"
 										className="profile-btn profile-btn--outline"
 										onClick={cancelEditing}
+										disabled={saving}
 									>
 										Cancel
 									</button>

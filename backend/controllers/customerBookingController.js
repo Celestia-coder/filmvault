@@ -27,7 +27,9 @@ const crypto = require("crypto");
 const pool = require("../config/database");
 const cloudinary = require("../config/cloudinary");
 const paymentService = require("../services/paymentService");
-const { createBookingNotifier } = require("../services/bookingNotificationService");
+const {
+	createBookingNotifier,
+} = require("../services/bookingNotificationService");
 const { notificationCustomer } = require("../utils/notificationAuth");
 const { calculatePrice, toCents } = require("../utils/pricing");
 
@@ -39,6 +41,7 @@ const TICKET_TYPE_NAMES = { regular: "Regular", senior: "Senior", pwd: "PWD" };
 const PURCHASE_TYPES = Object.keys(TICKET_TYPE_NAMES);
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I, easy to read aloud
 const MAX_REFERENCE_ATTEMPTS = 5;
+const ID_FIELD_RE = /^idImage_(\d+)$/; // upload field name: idImage_<seatId>
 
 const isPositiveInt = (value) => Number.isInteger(value) && value > 0;
 const rowLabel = (rowNum) => String.fromCharCode(64 + rowNum); // 1 -> "A"
@@ -449,7 +452,8 @@ const discardIdFile = (file) => {
 //   discount_type        "none" | "senior" | "pwd", applies to every seat
 //   ticketTypes          optional JSON { "41": "senior", "42": "regular" } for mixed
 //                        bookings. Wins over discount_type.
-//   idImage              ID photo file. Required when any seat is discounted.
+//   idImage_<seatId>     ID photo, one per discounted seat (e.g. idImage_41). Required
+//                        for every seat whose ticket type is senior or pwd.
 //   snacks               optional JSON [{ "snackId": 1, "quantity": 2 }]. Priced from
 //                        the SNACK table, never discounted.
 const createCreateBooking =
@@ -459,10 +463,12 @@ const createCreateBooking =
 		notifier = bookingNotifier,
 	} = {}) =>
 	async (req, res) => {
-		const file = req.file;
-		let fileKept = false; // true once a saved booking references the ID photo
+		const files = req.files ?? []; // ID photos, one per discounted seat
+		const keptFiles = new Set(); // photos referenced by a saved booking
 		const fail = (status, code, message, extra = {}) =>
-			res.status(status).json({ success: false, code, message, ...extra });
+			res
+				.status(status)
+				.json({ success: false, code, message, ...extra });
 
 		try {
 			const body = req.body || {};
@@ -585,6 +591,20 @@ const createCreateBooking =
 				}
 			}
 
+			// ID photos: one per discounted seat, sent as idImage_<seatId>.
+			const idFileBySeatId = new Map();
+			for (const f of files) {
+				const seatId = Number(ID_FIELD_RE.exec(f.fieldname)?.[1]);
+				if (!isPositiveInt(seatId) || idFileBySeatId.has(seatId)) {
+					return fail(
+						400,
+						"VALIDATION_ERROR",
+						'Send each ID photo once, in a field named "idImage_<seatId>".',
+					);
+				}
+				idFileBySeatId.set(seatId, f);
+			}
+
 			const conn = await db.getConnection();
 			let connectionReleased = false;
 			let committed = false;
@@ -644,7 +664,8 @@ const createCreateBooking =
 						{ releaseExpired: true },
 					);
 				}
-				const seatIds = requestedSeatIds ?? locked.map((r) => r.seat_id);
+				const seatIds =
+					requestedSeatIds ?? locked.map((r) => r.seat_id);
 				if (seatIds.length > MAX_SEATS_PER_BOOKING) {
 					throw new BookingError(
 						400,
@@ -676,7 +697,10 @@ const createCreateBooking =
 					const row = lockedById.get(seatId);
 					if (!seatStatusById.has(seatId)) {
 						taken.push({ seatId, reason: "invalid" });
-					} else if (soldIds.has(seatId) || row?.status === "booked") {
+					} else if (
+						soldIds.has(seatId) ||
+						row?.status === "booked"
+					) {
 						taken.push({ seatId, reason: "booked" });
 					} else if (
 						seatStatusById.get(seatId) !== "active" ||
@@ -733,18 +757,29 @@ const createCreateBooking =
 						: discountedKinds.size === 1
 							? [...discountedKinds][0]
 							: "mixed";
-				if (discountedKinds.size > 0 && !file) {
+				const discountedSeatIds = seatTypes
+					.filter((s) => s.type !== "regular")
+					.map((s) => s.seatId);
+				const missingIdSeatIds = discountedSeatIds.filter(
+					(seatId) => !idFileBySeatId.has(seatId),
+				);
+				if (missingIdSeatIds.length > 0) {
 					throw new BookingError(
 						400,
 						"ID_IMAGE_REQUIRED",
-						"Upload a photo of the Senior Citizen/PWD ID to get the discount.",
+						"Upload a photo of the Senior Citizen/PWD ID for every discounted seat.",
+						{ missingSeatIds: missingIdSeatIds },
 					);
 				}
 
 				// Prices always come from the database, never from the browser.
 				const [typeRows] = await conn.query(
 					"SELECT type_id, type, ticket_discount FROM TICKET_TYPE WHERE LOWER(type) IN (?)",
-					[PURCHASE_TYPES.map((t) => TICKET_TYPE_NAMES[t].toLowerCase())],
+					[
+						PURCHASE_TYPES.map((t) =>
+							TICKET_TYPE_NAMES[t].toLowerCase(),
+						),
+					],
 				);
 				const typeRowByKey = {};
 				for (const key of PURCHASE_TYPES) {
@@ -789,7 +824,10 @@ const createCreateBooking =
 						);
 					}
 					const priceBySnack = new Map(
-						snackRows.map((r) => [r.snack_id, toCents(r.snack_price)]),
+						snackRows.map((r) => [
+							r.snack_id,
+							toCents(r.snack_price),
+						]),
 					);
 					snacks = snackRequests.map(({ snackId, quantity }) => ({
 						snackId,
@@ -829,13 +867,18 @@ const createCreateBooking =
 					);
 				}
 
-				// Where the ID photo lives: "cloudinary:<public_id>" or a local private path.
-				const idImageUrl =
-					discountedKinds.size > 0
-						? file.cloudinary
-							? `cloudinary:${file.filename}`
-							: `private/id-uploads/${file.filename}`
-						: null;
+				// Where each ID photo lives: "cloudinary:<public_id>" or a local private path.
+				const idRefBySeatId = new Map(
+					discountedSeatIds.map((seatId) => {
+						const f = idFileBySeatId.get(seatId);
+						return [
+							seatId,
+							f.cloudinary
+								? `cloudinary:${f.filename}`
+								: `private/id-uploads/${f.filename}`,
+						];
+					}),
+				);
 
 				// Save the purchase. reference_code is UNIQUE, so retry with a new code on a clash.
 				// verification_token is the secret behind the e-ticket QR code.
@@ -851,15 +894,14 @@ const createCreateBooking =
 						const [result] = await conn.query(
 							`INSERT INTO TOTAL_PURCHASE
                (user_id, payment_method, total_price, purchase_datetime, status, reference_code,
-                payment_status, discount_type, id_image_url, verification_token)
-             VALUES (?, ?, ?, NOW(), 'confirmed', ?, 'paid', ?, ?, ?)`,
+                payment_status, discount_type, verification_token)
+             VALUES (?, ?, ?, NOW(), 'confirmed', ?, 'paid', ?, ?)`,
 							[
 								userId,
 								paymentMethod,
 								price.total,
 								referenceCode,
 								discountType,
-								idImageUrl,
 								crypto.randomBytes(16).toString("hex"),
 							],
 						);
@@ -894,11 +936,26 @@ const createCreateBooking =
 							showtimeId,
 							seatId,
 							typeRowByKey[type].type_id,
-							(priceBySeat.get(seatId).priceCents / 100).toFixed(2),
+							(priceBySeat.get(seatId).priceCents / 100).toFixed(
+								2,
+							),
 							referenceCode,
 						]),
 					],
 				);
+
+				if (idRefBySeatId.size > 0) {
+					await conn.query(
+						"INSERT INTO BOOKING_ID_IMAGE (purchase_id, seat_id, id_image_url) VALUES ?",
+						[
+							[...idRefBySeatId].map(([seatId, ref]) => [
+								purchaseId,
+								seatId,
+								ref,
+							]),
+						],
+					);
+				}
 
 				if (price.snacks.length > 0) {
 					await conn.query(
@@ -936,7 +993,8 @@ const createCreateBooking =
 
 				await conn.commit();
 				committed = true;
-				fileKept = idImageUrl !== null;
+				for (const seatId of idRefBySeatId.keys())
+					keptFiles.add(idFileBySeatId.get(seatId));
 
 				connectionReleased = true;
 				try {
@@ -994,7 +1052,8 @@ const createCreateBooking =
 							onlyExpired: true,
 						});
 					}
-					const { releaseSeats, releaseExpired, ...extra } = error.extra; // eslint-disable-line no-unused-vars
+					const { releaseSeats, releaseExpired, ...extra } =
+						error.extra; // eslint-disable-line no-unused-vars
 					return fail(error.status, error.code, error.message, extra);
 				}
 				console.error("createBooking error:", error);
@@ -1005,7 +1064,7 @@ const createCreateBooking =
 		} finally {
 			// Any outcome without a saved booking must not leave the ID photo behind
 			// (local file or Cloudinary upload).
-			if (file && !fileKept) discardIdFile(file);
+			for (const f of files) if (!keptFiles.has(f)) discardIdFile(f);
 		}
 	};
 

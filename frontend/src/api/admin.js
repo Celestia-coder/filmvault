@@ -146,8 +146,10 @@ function mapBooking(raw) {
 		seats: raw.seats,
 		ticketTypes, // one per seat, same order as seats
 		discountLabel: summarizeTicketTypes(ticketTypes),
-		// True when a senior/PWD ID photo was uploaded (see fetchBookingIdImage).
+		// True when at least one senior/PWD ID photo was uploaded (see fetchBookingIdImages).
 		hasIdImage: Boolean(raw.has_id_image),
+		// How many ID photos were uploaded: one for each senior/PWD seat.
+		idImageCount: Number(raw.id_image_count ?? 0),
 		// Stays null until the backend adds an id_status column.
 		idStatus: raw.id_status ?? null,
 		amount: raw.total_price,
@@ -183,15 +185,21 @@ export async function cancelBooking({ bookingId, branchId }, signal) {
 	return { seatsReleased: body.seatsReleased };
 }
 
-// GET /api/admin/bookings/:id/id-image?branchId=
-// Resolves a URL for the booking's private ID photo (signed Cloudinary link,
-// or the server route for locally stored photos).
+// GET /api/admin/bookings/:id/id-images?branchId=
+// Resolves the booking's private ID photos, one per senior/PWD seat, in seat order:
+//   [{ seatId, seat: "A1", ticketType: "Senior", url }]
+// Each url is a signed Cloudinary link, or the server route for locally stored photos.
 // Rejects with ApiError (404 if the booking has no ID photo).
-// Fetch it only when the admin asks to view it, and don't store the URL.
-export async function fetchBookingIdImage({ bookingId, branchId }, signal) {
-	const body = await request(`/api/admin/bookings/${bookingId}/id-image`, {
+// Fetch them only when the admin asks to view them, and don't store the URLs.
+export async function fetchBookingIdImages({ bookingId, branchId }, signal) {
+	const body = await request(`/api/admin/bookings/${bookingId}/id-images`, {
 		params: { branchId },
 		signal,
 	});
-	return body.url;
+	return body.images.map((image) => ({
+		seatId: image.seat_id,
+		seat: image.seat,
+		ticketType: image.ticket_type ?? null,
+		url: image.url,
+	}));
 }

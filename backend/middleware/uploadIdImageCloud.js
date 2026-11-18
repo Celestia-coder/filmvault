@@ -1,19 +1,27 @@
 // middleware/uploadIdImageCloud.js
-// Same job as uploadIdImage.js, but stores the senior/PWD ID photo on Cloudinary
-// as a PRIVATE ("authenticated") image instead of on the server's disk.
-// Nothing is written to disk, so nothing can end up in git.
-
-// After this runs, req.file.filename holds the Cloudinary public_id
-// (e.g. "filmvault/ids/abc123"), so the booking controller can save it as before.
-// Admins view the photo through a signed URL:
-// GET /api/admin/bookings/:id/id-image (see bookingController.js).
+// Stores the senior/PWD ID photos on Cloudinary as PRIVATE ("authenticated")
+// images instead of on the server's disk. Nothing is written to disk, so
+// nothing can end up in git.
+//
+// A booking can have several discounted seats, and each one needs its own ID
+// photo. The client sends one file per seat, in a field named idImage_<seatId>
+// (e.g. idImage_41, idImage_42).
+//
+// After this runs, req.files holds one entry per photo. Each entry has:
+//   fieldname   "idImage_<seatId>", used by the booking controller to match the seat
+//   filename    the Cloudinary public_id (e.g. "filmvault/ids/abc123")
+//   cloudinary  true
+// Admins view the photos through signed URLs:
+// GET /api/admin/bookings/:id/id-images (see bookingController.js).
 
 const multer = require("multer");
 const cloudinary = require("../config/cloudinary");
 const { looksLikeImage } = require("./upload");
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB, same as the local version
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB per photo, same as the local version
+const MAX_FILES = 8; // one per seat, and a booking has at most 8 seats
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+const FIELD_RE = /^idImage_\d+$/;
 
 class UploadError extends Error {
 	constructor(status, code, message) {
@@ -25,8 +33,17 @@ class UploadError extends Error {
 
 const upload = multer({
 	storage: multer.memoryStorage(),
-	limits: { fileSize: MAX_BYTES, files: 1 },
+	limits: { fileSize: MAX_BYTES, files: MAX_FILES },
 	fileFilter: (req, file, cb) => {
+		if (!FIELD_RE.test(file.fieldname)) {
+			return cb(
+				new UploadError(
+					400,
+					"INVALID_UPLOAD",
+					'Upload each ID in a field named "idImage_<seatId>".',
+				),
+			);
+		}
 		if (!ALLOWED.includes(file.mimetype)) {
 			return cb(
 				new UploadError(
@@ -54,8 +71,26 @@ const uploadToCloudinary = (buffer) =>
 			.end(buffer);
 	});
 
-const uploadIdImage = (req, res, next) => {
-	upload.single("idImage")(req, res, async (err) => {
+// Best effort: removes photos that were uploaded before a later one failed.
+const destroyUploaded = (publicIds) =>
+	Promise.all(
+		publicIds.map((publicId) =>
+			cloudinary.uploader
+				.destroy(publicId, {
+					type: "authenticated",
+					resource_type: "image",
+				})
+				.catch((e) =>
+					console.error(
+						"Could not delete partial ID upload:",
+						e.message,
+					),
+				),
+		),
+	);
+
+const uploadIdImages = (req, res, next) => {
+	upload.any()(req, res, async (err) => {
 		const reject = (status, code, message) =>
 			res.status(status).json({ success: false, code, message });
 
@@ -67,49 +102,90 @@ const uploadIdImage = (req, res, next) => {
 					return reject(
 						413,
 						"FILE_TOO_LARGE",
-						"The ID image is too large. The maximum size is 5 MB.",
+						"An ID image is too large. The maximum size is 5 MB per photo.",
+					);
+				}
+				if (err.code === "LIMIT_FILE_COUNT") {
+					return reject(
+						400,
+						"INVALID_UPLOAD",
+						`You can upload at most ${MAX_FILES} ID photos.`,
 					);
 				}
 				return reject(
 					400,
 					"INVALID_UPLOAD",
-					'Upload the ID as a single file in the "idImage" field.',
+					'Upload each ID in a field named "idImage_<seatId>".',
 				);
 			}
 			console.error("uploadIdImageCloud error:", err);
 			return reject(
 				500,
 				"UPLOAD_FAILED",
-				"Failed to process the uploaded file.",
+				"Failed to process the uploaded files.",
 			);
 		}
 
-		// No file: the ID is optional (only needed for senior/PWD discounts)
-		if (!req.file) return next();
+		// No files: IDs are only needed for senior/PWD discounts
+		const files = req.files ?? [];
+		if (files.length === 0) return next();
 
-		if (!looksLikeImage(req.file.buffer, req.file.mimetype)) {
-			return reject(
-				415,
-				"INVALID_FILE_TYPE",
-				"That file isn't a valid JPG, PNG or WebP image.",
-			);
+		// Check everything before uploading anything, so a bad file costs no uploads.
+		const seen = new Set();
+		for (const file of files) {
+			if (seen.has(file.fieldname)) {
+				return reject(
+					400,
+					"INVALID_UPLOAD",
+					"Send only one ID photo per seat.",
+				);
+			}
+			seen.add(file.fieldname);
+			if (!looksLikeImage(file.buffer, file.mimetype)) {
+				return reject(
+					415,
+					"INVALID_FILE_TYPE",
+					"That file isn't a valid JPG, PNG or WebP image.",
+				);
+			}
 		}
 
-		try {
-			const result = await uploadToCloudinary(req.file.buffer);
-			req.file.filename = result.public_id; // saved by the booking controller
-			req.file.cloudinary = true;
-			delete req.file.buffer; // free the memory
-			return next();
-		} catch (e) {
-			console.error("ID upload to Cloudinary failed:", e.message);
+		const results = await Promise.allSettled(
+			files.map((file) => uploadToCloudinary(file.buffer)),
+		);
+
+		if (results.some((r) => r.status === "rejected")) {
+			const failed = results.find((r) => r.status === "rejected");
+			console.error(
+				"ID upload to Cloudinary failed:",
+				failed.reason?.message,
+			);
+			// All or nothing: don't leave half of the photos behind.
+			await destroyUploaded(
+				results
+					.filter((r) => r.status === "fulfilled")
+					.map((r) => r.value.public_id),
+			);
 			return reject(
 				502,
 				"UPLOAD_FAILED",
-				"Couldn't store the ID image. Please try again.",
+				"Couldn't store the ID images. Please try again.",
 			);
 		}
+
+		files.forEach((file, i) => {
+			file.filename = results[i].value.public_id; // saved by the booking controller
+			file.cloudinary = true;
+			delete file.buffer; // free the memory
+		});
+		return next();
 	});
 };
 
-module.exports = { uploadIdImage, MAX_BYTES };
+// uploadIdImage keeps the old export name, so existing route imports still work.
+module.exports = {
+	uploadIdImage: uploadIdImages,
+	uploadIdImages,
+	MAX_BYTES,
+	MAX_FILES,
+};

@@ -28,6 +28,7 @@ const cloudinary = require("../config/cloudinary");
 const paymentService = require("../services/paymentService");
 const { createBookingNotifier } = require("../services/bookingNotificationService");
 const { notificationCustomer } = require("../utils/notificationAuth");
+const { isValidRecipient } = require("../utils/mailer");
 const { calculatePrice, toCents } = require("../utils/pricing");
 
 const bookingNotifier = createBookingNotifier();
@@ -445,6 +446,7 @@ const discardIdFile = (file) => {
 //
 // Fields:
 //   userId, showtimeId   required
+//   email                optional for older clients; when supplied, must match USER.email
 //   seatIds              optional JSON array, e.g. [41,42]. Omit to book every seat
 //                        the user currently holds for the showtime.
 //   paymentMethod        e.g. "gcash" (default "simulated")
@@ -597,11 +599,12 @@ const createCreateBooking =
 			try {
 				await conn.beginTransaction();
 
-				// Showtime must exist and be open.
+				// Share the screening lock with rescheduling so its recipient snapshot
+				// cannot miss a checkout that commits against the previous schedule.
 				const [screenings] = await conn.query(
 					`SELECT s.screening_id, s.cinema_id, s.status, m.base_price
          FROM SCREENING s JOIN MOVIE m ON m.movie_id = s.movie_id
-         WHERE s.screening_id = ?`,
+         WHERE s.screening_id = ? FOR UPDATE`,
 					[showtimeId],
 				);
 				if (screenings.length === 0)
@@ -620,7 +623,7 @@ const createCreateBooking =
 				}
 
 				const [users] = await conn.query(
-					"SELECT user_id FROM `USER` WHERE user_id = ?",
+					"SELECT user_id, email FROM `USER` WHERE user_id = ?",
 					[userId],
 				);
 				if (users.length === 0)
@@ -629,6 +632,15 @@ const createCreateBooking =
 						"VALIDATION_ERROR",
 						"User does not exist.",
 					);
+				if (body.email !== undefined) {
+					const submittedEmail = typeof body.email === "string" ? body.email.trim() : "";
+					if (!isValidRecipient(submittedEmail)) {
+						throw new BookingError(400, "VALIDATION_ERROR", "Enter a valid email address.");
+					}
+					if (submittedEmail.toLowerCase() !== users[0].email?.toLowerCase()) {
+						throw new BookingError(400, "EMAIL_MISMATCH", "Use the email address on your account for checkout.");
+					}
+				}
 
 				// Lock the seat rows so two checkouts can't take the same seat.
 				// Seat IDs are locked in ascending order, same as the hold endpoint, to avoid deadlocks.
@@ -764,7 +776,7 @@ const createCreateBooking =
 				for (const key of neededKeys) {
 					if (!typeRowByKey[key]) {
 						console.error(
-							`createBooking: TICKET_TYPE row "${TICKET_TYPE_NAMES[key]}" is missing. Run database/migrations/002_booking_checkout.sql.`,
+							`createBooking: TICKET_TYPE row "${TICKET_TYPE_NAMES[key]}" is missing. Check the active database's ticket type seed.`,
 						);
 						throw new BookingError(
 							500,

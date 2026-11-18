@@ -107,11 +107,13 @@ test("a committed, paid booking renders one CID QR with matching trusted ticket 
   assert.equal(captured.length, 1);
   const message = captured[0];
   assert.equal(message.to, row.customer_email);
-  assert.equal(message.attachments.length, 1);
+  assert.equal(message.attachments.length, 2);
   assert.equal(message.attachments[0].cid, QR_CID);
   assert.equal(message.attachments[0].contentType, "image/png");
   assert.equal(message.attachments[0].contentDisposition, "inline");
   assert.equal(message.attachments[0].content.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  assert.equal(message.attachments[1].cid, "filmvault-logo@filmvault.invalid");
+  assert.match(message.html, /src="cid:filmvault-logo@filmvault\.invalid"/);
   assert.equal(prepared.data.ticketUrl, `${origin}/verify/${token}`);
   assert.doesNotMatch(prepared.data.ticketUrl, /Fictional|FV-ABCD2345|gcash|400\.00/i);
   assert.match(message.html, new RegExp(`src="cid:${QR_CID.replace(".", "\\.")}"`));

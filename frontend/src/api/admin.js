@@ -171,8 +171,6 @@ export async function fetchAdminBookings(
 
 // PATCH /api/admin/bookings/:id?branchId=   body { status: "cancelled" }
 // Releases the seats. Resolves { seatsReleased }.
-// TODO (touchpoint): the backend should send the cancellation email here once
-// the email service exists.
 export async function cancelBooking({ bookingId, branchId }, signal) {
 	const body = await request(`/api/admin/bookings/${bookingId}`, {
 		method: "PATCH",

@@ -427,12 +427,13 @@ function Checkout() {
     booking;
 
   const user = getUser();
+  const accountEmail = typeof user?.email === "string" ? user.email.trim() : "";
   // Booking needs a logged-in user and seats that were really held in Seat Selection.
   const canBook = Boolean(user && showtimeId && seatIds?.length === seats.length);
   const basePrice = showtime.price;
 
   /* ---- state: contact ---- */
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(accountEmail);
   const [mobile, setMobile] = useState("");
   const [emailTouched, setEmailTouched] = useState(false);
 
@@ -537,7 +538,8 @@ function Checkout() {
   const total = subtotal - discountTotal + bookingFee;
 
   /* ---- validation ---- */
-  const emailValid = EMAIL_REGEX.test(email.trim());
+  const emailFormatValid = EMAIL_REGEX.test(email.trim());
+  const emailValid = emailFormatValid && email.trim().toLowerCase() === accountEmail.toLowerCase();
   // Every discounted seat needs its own ID photo, holder name and ID number.
   // A camera scan counts too, because it saves its photo into idFiles.
   const idOk = discountedSeats.every(
@@ -652,6 +654,7 @@ function Checkout() {
       // hold. Only the first discounted seat's ID photo is sent: the API stores one per booking.
       const booked = await createBooking({
         userId: user.userId,
+        email: email.trim(),
         showtimeId,
         seatIds,
         ticketTypes: typesBySeatId,
@@ -698,7 +701,7 @@ function Checkout() {
             <div className="co-card">
               <CardHeader
                 title="Contact Details"
-                subtitle="Your e-ticket with QR code & booking confirmation are sent here"
+                subtitle="Your booking confirmation is sent to this account email"
               />
               <div className="co-card-body">
                 <div className="co-form-row">
@@ -713,11 +716,13 @@ function Checkout() {
                       placeholder="you@example.com"
                       autoComplete="email"
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => { setEmail(e.target.value); setEmailTouched(true); }}
                       onBlur={() => setEmailTouched(true)}
                     />
                     {emailTouched && !emailValid && (
-                      <p className="co-error">Enter a valid email address.</p>
+                      <p className="co-error">
+                        {emailFormatValid ? "Use the email address on your account for checkout." : "Enter a valid email address."}
+                      </p>
                     )}
                   </div>
                   <div className="co-field">
@@ -738,8 +743,8 @@ function Checkout() {
                 <div className="co-note co-note--green">
                   <IconMail />
                   <span>
-                    We'll email your QR-coded ticket the moment payment is confirmed. Present it at
-                    the cinema entrance — no printing needed.
+                    After payment is confirmed, we'll email your booking confirmation. Open My Tickets
+                    in FilmVault to view your e-ticket and QR code.
                   </span>
                 </div>
               </div>

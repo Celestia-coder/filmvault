@@ -336,7 +336,8 @@ test("a missing verification column still delivers the ordinary confirmation", a
   assert.equal(prepared.data.ticketUrl, undefined);
   assert.equal((await notifier.notify(prepared)).status, "sent");
   assert.equal(captured.length, 1);
-  assert.equal(captured[0].attachments, undefined);
-  assert.doesNotMatch(captured[0].html, /cid:|\/verify\//);
+  assert.equal(captured[0].attachments.length, 1);
+  assert.equal(captured[0].attachments[0].cid, "filmvault-logo@filmvault.invalid");
+  assert.doesNotMatch(captured[0].html, /cid:filmvault-ticket-qr|\/verify\//);
   assert.match(captured[0].text, /FV-TEST1234/);
 });

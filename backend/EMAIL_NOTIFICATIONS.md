@@ -8,6 +8,9 @@ declares the module type). No separate backend copy of the designs exists.
 Start with `EMAIL_DELIVERY_ENABLED=false` and
 `RESCHEDULE_NOTIFICATIONS_ENABLED=false` as shown in `.env.example`. SMTP
 settings and `MAIL_FROM` are validated only when real delivery is enabled.
+The normal backend pool uses `DB_HOST`, `DB_PORT` (default 3306), `DB_USER`,
+`DB_PASS`, and `DB_NAME`. Set these for a separately authorized local database;
+the Vite development proxy expects the backend on port 5000.
 `npm test` uses a fake mail transport and mocked database; it needs neither
 SMTP credentials nor MySQL. A future trusted caller may pass an approved
 public HTTPS `logoUrl`. Confirmation preparation selects `MOVIE.poster` from
@@ -16,15 +19,33 @@ URL on the seeded `image.tmdb.org` CDN or on this deployment's configured
 `CLOUDINARY_CLOUD_NAME` image host. Local filenames and other hosts omit
 the image; no deployment asset origin has been approved for them. An email
 client can also block or fail to fetch a remote poster, leaving the movie title
-readable. The QR integration below supplies a
-verification `ticketUrl` only from committed purchase data. No local asset path is
-embedded in outgoing mail.
+readable. Booking Confirmation attaches the tracked
+`frontend/src/assets/images/logo.png` as an inline CID image. If the asset is
+unavailable, the template displays the FILMVAULT text fallback. A backend
+deployment must include the frontend asset for the original logo to appear.
+The QR integration below supplies a verification `ticketUrl` only from committed
+purchase data. No local asset path is embedded in outgoing mail.
 
 The integration branch now verifies a signed token, resolves the current USER
 role and branch, and populates `req.auth` on protected routes. See
 `AUTHENTICATION.md`. The browser's `branchId` is not proof of authorization.
-Live reschedule mail remains disabled pending the concurrency and seat-policy
-work described below.
+Checkout pre-fills the signed-in account email. If the form submits an address,
+the booking controller checks its syntax and compares it with the current
+`USER.email` read inside the booking transaction before payment. A different
+address is rejected; older API callers that omit the field still use the saved
+account address. Confirmation, cancellation, and reschedule recipients are
+read from `USER.email`, not a browser-supplied address. The existing signup
+code does not verify mailbox ownership, and changing the profile email can
+change the destination of later notices. Alternate checkout recipients require
+a separate verified-email design and a purchase-level recipient record.
+The account-email policy needs no new column. A fresh database built from
+`database/schema.sql` alone still lacks checkout columns and Eli's
+`verification_token`, which the current booking INSERT requires even when QR
+mail is off. The existing compatibility and ticket-verification SQL contain
+`USE filmvault` and additional data operations; review and adapt them for the
+intended database rather than running them unchanged on a test or team schema.
+Live reschedule mail remains disabled pending database-backed concurrency
+verification and the cinema seat policy described below.
 
 For a changed schedule, the controller holds the screening's `FOR UPDATE` lock
 and asks the notifier to read confirmed, paid purchases for that screening and
@@ -38,16 +59,13 @@ cinema after `SCREENING.cinema_id` changes. The Backend Team must decide how
 to validate or reassign seats before those notices can be enabled.
 
 The pre-update recipient snapshot excludes customers who book the updated
-schedule after the update commits. It does **not** guarantee correct event
-membership for every overlapping transaction. Customer checkout currently
-reads `SCREENING` without a matching locking protocol, so an in-flight checkout
-may read the old schedule, complete after the recipient snapshot, and miss a
-notice. MySQL's repeatable-read snapshot alone does not prevent this. The
-Booking Backend developer and Email Notifications developer must coordinate a
-shared schedule-validation and locking contract and verify it against an
-isolated MySQL test database. Real reschedule email delivery must remain
-disabled until that work and cinema seat policy are complete. This branch now
-provides verified admin identity and branch checks.
+schedule after the update commits. Checkout now locks the same `SCREENING` row
+before validating and completing a booking. An in-flight checkout should
+therefore commit before the reschedule snapshot or wait and book the updated
+schedule. This ordering has an offline controller check but still needs a
+concurrent test against isolated MySQL. Real reschedule delivery remains
+disabled until that test and the cinema seat policy are reviewed. The branch
+already provides verified admin identity and branch checks.
 
 Repeated unchanged schedule requests do not send another notice: the locked
 screening is compared before creating a notification event. A random UUID
@@ -194,6 +212,51 @@ calls the mail service directly, not the admin endpoint. The sample
 The backend's `.env` is ignored by Git. Do not put secrets in shell command
 arguments, committed files, or test output.
 
+If a local development machine times out when connecting to an SMTP hostname,
+set `SMTP_LOCAL_IPV4_RESOLVE=true` only in that backend process. The mailer
+resolves the configured `SMTP_HOST` to IPv4 before connecting, retains the
+hostname in `tls.servername` for certificate validation, and requires STARTTLS
+when implicit TLS is not selected. The option defaults to `false` and is
+rejected outside `NODE_ENV=development`. It does not alter the recipient
+allowlist or enable delivery by itself. Do not enter a fixed SMTP IP address.
+On a Windows host where a trusted local CA is needed, start Node with
+`node --use-system-ca server.js` from `backend` (or set `NODE_OPTIONS=--use-system-ca`
+for that local process). Do not disable certificate verification.
+
+For a no-send connection and authentication check, first configure the approved
+SMTP settings privately and retain a single authorized test recipient. From
+`backend` in a temporary PowerShell session, set `NODE_ENV=development`,
+`SMTP_LOCAL_IPV4_RESOLVE=true`, `EMAIL_DELIVERY_ENABLED=true`, and
+`EMAIL_LOCAL_TEST_RECIPIENT` to that approved inbox for this process only. Run:
+
+```powershell
+node --use-system-ca -e "require('dotenv').config(); const {createMailer}=require('./utils/mailer'); createMailer().verify().then(result => { console.log(result.status); process.exitCode = result.status === 'verified' ? 0 : 1; });"
+```
+
+`verify()` performs the SMTP connection, TLS negotiation, and authentication;
+it does not call `sendMail()`. After the check, clear the temporary environment
+overrides and leave delivery disabled. Verification does not resolve an earlier
+uncertain send and must not be followed by an automatic retry.
+
+For a normal browser checkout test, use only an isolated database containing
+fictional records and a customer whose saved `USER.email` is the explicitly
+authorized test inbox. Before starting the backend, obtain approval for that
+single send, set `NODE_ENV=development` and
+`EMAIL_LOCAL_TEST_RECIPIENT` to that same address, and enable
+`EMAIL_DELIVERY_ENABLED=true` only in that local backend process. The mailer
+rejects any other recipient before SMTP; this guard cannot redirect a different
+customer's mail to the test inbox. Keep
+`RESCHEDULE_NOTIFICATIONS_ENABLED=false` and both QR flags false. Stop the
+backend after the test so normal delivery returns to its disabled default.
+The browser checkout itself does not ask for a separate email-send confirmation.
+The manual smoke-test allowlist is a separate setting and does not protect the
+normal application. A successful simulated payment and committed purchase
+trigger the confirmation hook; notification failure does not undo checkout.
+The Checkout page pre-fills the saved account address and submits it for the
+server-side match check; the test account must use the approved inbox. With the QR
+flags off, the confirmation email has no QR. Checkout directs customers to My
+Tickets for their e-ticket and QR code.
+
 The script checks its CLI flag, recipient allowlist, SMTP settings, and all
 three rendered templates before the first send. `npm test` exercises the same
 workflow through an injected fake transport and never connects to SMTP. A
@@ -204,6 +267,46 @@ manual SMTP run checks service-level delivery only. All three controllers have
 guarded hooks and the new middleware populates `req.auth`. Delivery flags
 remain disabled. Reschedule additionally
 requires branch and seat safety and both delivery flags.
+
+## Fresh local test database for a teammate
+
+Use a separate database named `filmvault_email_local_test` on your own MySQL
+server. Confirm that the name is absent before creating it. Apply
+`database/schema.sql`, `database/email_local_test_catalog.sql`, and
+`database/email_local_test_checkout.sql` in that order, stopping after any SQL
+error. The two local-test scripts select only `filmvault_email_local_test`.
+They are for a new disposable database and must not be run on an existing team
+database or repeated after checkout. The catalog is based on the QA movie,
+branch, cinema, and seat seed but omits every sample USER row. The checkout
+script adds the required hold, payment, reference, and verification-token
+columns and indexes, inserts the three ticket types, and ensures a future
+Cinema 1 screening if the catalog's fixed screening dates have passed. It does
+not create accounts or bookings. Do not run `booking_compatibility.sql`,
+`ticket_verification.sql`, or `credentials_update.sql` for this setup.
+
+Create a database-scoped application account with SELECT, INSERT, UPDATE, and
+DELETE privileges on this disposable database only. Configure its credentials
+privately in the Git-ignored `backend/.env`, together with `DB_HOST`, `DB_PORT`,
+`DB_NAME=filmvault_email_local_test`, and a unique `AUTH_TOKEN_SECRET` of at least
+32 random bytes. Keep all email and QR flags false while checking login and the
+catalog. Install dependencies with `npm ci` in both `backend` and `frontend`.
+Start the backend with `npm start` from `backend`, then start Vite with `npm run
+dev` from `frontend`. Vite forwards `/api` to backend port 5000.
+
+Register one fictional customer through the website with the approved test
+inbox as its account email. For admin actions, register a separate fictional
+account, then have the owner of this disposable database assign that account
+`role='admin'` and the intended `branch_id` in the local USER table. Sign in
+again after the branch assignment. Do not use the placeholder users from the
+normal development seed, change a shared account, or copy a teammate's
+database credentials. Before a controlled email test, configure only your own
+approved SMTP sender and set `EMAIL_LOCAL_TEST_RECIPIENT` to the same address as
+the customer's saved USER.email. Enable `EMAIL_DELIVERY_ENABLED=true` only for
+that isolated local process; set `RESCHEDULE_NOTIFICATIONS_ENABLED=true` only
+when testing an authorized same-cinema schedule change. Leave both QR flags
+false. Stop the backend and restore delivery to false after testing. The
+Windows system-CA option and development-only SMTP IPv4 resolution are needed
+only on machines whose network or certificate setup requires them.
 
 ## Automatic event trigger readiness
 
@@ -247,7 +350,7 @@ an affected-booking snapshot before update. Its controller tests use a fake
 database and transport. It now consumes the same `req.auth` adapter as the
 booking hooks. Keep `EMAIL_DELIVERY_ENABLED=false` and
 `RESCHEDULE_NOTIFICATIONS_ENABLED=false` in normal configuration. The deferred
-checkout/reschedule concurrency contract and cinema seat validity issue above
+isolated concurrent checkout/reschedule test and cinema seat validity issue above
 also block live reschedule delivery. No real SMTP test is part of the automated
 event tests.
 

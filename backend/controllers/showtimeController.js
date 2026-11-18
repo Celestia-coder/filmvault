@@ -260,9 +260,8 @@ const createUpdateShowtime = ({ db = pool, notifier = createRescheduleNotifier()
 
     let prepared;
     try {
-      // Capture a pre-update recipient snapshot. Checkout does not yet lock
-      // the screening on its initial read, so in-flight bookings remain a
-      // Backend Team concurrency dependency before live delivery.
+      // Capture a pre-update recipient snapshot while holding the same
+      // screening lock that checkout takes before completing a booking.
       prepared = await notifier.prepare({
         connection: conn, eventId: randomUUID(), screeningId: id,
         previous, updated, admin,
@@ -293,6 +292,17 @@ const createUpdateShowtime = ({ db = pool, notifier = createRescheduleNotifier()
       console.error("Reschedule notification delivery failed after schedule commit.");
       notification = { status: "failed", sent: 0 };
     }
+    const safeStatus = new Set(["sent", "partial_failure", "disabled", "no_recipients",
+      "ineligible_screening", "seat_revalidation_required", "unauthorized", "invalid_event",
+      "preparation_failed", "failed", "duplicate", "not_committed"]);
+    const resultLog = { screeningId: id,
+      status: safeStatus.has(notification?.status) ? notification.status : "unknown" };
+    for (const key of ["sent", "failed", "skipped"]) {
+      if (Number.isSafeInteger(notification?.[key]) && notification[key] >= 0) {
+        resultLog[key] = notification[key];
+      }
+    }
+    console.info("Reschedule notification result:", resultLog);
     return res.status(200).json({
       success: true,
       message: "Showtime rescheduled.",

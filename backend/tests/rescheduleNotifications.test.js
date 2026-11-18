@@ -98,6 +98,8 @@ test("pre-change snapshot groups seats and sends one email per affected booking"
   const result = await notifier.notify({ prepared, committed: true });
   assert.equal(result.status, "sent");
   assert.equal(result.sent, 2);
+  assert.equal(requests[0].to, "one@example.invalid");
+  assert.equal(requests[1].to, "two@example.invalid");
   assert.deepEqual(requests[0].data.seats, ["A1", "A2"]);
   assert.deepEqual(requests[1].data.seats, ["B3"]);
   assert.equal(requests[0].data.previous.date, "2026-12-05");
@@ -146,7 +148,40 @@ test("invalid address is skipped; duplicate event and failed send are not retrie
   assert.equal((await notifier.notify({ prepared, committed: true })).status, "duplicate");
   assert.equal(sends, 1);
   assert.match(logs[0], /0 definite, 1 uncertain/);
+  assert.match(logs[0], /skipped invalid_recipient=1/);
   assert.doesNotMatch(logs[0], /private|SMTP detail|example\.invalid/);
+});
+
+test("allowlist skips are logged without recipient data or a retry", async () => {
+  const db = fakeDb(bookingRows.slice(0, 1));
+  const logs = [];
+  let attempts = 0;
+  const notifier = createRescheduleNotifier({ env, log: (message) => logs.push(message),
+    send: async () => { attempts++; return { status: "not_allowlisted" }; } });
+  const prepared = await notifier.prepare(event(db));
+  assert.deepEqual(await notifier.notify({ prepared, committed: true }),
+    { status: "partial_failure", sent: 0, failed: 0, skipped: 1 });
+  assert.equal(attempts, 1);
+  assert.match(logs[0], /skipped not_allowlisted=1/);
+  assert.doesNotMatch(logs[0], /example\.invalid|FV-AAAA/);
+  assert.equal((await notifier.notify({ prepared, committed: true })).status, "duplicate");
+});
+
+test("committed disabled reschedule logs its status without reading recipients", async () => {
+  const db = fakeDb();
+  const notifier = createRescheduleNotifier({ env: {}, send: () => { throw new Error("must not send"); } });
+  const response = fakeResponse();
+  const originalInfo = console.info;
+  const logs = [];
+  console.info = (...values) => logs.push(values);
+  try { await createUpdateShowtime({ db, notifier })(request(), response); }
+  finally { console.info = originalInfo; }
+  assert.equal(response.code, 200);
+  assert.equal(response.body.notification.status, "disabled");
+  assert.ok(db.events.includes("commit"));
+  assert.ok(!db.events.includes("affected_read"));
+  assert.deepEqual(logs, [["Reschedule notification result:",
+    { screeningId: 7, status: "disabled", sent: 0 }]]);
 });
 
 test("overlapping calls for one event attempt each purchase only once", async () => {

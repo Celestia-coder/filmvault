@@ -44,7 +44,8 @@ function fakeDelivery(db, events, { failSend = false } = {}) {
   return { notifier, messages };
 }
 
-function checkoutFixture({ paid = true, failCommit = false, failSend = false, email, ownerId = 8 } = {}) {
+function checkoutFixture({ paid = true, failCommit = false, failSend = false, email,
+  accountEmail = "customer@example.invalid", ownerId = 8 } = {}) {
   const events = [];
   let committed = false;
   let referenceCode;
@@ -57,8 +58,12 @@ function checkoutFixture({ paid = true, failCommit = false, failSend = false, em
     async rollback() { events.push("rollback"); },
     release() { events.push("release"); },
     async query(sql, params) {
-      if (sql.includes("FROM SCREENING s JOIN MOVIE")) return [[{ screening_id: 7, cinema_id: 5, status: "scheduled", base_price: "350.00" }]];
-      if (sql.includes("SELECT user_id FROM `USER`")) return [[{ user_id: 8 }]];
+      if (sql.includes("FROM SCREENING s JOIN MOVIE")) {
+        assert.match(sql, /WHERE s\.screening_id = \? FOR UPDATE/);
+        events.push("screening_lock");
+        return [[{ screening_id: 7, cinema_id: 5, status: "scheduled", base_price: "350.00" }]];
+      }
+      if (sql.includes("SELECT user_id, email FROM `USER`")) return [[{ user_id: 8, email: accountEmail }]];
       if (sql.includes("FROM SEATBOOKING") && sql.includes("FOR UPDATE")) {
         return [[{ seat_id: 41, status: "held", held_by: 8, hold_active: 1 }]];
       }
@@ -143,8 +148,51 @@ test("actual checkout handler sends one fake confirmation after paid commit and 
   assert.match(f.messages[0].subject, /booking confirmed/i);
   assert.match(f.messages[0].text, /FV-TEST1234/);
   assert.ok(f.events.indexOf("commit") < f.events.indexOf("release"));
+  assert.ok(f.events.indexOf("screening_lock") < f.events.indexOf("verify_payment"));
   assert.ok(f.events.indexOf("release") < f.events.indexOf("read_committed_purchase"));
   assert.ok(f.events.indexOf("read_committed_purchase") < f.events.indexOf("fake_send"));
+});
+
+test("checkout uses the saved account recipient when the address matches or is omitted", async () => {
+  for (const submittedEmail of ["customer@example.invalid", " CUSTOMER@example.invalid ", undefined]) {
+    const f = checkoutFixture();
+    const req = f.request();
+    if (submittedEmail !== undefined) req.body.email = submittedEmail;
+    const res = response();
+    await f.handler(req, res);
+    assert.equal(res.code, 201);
+    assert.equal(f.messages.length, 1);
+    assert.equal(f.messages[0].to, "customer@example.invalid");
+    assert.ok(f.events.indexOf("commit") < f.events.indexOf("fake_send"));
+  }
+});
+
+test("invalid or different checkout addresses fail before payment and mail", async () => {
+  for (const submittedEmail of ["", "not-an-email", "bad\r\nBcc: x@example.invalid",
+    ["customer@example.invalid"], "other@example.invalid"]) {
+    const f = checkoutFixture();
+    const req = f.request();
+    req.body.email = submittedEmail;
+    const res = response();
+    await f.handler(req, res);
+    assert.equal(res.code, 400);
+    assert.equal(res.body.code, submittedEmail === "other@example.invalid" ? "EMAIL_MISMATCH" : "VALIDATION_ERROR");
+    assert.equal(f.messages.length, 0);
+    assert.ok(!f.events.includes("verify_payment"));
+    assert.ok(!f.events.includes("commit"));
+  }
+});
+
+test("checkout compares against the current database account address", async () => {
+  const f = checkoutFixture({ accountEmail: "new-account@example.invalid" });
+  const req = f.request();
+  req.body.email = "customer@example.invalid";
+  const res = response();
+  await f.handler(req, res);
+  assert.equal(res.code, 400);
+  assert.equal(res.body.code, "EMAIL_MISMATCH");
+  assert.equal(f.messages.length, 0);
+  assert.ok(!f.events.includes("verify_payment"));
 });
 
 test("checkout rejects missing, mismatched, or browser-only identity before payment", async () => {
@@ -213,6 +261,7 @@ test("actual cancellation handler sends one fake notice after commit and connect
   assert.equal(res.code, 200);
   assert.equal(res.body.seatsReleased, 1);
   assert.equal(f.messages.length, 1);
+  assert.equal(f.messages[0].to, "customer@example.invalid");
   assert.match(f.messages[0].subject, /booking cancelled/i);
   assert.ok(f.events.indexOf("commit") < f.events.indexOf("release"));
   assert.ok(f.events.indexOf("release") < f.events.indexOf("read_committed_purchase"));

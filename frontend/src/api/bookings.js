@@ -121,11 +121,12 @@ export async function verifyTicket(token, { signal } = {}) {
 //                ID photo per booking, so Checkout sends the first discounted seat's.
 // Resolves to the confirmed booking. Rejects with an ApiError (see BOOKING_ERRORS).
 export async function createBooking(
-  { userId, showtimeId, seatIds, ticketTypes, paymentMethod, snacks = [], idImage },
+  { userId, email, showtimeId, seatIds, ticketTypes, paymentMethod, snacks = [], idImage },
   signal
 ) {
   const form = new FormData();
   form.append("userId", userId);
+  if (email !== undefined) form.append("email", email);
   form.append("showtimeId", showtimeId);
   form.append("seatIds", JSON.stringify(seatIds));
   form.append("ticketTypes", JSON.stringify(ticketTypes));

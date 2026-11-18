@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { authHeaders, clearUser } from "../../api/session.js";
 import { getAdminSession } from "../../api/admin.js";
+import { rescheduleNotificationFeedback } from "../../utils/rescheduleNotificationFeedback.js";
 import "../../styles/ScheduleManagement.css";
 
 import AdminSidebar from "../../components/AdminSidebar";
@@ -411,6 +412,7 @@ function ScheduleManagement() {
 	const [loadError, setLoadError] = useState("");
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [formError, setFormError] = useState("");
+	const [rescheduleFeedback, setRescheduleFeedback] = useState("");
 
 	const [searchQuery, setSearchQuery] = useState("");
 	const [movieFilter, setMovieFilter] = useState("all");
@@ -531,6 +533,7 @@ function ScheduleManagement() {
 
 	const openRescheduleModal = (row) => {
 		setFormError("");
+		setRescheduleFeedback("");
 		setEditForm({ datetime: row.datetime, cinemaId: row.cinemaId });
 		setEditingId(row.id);
 	};
@@ -545,7 +548,7 @@ function ScheduleManagement() {
 			const { showDate, showTime } = splitDatetimeLocal(
 				editForm.datetime,
 			);
-			await apiRequest(`/admin/showtimes/${editingId}`, {
+			const result = await apiRequest(`/admin/showtimes/${editingId}`, {
 				method: "PUT",
 				body: JSON.stringify({
 					cinemaId: editForm.cinemaId,
@@ -553,8 +556,14 @@ function ScheduleManagement() {
 					showTime,
 				}),
 			});
-			await reloadShowtimes();
+			setRescheduleFeedback(rescheduleNotificationFeedback(result));
 			setEditingId(null);
+			try {
+				await reloadShowtimes();
+				setLoadError("");
+			} catch {
+				setLoadError("Schedule was saved, but the list could not be refreshed. Reload the page to see the latest schedule.");
+			}
 		} catch (error) {
 			setFormError(error.message);
 		} finally {
@@ -630,6 +639,9 @@ function ScheduleManagement() {
 						Log Out
 					</Link>
 				</header>
+				{rescheduleFeedback && (
+					<p className="modal-notice" role="status">{rescheduleFeedback}</p>
+				)}
 
 				{loadError && (
 					<p className="schedule-empty" role="alert">
@@ -966,8 +978,8 @@ function ScheduleManagement() {
 								<IconWarning />
 								<span>
 									Rescheduling this will automatically update
-									all reserved tickets. Ticket holders will be
-									notified via email.
+									all reserved tickets. Eligible ticket holders may
+									receive email when notifications are enabled.
 								</span>
 							</p>
 

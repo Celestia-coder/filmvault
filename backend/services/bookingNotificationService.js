@@ -188,7 +188,7 @@ function createBookingNotifier({ db = pool, sendConfirmation = sendBookingConfir
         attempts.set(key, { status: "sent", count: (prior?.count ?? 0) + 1, to: prepared.to });
         return result;
       }
-      if (["disabled", "invalid_data", "invalid_recipient", "template_unavailable"].includes(result?.status)) {
+      if (["disabled", "invalid_data", "invalid_recipient", "not_allowlisted", "template_unavailable"].includes(result?.status)) {
         // No transport attempt was made; a later authorized event may prepare again.
         if (prior) attempts.set(key, prior);
         else attempts.delete(key);

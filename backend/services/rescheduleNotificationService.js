@@ -42,8 +42,8 @@ function createRescheduleNotifier({ env = process.env, send = sendRescheduleNoti
   const events = new Map();
 
   // Called on the showtime transaction's connection before the UPDATE. This
-  // snapshot excludes purchases made after the change. It does not serialize
-  // an in-flight checkout that read the old screening without locking it.
+  // snapshot excludes purchases made after the change. Checkout and this
+  // update both lock the screening row before reading or changing it.
   async function prepare({ connection, eventId, screeningId, previous, updated, admin }) {
     if (sameSchedule(previous, updated)) return { status: "unchanged", sent: 0 };
     if (previous.status !== "scheduled" || updated.status !== "scheduled") {
@@ -117,7 +117,7 @@ function createRescheduleNotifier({ env = process.env, send = sendRescheduleNoti
           attempts.set(purchaseId, { status: "sent", to: booking.customer_email, count: 1 });
           return result;
         }
-        if (["invalid_data", "invalid_recipient", "disabled", "template_unavailable"].includes(result?.status)) {
+        if (["invalid_data", "invalid_recipient", "not_allowlisted", "disabled", "template_unavailable"].includes(result?.status)) {
           attempts.delete(purchaseId); // No transport attempt occurred.
           return result;
         }
@@ -134,11 +134,15 @@ function createRescheduleNotifier({ env = process.env, send = sendRescheduleNoti
       status: sent === results.length ? "sent" : "partial_failure",
       sent,
       failed: results.filter((result) => result.status === "failed").length,
-      skipped: results.filter((result) => ["invalid_recipient", "invalid_data", "disabled", "template_unavailable"].includes(result.status)).length,
+      skipped: results.filter((result) => ["invalid_recipient", "not_allowlisted", "invalid_data", "disabled", "template_unavailable"].includes(result.status)).length,
     };
-    if (summary.failed > 0) {
+    if (summary.failed > 0 || summary.skipped > 0) {
       const definite = results.filter((result) => result.outcome === "definite").length;
-      log(`Reschedule email failure in event ${eventId}: ${definite} definite, ${summary.failed - definite} uncertain.`);
+      const skipReasons = ["invalid_recipient", "not_allowlisted", "invalid_data", "disabled", "template_unavailable"]
+        .map((status) => [status, results.filter((result) => result.status === status).length])
+        .filter(([, count]) => count > 0)
+        .map(([status, count]) => `${status}=${count}`);
+      log(`Reschedule email result: ${definite} definite, ${summary.failed - definite} uncertain; skipped ${skipReasons.join(", ") || "none"}.`);
     }
     return summary;
   }

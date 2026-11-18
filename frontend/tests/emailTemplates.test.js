@@ -63,11 +63,16 @@ test("confirmation presents optional e-ticket purchase lines without changing it
     assert.ok(email.html.includes(value), `HTML missing ${value}`);
     assert.ok(email.text.includes(value), `text missing ${value}`);
   }
-  assert.match(email.html, /border:1px dashed #2c2c2c/);
-  assert.match(email.html, /Ticket details/);
-  assert.match(email.html, /Payment summary/);
+  assert.match(email.html, /border:1px dashed #c8c8c8/);
+  assert.match(email.html, /border:1px solid #c8c8c8;border-radius:12px;border-collapse:separate;background:#ffffff/);
+  assert.match(email.html, /border-top:1px solid #d0d0d0/);
+  assert.match(email.html, />Total<\/td>/);
+  assert.match(email.html, /Branch<\/p>/);
+  assert.match(email.html, /Paid via GCash<br>Senior Citizen discount.*<br>Booked on Sunday, November 15, 2026/s);
   assert.doesNotMatch(email.html, />Ticket types</);
-  assert.doesNotMatch(email.html, /booking-badge|border-radius:999px;background:#203d32/);
+  assert.match(email.html, /border-radius:999px;background:#e2f5ec;color:#178654/);
+  assert.equal((email.html.match(/PG · 125 min/g) ?? []).length, 1);
+  assert.match(email.text, /Movie rating & runtime: PG · 125 min/);
   assert.doesNotMatch(email.html, /View your ticket|\/verify\//);
 });
 
@@ -103,10 +108,10 @@ test("long titles, many seats, and the booking reference remain readable content
     assert.ok(email.html.includes(content));
     assert.ok(email.text.includes(content));
   }
-  assert.match(email.html, /Booking reference<\/p>\s*<p[^>]*>FV-ABCD2345<\/p>/);
+  assert.match(email.html, /Reference code<\/p>\s*<p[^>]*>FV-ABCD2345<\/p>/);
 });
 
-test("all three templates share ticket styling and omit an absent poster", () => {
+test("confirmation uses the white e-ticket while other notices retain their styling", () => {
   const emails = [
     buildBookingConfirmationEmail({ ...base, cinemaNumber: 2 }),
     buildBookingCancellationEmail(base),
@@ -117,12 +122,15 @@ test("all three templates share ticket styling and omit an absent poster", () =>
       updated: { date: "2026-12-06", time: "19:00" },
     }),
   ];
-  for (const email of emails) {
+  for (const [index, email] of emails.entries()) {
     assert.match(email.html, /FILMVAULT/);
-    assert.match(email.html, /Booking reference/);
-    assert.match(email.html, /border:1px dashed #2c2c2c/);
+    assert.match(email.html, index === 0 ? /Reference code/ : /Booking reference/);
+    assert.match(email.html, index === 0 ? /border:1px dashed #c8c8c8/ : /border:1px dashed #2c2c2c/);
     assert.doesNotMatch(email.html, /<img\b/);
   }
+  assert.match(emails[0].html, /<body style="[^"]*background:#ffffff;color:#191919/);
+  assert.match(emails[1].html, /<body style="[^"]*background:#191919;color:#ffffff/);
+  assert.match(emails[2].html, /<body style="[^"]*background:#191919;color:#ffffff/);
 });
 
 test("optional poster URLs are escaped and unsafe poster URLs are rejected", () => {
@@ -140,6 +148,8 @@ test("confirmation can show an inline ticket QR while plain text retains the ver
     ticketUrl, qrImageCid: "filmvault-ticket-qr@filmvault.invalid" });
   assert.match(email.html, /src="cid:filmvault-ticket-qr@filmvault\.invalid"/);
   assert.match(email.html, /alt="QR code to verify booking FV-ABCD2345"/);
+  assert.match(email.html, /<td width="132"[^>]*><table[^>]*>.*src="cid:filmvault-ticket-qr@filmvault\.invalid"/s);
+  assert.match(email.html, /Scan to verify ticket<\/td>/);
   assert.match(email.html, /Verify your ticket/);
   assert.match(email.text, new RegExp(ticketUrl));
   assert.doesNotMatch(email.text, /cid:|image\/png/);
@@ -169,6 +179,17 @@ test("the tracked FilmVault logo can be supplied over HTTPS with text fallback",
   }
   assert.throws(() => buildBookingConfirmationEmail({ ...base, cinemaNumber: 2, logoUrl: "/src/assets/images/logo.png" }), /logoUrl/);
   assert.throws(() => buildBookingCancellationEmail({ ...base, logoUrl: "http://example.com/logo.png" }), /logoUrl/);
+});
+
+test("confirmation accepts an inline logo CID and keeps the text fallback", () => {
+  const fallback = buildBookingConfirmationEmail({ ...base, cinemaNumber: 1 });
+  assert.match(fallback.html, /<span[^>]*>FILMVAULT<\/span>/);
+  const inline = buildBookingConfirmationEmail({ ...base, cinemaNumber: 1,
+    logoImageCid: "filmvault-logo@filmvault.invalid" });
+  assert.match(inline.html, /src="cid:filmvault-logo@filmvault\.invalid"/);
+  assert.doesNotMatch(inline.text, /cid:/);
+  assert.throws(() => buildBookingConfirmationEmail({ ...base, cinemaNumber: 1,
+    logoImageCid: 'bad" onerror="alert(1)' }), /logoImageCid/);
 });
 
 test("cancellation confirms cancellation without suggesting a refund", () => {

@@ -33,30 +33,27 @@ const saveCast = async (conn, movieId, cast) => {
 };
 
 // GET /api/movies?status=now-showing,upcoming  (status is optional)
+// GET /api/movies?status=now-showing,upcoming  (status is optional)
 const getAllMovies = async (req, res) => {
   const { statuses, error } = parseStatusFilter(req.query.status);
   if (error) {
     return res.status(400).json({ success: false, message: error });
   }
 
-  const where = statuses.length ? "WHERE m.status IN (?)" : "";
+  const conditions = ["m.deleted_at IS NULL"];
+  const params = [];
+  if (statuses.length) {
+    conditions.push("m.status IN (?)");
+    params.push(statuses);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
 
   try {
     const [rows] = await pool.query(
       `${MOVIE_SELECT} ${where} GROUP BY m.movie_id ORDER BY m.movie_id`,
-      statuses.length ? [statuses] : []
+      params
     );
-    // The admin edit form reads cast from this list, so include it here too.
-    const [castRows] = await pool.query(
-      `SELECT mc.movie_id, c.cast_name FROM MOVIE_CAST mc
-       JOIN \`CAST\` c ON c.cast_id = mc.cast_id ORDER BY c.cast_id`
-    );
-    const castByMovie = {};
-    castRows.forEach((r) => (castByMovie[r.movie_id] ||= []).push(r.cast_name));
-    return res.status(200).json({
-      success: true,
-      movies: rows.map((r) => ({ ...formatMovie(r), cast: castByMovie[r.movie_id] || [] })),
-    });
+    return res.status(200).json({ success: true, movies: rows.map(formatMovie) });
   } catch (error) {
     console.error("getAllMovies error:", error);
     return res.status(500).json({ success: false, message: "Failed to fetch movies." });
@@ -72,7 +69,7 @@ const getMovieById = async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      `${MOVIE_SELECT} WHERE m.movie_id = ? GROUP BY m.movie_id`,
+      `${MOVIE_SELECT} WHERE m.movie_id = ? AND m.deleted_at IS NULL GROUP BY m.movie_id`,
       [id]
     );
     if (rows.length === 0) {
@@ -257,13 +254,8 @@ const updateMovie = async (req, res) => {
 };
 
 // DELETE /api/admin/movies/:id
-//
-// Decision (documented per Week 3 checklist): deletion is BLOCKED if the movie
-// has any existing showtimes (rows in SCREENING), rather than cascading or
-// leaving them orphaned. SCREENING is ON DELETE CASCADE from MOVIE, so without
-// this check, deleting a movie would silently wipe its showtimes and seat
-// data. Admin must remove the movie's showtimes first. Revisit with
-// Database/QA if an "archive instead of delete" approach is preferred later.
+// Soft-deletes the movie (sets deleted_at) once it has no active (non-deleted)
+// showtimes, preserving historical bookings/tickets.
 const deleteMovie = async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
@@ -271,13 +263,16 @@ const deleteMovie = async (req, res) => {
   }
 
   try {
-    const [existing] = await pool.query("SELECT movie_id FROM MOVIE WHERE movie_id = ?", [id]);
-    if (existing.length === 0) {
+    const [existing] = await pool.query(
+      "SELECT movie_id, deleted_at FROM MOVIE WHERE movie_id = ?",
+      [id]
+    );
+    if (existing.length === 0 || existing[0].deleted_at !== null) {
       return res.status(404).json({ success: false, message: "Movie not found." });
     }
 
     const [showtimes] = await pool.query(
-      "SELECT screening_id FROM SCREENING WHERE movie_id = ? LIMIT 1",
+      "SELECT screening_id FROM SCREENING WHERE movie_id = ? AND deleted_at IS NULL LIMIT 1",
       [id]
     );
     if (showtimes.length > 0) {
@@ -287,11 +282,7 @@ const deleteMovie = async (req, res) => {
       });
     }
 
-    // MOVIE_GENRE and MOVIE_CAST have no ON DELETE CASCADE, so clear them first
-    // to avoid a foreign key error.
-    await pool.query("DELETE FROM MOVIE_GENRE WHERE movie_id = ?", [id]);
-    await pool.query("DELETE FROM MOVIE_CAST WHERE movie_id = ?", [id]);
-    await pool.query("DELETE FROM MOVIE WHERE movie_id = ?", [id]);
+    await pool.query("UPDATE MOVIE SET deleted_at = NOW() WHERE movie_id = ?", [id]);
 
     return res.status(200).json({ success: true, message: "Movie deleted." });
   } catch (error) {

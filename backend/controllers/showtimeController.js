@@ -47,7 +47,7 @@ const isPositiveInt = (value) => Number.isInteger(Number(value)) && Number(value
 // GET /api/showtimes?movieId=&cinemaId=&date=
 const getAllShowtimes = async (req, res) => {
   const { movieId, cinemaId, date } = req.query;
-  const conditions = [];
+  const conditions = ["s.deleted_at IS NULL"];
   const params = [];
 
   if (movieId !== undefined) {
@@ -74,7 +74,7 @@ const getAllShowtimes = async (req, res) => {
     params.push(date);
   }
 
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const where = `WHERE ${conditions.join(" AND ")}`;
 
   try {
     const [rows] = await pool.query(
@@ -98,13 +98,16 @@ const getShowtimesForMovie = async (req, res) => {
   }
 
   try {
-    const [movieRows] = await pool.query("SELECT movie_id FROM MOVIE WHERE movie_id = ?", [movieId]);
+    const [movieRows] = await pool.query(
+      "SELECT movie_id FROM MOVIE WHERE movie_id = ? AND deleted_at IS NULL",
+      [movieId]
+    );
     if (movieRows.length === 0) {
       return res.status(404).json({ success: false, message: "Movie not found." });
     }
 
     const [rows] = await pool.query(
-      `${SHOWTIME_SELECT} WHERE s.movie_id = ? ORDER BY s.show_date, s.show_time`,
+      `${SHOWTIME_SELECT} WHERE s.movie_id = ? AND s.deleted_at IS NULL ORDER BY s.show_date, s.show_time`,
       [movieId]
     );
     return res.status(200).json({ success: true, movieId, showtimes: rows.map(formatShowtime) });
@@ -304,37 +307,63 @@ const createUpdateShowtime = ({ db = pool, notifier = createRescheduleNotifier()
 const updateShowtime = createUpdateShowtime();
 
 // DELETE /api/admin/showtimes/:id
-//
-// Decision (same rationale as movieController.deleteMovie): blocked, not
-// cascaded, if the showtime already has bookings — otherwise a ticket
-// holder's booking would point at nothing. Admin must handle
-// cancellation/refunds through a separate flow first.
+// Soft-deletes the showtime (sets deleted_at) unless it has active (non-cancelled)
+// bookings for a current/upcoming screening. Bookings on past showtimes or
+// cancelled bookings do not block deletion, and historical rows stay intact.
 const deleteShowtime = async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ success: false, message: "Invalid showtime ID." });
   }
 
+  let conn;
   try {
-    const [existing] = await pool.query(
-      "SELECT screening_id, booked_seats FROM SCREENING WHERE screening_id = ?",
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const [existing] = await conn.query(
+      "SELECT screening_id, booked_seats, deleted_at FROM SCREENING WHERE screening_id = ? FOR UPDATE",
       [id]
     );
-    if (existing.length === 0) {
+    if (existing.length === 0 || existing[0].deleted_at !== null) {
+      await conn.rollback();
       return res.status(404).json({ success: false, message: "Showtime not found." });
     }
-    if (existing[0].booked_seats > 0) {
+
+    const [activeBookings] = await conn.query(
+      `SELECT COUNT(*) AS active_count
+       FROM TICKET t
+       JOIN TOTAL_PURCHASE p ON p.purchase_id = t.purchase_id
+       JOIN SCREENING s ON s.screening_id = t.screening_id
+       WHERE t.screening_id = ?
+         AND p.status <> 'cancelled'
+         AND TIMESTAMP(s.show_date, s.show_time) >= NOW()`,
+      [id]
+    );
+
+    if (Number(activeBookings[0].active_count) > 0) {
+      await conn.rollback();
       return res.status(409).json({
         success: false,
-        message: "Cannot delete a showtime that already has bookings.",
+        message: "Cannot delete a showtime that has active bookings.",
       });
     }
 
-    await pool.query("DELETE FROM SCREENING WHERE screening_id = ?", [id]);
+    await conn.query(
+      "UPDATE SCREENING SET deleted_at = NOW() WHERE screening_id = ?",
+      [id]
+    );
+
+    await conn.commit();
     return res.status(200).json({ success: true, message: "Showtime deleted." });
   } catch (error) {
+    if (conn) {
+      try { await conn.rollback(); } catch { /* ignore */ }
+    }
     console.error("deleteShowtime error:", error);
     return res.status(500).json({ success: false, message: "Failed to delete showtime." });
+  } finally {
+    conn?.release();
   }
 };
 

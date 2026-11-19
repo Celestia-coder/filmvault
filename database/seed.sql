@@ -358,17 +358,41 @@ VALUES
 (1, 2, 4, 'active'),
 (1, 2, 5, 'active');
 
+-- Every cinema has 80 seats: rows A-H (row_num 1-8) x seats 1-10 (80 x 9 = 720).
+-- The ten Cinema 1 seats above keep their positions and generated IDs; this
+-- adds only the positions that are still missing, in cinema/row/seat order.
+INSERT INTO SEAT (cinema_id, row_num, seat_num, seat_status)
+SELECT c.cinema_id, r.row_num, n.seat_num, 'active'
+FROM CINEMA c
+CROSS JOIN (
+  SELECT 1 AS row_num UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+  UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8
+) AS r
+CROSS JOIN (
+  SELECT 1 AS seat_num UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+  UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8
+  UNION ALL SELECT 9 UNION ALL SELECT 10
+) AS n
+WHERE NOT EXISTS (
+  SELECT 1 FROM SEAT existing
+  WHERE existing.cinema_id = c.cinema_id
+    AND existing.row_num = r.row_num
+    AND existing.seat_num = n.seat_num
+)
+ORDER BY c.cinema_id, r.row_num, n.seat_num;
+
+-- total_seats matches the 80 seats of Cinema 1.
 INSERT INTO SCREENING
 (movie_id, cinema_id, show_date, show_time, total_seats, booked_seats, status)
 VALUES
 -- Insidious: Out of the Further
-(2, 1, '2026-12-25', '10:00:00', 10, 0, 'scheduled'),
+(2, 1, '2026-12-25', '10:00:00', 80, 0, 'scheduled'),
 
 -- Resident Evil
-(6, 1, '2026-12-25', '13:00:00', 10, 0, 'scheduled'),
+(6, 1, '2026-12-25', '13:00:00', 80, 0, 'scheduled'),
 
 -- Saving Cherry
-(8, 1, '2026-12-30', '16:00:00', 10, 0, 'scheduled'),
+(8, 1, '2026-12-30', '16:00:00', 80, 0, 'scheduled'),
 
 -- Life After You
-(9, 1, '2026-12-30', '19:00:00', 10, 0, 'scheduled');
+(9, 1, '2026-12-30', '19:00:00', 80, 0, 'scheduled');

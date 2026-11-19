@@ -19,6 +19,19 @@ const formatMovie = (row) => ({
   genres: row.genres ? row.genres.split(",") : [],
 });
 
+// Replaces a movie's cast with the given names, reusing existing CAST rows by name.
+const saveCast = async (conn, movieId, cast) => {
+  const names = [...new Set((Array.isArray(cast) ? cast : []).map((n) => String(n).trim()).filter(Boolean))];
+  await conn.query("DELETE FROM MOVIE_CAST WHERE movie_id = ?", [movieId]);
+  for (const name of names) {
+    const [found] = await conn.query("SELECT cast_id FROM `CAST` WHERE cast_name = ? LIMIT 1", [name]);
+    const castId = found.length
+      ? found[0].cast_id
+      : (await conn.query("INSERT INTO `CAST` (cast_name) VALUES (?)", [name]))[0].insertId;
+    await conn.query("INSERT INTO MOVIE_CAST (movie_id, cast_id) VALUES (?, ?)", [movieId, castId]);
+  }
+};
+
 // GET /api/movies?status=now-showing,upcoming  (status is optional)
 const getAllMovies = async (req, res) => {
   const { statuses, error } = parseStatusFilter(req.query.status);
@@ -33,7 +46,17 @@ const getAllMovies = async (req, res) => {
       `${MOVIE_SELECT} ${where} GROUP BY m.movie_id ORDER BY m.movie_id`,
       statuses.length ? [statuses] : []
     );
-    return res.status(200).json({ success: true, movies: rows.map(formatMovie) });
+    // The admin edit form reads cast from this list, so include it here too.
+    const [castRows] = await pool.query(
+      `SELECT mc.movie_id, c.cast_name FROM MOVIE_CAST mc
+       JOIN \`CAST\` c ON c.cast_id = mc.cast_id ORDER BY c.cast_id`
+    );
+    const castByMovie = {};
+    castRows.forEach((r) => (castByMovie[r.movie_id] ||= []).push(r.cast_name));
+    return res.status(200).json({
+      success: true,
+      movies: rows.map((r) => ({ ...formatMovie(r), cast: castByMovie[r.movie_id] || [] })),
+    });
   } catch (error) {
     console.error("getAllMovies error:", error);
     return res.status(500).json({ success: false, message: "Failed to fetch movies." });
@@ -80,14 +103,14 @@ const getMovieById = async (req, res) => {
 const createMovie = async (req, res) => {
   const {
     title, synopsis, duration, ageRating, language,
-    price, poster, director, releaseDate, status, trailerUrl, genres,
+    price, poster, director, releaseDate, status, trailerUrl, genres, cast,
   } = req.body;
 
-  if (!title || !director || !poster || !price || !duration || !status ||
+  if (!title || !director || !price || !duration || !status ||
       !Array.isArray(genres) || genres.length === 0) {
     return res.status(400).json({
       success: false,
-      message: "title, director, poster, price, duration, status, and at least one genre are required.",
+      message: "title, director, price, duration, status, and at least one genre are required.",
     });
   }
   if (Number(price) <= 0 || Number(duration) <= 0) {
@@ -123,7 +146,7 @@ const createMovie = async (req, res) => {
          poster, director, release_date, status, trailer_url)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [title, synopsis || null, duration, ageRating || null, language || null,
-       price, poster, director, releaseDate || null, status, trailerUrl || null]
+       price, poster || null, director, releaseDate || null, status, trailerUrl || null]
     );
 
     const movieId = result.insertId;
@@ -131,6 +154,7 @@ const createMovie = async (req, res) => {
       "INSERT INTO MOVIE_GENRE (movie_id, genre_id) VALUES ?",
       [genreRows.map((g) => [movieId, g.genre_id])]
     );
+    await saveCast(conn, movieId, cast);
 
     await conn.commit();
 
@@ -157,14 +181,14 @@ const updateMovie = async (req, res) => {
 
   const {
     title, synopsis, duration, ageRating, language,
-    price, poster, director, releaseDate, status, trailerUrl, genres,
+    price, poster, director, releaseDate, status, trailerUrl, genres, cast,
   } = req.body;
 
-  if (!title || !director || !poster || !price || !duration || !status ||
+  if (!title || !director || !price || !duration || !status ||
       !Array.isArray(genres) || genres.length === 0) {
     return res.status(400).json({
       success: false,
-      message: "title, director, poster, price, duration, status, and at least one genre are required.",
+      message: "title, director, price, duration, status, and at least one genre are required.",
     });
   }
   if (Number(price) <= 0 || Number(duration) <= 0) {
@@ -205,7 +229,7 @@ const updateMovie = async (req, res) => {
          base_price = ?, poster = ?, director = ?, release_date = ?, status = ?, trailer_url = ?
        WHERE movie_id = ?`,
       [title, synopsis || null, duration, ageRating || null, language || null,
-       price, poster, director, releaseDate || null, status, trailerUrl || null, id]
+       price, poster || null, director, releaseDate || null, status, trailerUrl || null, id]
     );
 
     // Simplest correct way to sync genres: wipe and re-insert rather than diffing.
@@ -214,6 +238,7 @@ const updateMovie = async (req, res) => {
       "INSERT INTO MOVIE_GENRE (movie_id, genre_id) VALUES ?",
       [genreRows.map((g) => [id, g.genre_id])]
     );
+    await saveCast(conn, id, cast);
 
     await conn.commit();
 

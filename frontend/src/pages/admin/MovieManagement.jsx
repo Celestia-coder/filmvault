@@ -596,19 +596,6 @@ function MovieManagement() {
 		event.preventDefault();
 		if (isSaving) return; // blocks double clicks
 
-		if (!form.posterPreview) {
-			setPosterRequiredError("Poster image is required.");
-			return;
-		}
-		// Edit mode with an old poster that can't load (e.g. a broken seeded URL).
-		if (!form.posterFile && previewBroken) {
-			setPosterRequiredError(
-				"The current poster can't be loaded. Upload a new one.",
-			);
-			return;
-		}
-		setPosterRequiredError("");
-
 		if (form.genres.length === 0) {
 			setGenreError("Select at least one genre.");
 			return;

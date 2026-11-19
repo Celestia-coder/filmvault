@@ -73,6 +73,18 @@
   height: 150px;
 }
 
+.profile-avatar-loading {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	background: rgba(0, 0, 0, 0.65);
+	color: #fff;
+	font-size: 0.75rem;
+}
+
 .profile-avatar {
   display: flex;
   align-items: center;
@@ -446,6 +458,8 @@
 .profile-eye:hover {
   color: var(--color-white);
 }
+
+
 
 /* ---- Responsive ---- */
 @media (max-width: 960px) {

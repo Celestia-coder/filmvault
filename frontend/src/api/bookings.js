@@ -21,141 +21,206 @@ import { request, resolvePoster } from "./movies.js";
 
 // Error codes POST /api/bookings can answer with (error.data.code).
 export const BOOKING_ERRORS = {
-  HOLD_EXPIRED: "HOLD_EXPIRED", // the hold ran out: pick seats again
-  SEAT_TAKEN: "SEAT_TAKEN", // someone else got a seat: pick seats again
-  PAYMENT_FAILED: "PAYMENT_FAILED", // seats were released: pick seats again
-  ID_IMAGE_REQUIRED: "ID_IMAGE_REQUIRED",
-  INVALID_FILE_TYPE: "INVALID_FILE_TYPE",
-  FILE_TOO_LARGE: "FILE_TOO_LARGE",
+	HOLD_EXPIRED: "HOLD_EXPIRED", // the hold ran out: pick seats again
+	SEAT_TAKEN: "SEAT_TAKEN", // someone else got a seat: pick seats again
+	PAYMENT_FAILED: "PAYMENT_FAILED", // seats were released: pick seats again
+	ID_IMAGE_REQUIRED: "ID_IMAGE_REQUIRED", // a senior/pwd seat has no ID photo
+	INVALID_UPLOAD: "INVALID_UPLOAD", // a photo was sent in the wrong field, twice, or too many
+	INVALID_FILE_TYPE: "INVALID_FILE_TYPE",
+	FILE_TOO_LARGE: "FILE_TOO_LARGE",
 };
 
 // Errors after which the seats are gone and the only way forward is the seat map.
 export const NEEDS_NEW_SEATS = [
-  BOOKING_ERRORS.HOLD_EXPIRED,
-  BOOKING_ERRORS.SEAT_TAKEN,
-  BOOKING_ERRORS.PAYMENT_FAILED,
+	BOOKING_ERRORS.HOLD_EXPIRED,
+	BOOKING_ERRORS.SEAT_TAKEN,
+	BOOKING_ERRORS.PAYMENT_FAILED,
 ];
 
 function mapBooking(raw) {
-  return {
-    id: raw.booking_id,
-    referenceNo: raw.reference_code,
-    status: raw.status,
-    paymentStatus: raw.payment_status,
-    paymentMethod: raw.payment_method,
-    discountType: raw.discount_type,
-    totalPrice: raw.total_price,
-    verificationToken: raw.verification_token,
-    ticketsTotal: raw.tickets_total,
-    snacksTotal: raw.snacks_total,
-    bookingFee: raw.booking_fee,
-    purchasedAt: raw.purchase_datetime,
-    title: raw.movie_title,
-    poster: resolvePoster(raw.poster),
-    rating: raw.age_rating,
-    runtimeMins: Number(raw.duration) || 0,
-    showDateTime: `${raw.show_date}T${raw.show_time}`,
-    branchName: raw.branch_name,
-    cinemaNum: raw.cinema_num,
-    ticketCount: raw.ticket_count,
-    seats: raw.seats,
-    tickets: raw.tickets.map((t) => ({ id: t.ticket_id, seat: t.seat, type: t.ticket_type, price: t.ticket_price })),
-    snacks: raw.snacks.map((x) => ({
-      id: x.snack_id,
-      name: x.name,
-      quantity: x.quantity,
-      unitPrice: x.unit_price,
-      subtotal: x.subtotal,
-    })),
-  };
+	return {
+		id: raw.booking_id,
+		referenceNo: raw.reference_code,
+		status: raw.status,
+		paymentStatus: raw.payment_status,
+		paymentMethod: raw.payment_method,
+		discountType: raw.discount_type,
+		totalPrice: raw.total_price,
+		verificationToken: raw.verification_token,
+		ticketsTotal: raw.tickets_total,
+		snacksTotal: raw.snacks_total,
+		bookingFee: raw.booking_fee,
+		purchasedAt: raw.purchase_datetime,
+		title: raw.movie_title,
+		poster: resolvePoster(raw.poster),
+		rating: raw.age_rating,
+		runtimeMins: Number(raw.duration) || 0,
+		showDateTime: `${raw.show_date}T${raw.show_time}`,
+		branchName: raw.branch_name,
+		cinemaNum: raw.cinema_num,
+		ticketCount: raw.ticket_count,
+		seats: raw.seats,
+		tickets: raw.tickets.map((t) => ({
+			id: t.ticket_id,
+			seat: t.seat,
+			type: t.ticket_type,
+			price: t.ticket_price,
+		})),
+		snacks: raw.snacks.map((x) => ({
+			id: x.snack_id,
+			name: x.name,
+			quantity: x.quantity,
+			unitPrice: x.unit_price,
+			subtotal: x.subtotal,
+		})),
+	};
 }
 
 // Checkout's payment options. `id` is what gets saved in TOTAL_PURCHASE.payment_method.
 export const PAYMENT_METHODS = [
-  { id: "gcash", logo: "GCash", name: "GCash", desc: "e-Wallet", color: "#0a73e8" },
-  { id: "maya", logo: "Maya", name: "Maya", desc: "e-Wallet", color: "#1fc16b" },
-  { id: "card", logo: "card", name: "Credit / Debit Card", desc: "Visa · Mastercard", color: "#23232e" },
-  { id: "bpi", logo: "BPI", name: "BPI Online", desc: "Online Banking", color: "#a4161a" },
+	{
+		id: "gcash",
+		logo: "GCash",
+		name: "GCash",
+		desc: "e-Wallet",
+		color: "#0a73e8",
+	},
+	{
+		id: "maya",
+		logo: "Maya",
+		name: "Maya",
+		desc: "e-Wallet",
+		color: "#1fc16b",
+	},
+	{
+		id: "card",
+		logo: "card",
+		name: "Credit / Debit Card",
+		desc: "Visa · Mastercard",
+		color: "#23232e",
+	},
+	{
+		id: "bpi",
+		logo: "BPI",
+		name: "BPI Online",
+		desc: "Online Banking",
+		color: "#a4161a",
+	},
 ];
 
 // "gcash" -> "GCash". Unknown/old values (e.g. "simulated") are shown as saved.
-export const paymentMethodName = (id) => PAYMENT_METHODS.find((m) => m.id === id)?.name ?? id;
+export const paymentMethodName = (id) =>
+	PAYMENT_METHODS.find((m) => m.id === id)?.name ?? id;
 
 // Only a confirmed, paid booking gets a QR code and a downloadable ticket.
 export const isValidTicket = (booking) =>
-  booking?.status === "confirmed" && booking.paymentStatus === "paid" && Boolean(booking.verificationToken);
+	booking?.status === "confirmed" &&
+	booking.paymentStatus === "paid" &&
+	Boolean(booking.verificationToken);
 
 // The page the QR code opens. Phones can't reach "localhost", so set VITE_PUBLIC_URL
 // (e.g. http://192.168.1.20:5173) when the site is opened on localhost.
 export const ticketVerifyUrl = (token) =>
-  `${import.meta.env.VITE_PUBLIC_URL ?? window.location.origin}/verify/${token}`;
+	`${import.meta.env.VITE_PUBLIC_URL ?? window.location.origin}/verify/${token}`;
 
 // GET /api/tickets/verify/:token  (public). Rejects with a 404 ApiError for an unknown token.
 // Movie/seat fields can be missing for a cancelled booking whose seats were resold.
 export async function verifyTicket(token, { signal } = {}) {
-  const { valid, ticket: t } = await request(`/api/tickets/verify/${encodeURIComponent(token)}`, { signal });
-  return {
-    valid,
-    ownerName: t.owner_name,
-    referenceNo: t.reference_code,
-    status: t.status,
-    paymentStatus: t.payment_status,
-    paymentMethod: t.payment_method,
-    totalPrice: t.total_price,
-    title: t.movie_title ?? null,
-    poster: t.movie_title ? resolvePoster(t.poster) : null,
-    showDate: t.show_date ?? null,
-    showTime: t.show_time ?? null,
-    branchName: t.branch_name ?? null,
-    cinemaNum: t.cinema_num ?? null,
-    seats: t.seats ?? [],
-    tickets: (t.tickets ?? []).map((x) => ({ seat: x.seat, type: x.ticket_type })),
-  };
+	const { valid, ticket: t } = await request(
+		`/api/tickets/verify/${encodeURIComponent(token)}`,
+		{ signal },
+	);
+	return {
+		valid,
+		ownerName: t.owner_name,
+		referenceNo: t.reference_code,
+		status: t.status,
+		paymentStatus: t.payment_status,
+		paymentMethod: t.payment_method,
+		totalPrice: t.total_price,
+		title: t.movie_title ?? null,
+		poster: t.movie_title ? resolvePoster(t.poster) : null,
+		showDate: t.show_date ?? null,
+		showTime: t.show_time ?? null,
+		branchName: t.branch_name ?? null,
+		cinemaNum: t.cinema_num ?? null,
+		seats: t.seats ?? [],
+		tickets: (t.tickets ?? []).map((x) => ({
+			seat: x.seat,
+			type: x.ticket_type,
+		})),
+	};
 }
 
-// POST /api/bookings (multipart: the ID photo is a file upload).
+// POST /api/bookings (multipart: the ID photos are file uploads).
 //   seatIds      the held seat ids, e.g. [41, 42]
 //   ticketTypes  { [seatId]: "regular" | "senior" | "pwd" }
 //   snacks       [{ snackId, quantity }]  (the server prices them from the SNACK table)
-//   idImage      File, required when any seat is senior/pwd. The API stores ONE
-//                ID photo per booking, so Checkout sends the first discounted seat's.
+//   idImages     { [seatId]: File }, one ID photo for every senior/pwd seat.
+//                Each file is sent as idImage_<seatId> so the server can match it to its seat.
 // Resolves to the confirmed booking. Rejects with an ApiError (see BOOKING_ERRORS).
 export async function createBooking(
-  { userId, showtimeId, seatIds, ticketTypes, paymentMethod, snacks = [], idImage },
-  signal
+	{
+		userId,
+		showtimeId,
+		seatIds,
+		ticketTypes,
+		paymentMethod,
+		snacks = [],
+		idImages = {},
+	},
+	signal,
 ) {
-  const form = new FormData();
-  form.append("userId", userId);
-  form.append("showtimeId", showtimeId);
-  form.append("seatIds", JSON.stringify(seatIds));
-  form.append("ticketTypes", JSON.stringify(ticketTypes));
-  form.append("paymentMethod", paymentMethod);
-  if (snacks.length > 0) form.append("snacks", JSON.stringify(snacks));
+	const form = new FormData();
+	form.append("userId", userId);
+	form.append("showtimeId", showtimeId);
+	form.append("seatIds", JSON.stringify(seatIds));
+	form.append("ticketTypes", JSON.stringify(ticketTypes));
+	form.append("paymentMethod", paymentMethod);
+	if (snacks.length > 0) form.append("snacks", JSON.stringify(snacks));
 
-  // discount_type is only sent when every discounted seat has the same type.
-  const kinds = new Set(Object.values(ticketTypes).filter((t) => t !== "regular"));
-  if (kinds.size <= 1) form.append("discount_type", kinds.size === 0 ? "none" : [...kinds][0]);
-  if (idImage) form.append("idImage", idImage);
+	// discount_type is only sent when every discounted seat has the same type.
+	const kinds = new Set(
+		Object.values(ticketTypes).filter((t) => t !== "regular"),
+	);
+	if (kinds.size <= 1)
+		form.append("discount_type", kinds.size === 0 ? "none" : [...kinds][0]);
 
-  const body = await request("/api/bookings", { method: "POST", body: form, signal });
-  return mapBooking(body.booking);
+	// One file per discounted seat.
+	for (const [seatId, file] of Object.entries(idImages)) {
+		form.append(`idImage_${seatId}`, file);
+	}
+
+	const body = await request("/api/bookings", {
+		method: "POST",
+		body: form,
+		signal,
+	});
+	return mapBooking(body.booking);
 }
 
 // GET /api/bookings?userId=   newest first
 export async function fetchBookings(userId, { signal } = {}) {
-  const body = await request("/api/bookings", { signal, params: { userId } });
-  return body.bookings.map(mapBooking);
+	const body = await request("/api/bookings", { signal, params: { userId } });
+	return body.bookings.map(mapBooking);
 }
 
 // GET /api/bookings/:id?userId=
 export async function fetchBooking(bookingId, userId, { signal } = {}) {
-  const body = await request(`/api/bookings/${bookingId}`, { signal, params: { userId } });
-  return mapBooking(body.booking);
+	const body = await request(`/api/bookings/${bookingId}`, {
+		signal,
+		params: { userId },
+	});
+	return mapBooking(body.booking);
 }
 
 // GET /api/snacks - the food & drinks menu. Prices shown here are for display only;
 // the booking endpoint prices the order again on the server.
 export async function fetchSnacks({ signal } = {}) {
-  const body = await request("/api/snacks", { signal });
-  return body.snacks.map((x) => ({ id: x.snack_id, name: x.snack_name, price: x.snack_price }));
+	const body = await request("/api/snacks", { signal });
+	return body.snacks.map((x) => ({
+		id: x.snack_id,
+		name: x.snack_name,
+		price: x.snack_price,
+	}));
 }

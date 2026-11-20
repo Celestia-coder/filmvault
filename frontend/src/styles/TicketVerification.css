@@ -1,0 +1,202 @@
+@import "./variables.css";
+
+/* Page shell (.admin-dashboard, .admin-header…) comes from Dashboard.css. */
+
+/* Header stays on top; the intro + card sit centered in the space below it. */
+.tv-main {
+	display: flex;
+	flex-direction: column;
+}
+
+.tv-body {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	width: 100%;
+	max-width: 760px;
+	margin: 0 auto;
+	padding: 32px 0 48px;
+}
+
+.tv-intro {
+	text-align: center;
+}
+
+.tv-intro h2 {
+	font-size: 20px;
+	font-weight: 700;
+}
+
+.tv-intro p {
+	margin-top: 4px;
+	font-size: 13px;
+	color: var(--color-text-muted);
+}
+
+.tv-card {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	margin-top: 20px;
+	padding: 24px;
+	background-color: var(--color-bg-dark2);
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 14px;
+}
+
+.tv-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 16px;
+	border-radius: 8px;
+	font-family: var(--font-main);
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	background-color: transparent;
+	color: var(--color-white);
+}
+
+.tv-btn:hover:not(:disabled) {
+	background-color: rgba(255, 255, 255, 0.08);
+}
+
+.tv-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.tv-drop {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	padding: 72px 24px;
+	text-align: center;
+	color: var(--color-text-muted);
+	border: 2px dashed rgba(255, 255, 255, 0.2);
+	border-radius: 12px;
+	transition: border-color 0.2s, background-color 0.2s;
+}
+
+.tv-drop-title {
+	margin: 8px 0 0;
+	font-weight: 600;
+	color: var(--color-white);
+}
+
+.tv-drop-hint {
+	margin: 0 0 10px;
+	font-size: 13px;
+}
+
+.tv-dragging {
+	border-color: var(--color-red);
+	background-color: rgba(238, 17, 43, 0.06);
+}
+
+.tv-preview {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 12px;
+	border: 2px solid rgba(255, 255, 255, 0.12);
+	border-radius: 12px;
+}
+
+.tv-file {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+}
+
+.tv-file-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 500;
+}
+
+.tv-file-actions {
+	display: flex;
+	gap: 8px;
+}
+
+.tv-remove:hover:not(:disabled) {
+	border-color: var(--color-red);
+	color: var(--color-red);
+}
+
+.tv-preview-img {
+	display: block;
+	max-width: 100%;
+	max-height: 420px;
+	margin: 0 auto;
+	object-fit: contain;
+	border-radius: 8px;
+	background-color: var(--color-surface);
+}
+
+.tv-preview-pdf {
+	width: 100%;
+	height: 480px;
+	border: 0;
+	border-radius: 8px;
+	background-color: var(--color-surface);
+}
+
+.tv-verify-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	align-self: center;
+	padding: 12px 28px;
+	font-family: var(--font-main);
+	font-size: 15px;
+	font-weight: 600;
+	color: var(--color-white);
+	background-color: var(--color-red);
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+}
+
+.tv-verify-btn:hover:not(:disabled) {
+	filter: brightness(1.1);
+}
+
+.tv-verify-btn:disabled {
+	opacity: 0.6;
+	cursor: wait;
+}
+
+/* Hidden file input; the Browse/Replace buttons open it. */
+.tv-input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}
+
+/* Verdict card (.eticket / .verify-status from Ticket.css) in the admin's dark panel. */
+.tv-result {
+	--fv-muted: var(--color-text-muted);
+	margin-top: 20px;
+	scroll-margin-top: 16px;
+}
+
+.tv-result .eticket {
+	max-width: none;
+	background-color: var(--color-bg-dark2);
+	border-color: rgba(255, 255, 255, 0.12);
+	border-radius: 14px;
+}

@@ -11,6 +11,7 @@ const NAV_ITEMS = [
 	{ label: "Schedule Management", icon: "schedule", to: "/admin/schedule" },
 	{ label: "Seat Selection Management", icon: "seat", to: "/admin/seats" },
 	{ label: "List of Bookings", icon: "bookings", to: "/admin/bookings" },
+	{ label: "Ticket Verification", icon: "verify", to: "/admin/verify" },
 ];
 
 function AdminSidebar() {

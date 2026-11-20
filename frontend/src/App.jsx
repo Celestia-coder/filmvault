@@ -27,6 +27,7 @@ import ScheduleManagement from "./pages/admin/ScheduleManagement.jsx";
 import MovieManagement from "./pages/admin/MovieManagement.jsx";
 import SeatSelectionManagement from "./pages/admin/SeatSelectionManagement";
 import ListOfBookings from "./pages/admin/ListOfBookings.jsx";
+import TicketVerification from "./pages/admin/TicketVerification.jsx";
 import RequireAdmin from "./components/RequireAdmin.jsx";
 
 function App() {
@@ -60,6 +61,7 @@ function App() {
 				<Route path="/admin/schedule" element={<ScheduleManagement />} />
 				<Route path="/admin/seats" element={<SeatSelectionManagement />} />
 				<Route path="/admin/bookings" element={<ListOfBookings />} />
+				<Route path="/admin/verify" element={<TicketVerification />} />
 			</Route>
 		</Routes>
 	);

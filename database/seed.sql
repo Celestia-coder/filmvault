@@ -381,7 +381,9 @@ WHERE NOT EXISTS (
 )
 ORDER BY c.cinema_id, r.row_num, n.seat_num;
 
--- total_seats matches the 80 seats of Cinema 1.
+-- total_seats matches the 80 seats of every cinema.
+-- Cinema 1 keeps its original four screenings (IDs 1-4). Cinemas 2-9 get one
+-- screening each (IDs 5-12) so every cinema, and every branch, can be booked.
 INSERT INTO SCREENING
 (movie_id, cinema_id, show_date, show_time, total_seats, booked_seats, status)
 VALUES
@@ -395,4 +397,31 @@ VALUES
 (8, 1, '2026-12-30', '16:00:00', 80, 0, 'scheduled'),
 
 -- Life After You
-(9, 1, '2026-12-30', '19:00:00', 80, 0, 'scheduled');
+(9, 1, '2026-12-30', '19:00:00', 80, 0, 'scheduled'),
+
+-- Vista Mall Taguig (branch 1)
+-- cinema_id 2 (Cinema 2): Insidious: Out of the Further
+(2, 2, '2026-12-25', '13:00:00', 80, 0, 'scheduled'),
+
+-- cinema_id 3 (Cinema 3): Resident Evil
+(6, 3, '2026-12-25', '16:00:00', 80, 0, 'scheduled'),
+
+-- Market! Market! (branch 2)
+-- cinema_id 4 (Cinema 1): Insidious: Out of the Further
+(2, 4, '2026-12-25', '10:00:00', 80, 0, 'scheduled'),
+
+-- cinema_id 5 (Cinema 2): Saving Cherry
+(8, 5, '2026-12-30', '13:00:00', 80, 0, 'scheduled'),
+
+-- cinema_id 6 (Cinema 3): Life After You
+(9, 6, '2026-12-30', '16:00:00', 80, 0, 'scheduled'),
+
+-- Venice McKinley (branch 3)
+-- cinema_id 7 (Cinema 1): Resident Evil
+(6, 7, '2026-12-25', '19:00:00', 80, 0, 'scheduled'),
+
+-- cinema_id 8 (Cinema 2): Saving Cherry
+(8, 8, '2026-12-30', '10:00:00', 80, 0, 'scheduled'),
+
+-- cinema_id 9 (Cinema 3): Life After You
+(9, 9, '2026-12-30', '19:00:00', 80, 0, 'scheduled');

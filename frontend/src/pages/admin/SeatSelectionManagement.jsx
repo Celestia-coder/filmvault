@@ -7,11 +7,16 @@
 //   block / release          -> PUT /api/admin/showtimes/:id/seats/:seatId?branchId=
 //   customer for a sold seat -> GET /api/admin/bookings?branchId=&date=&movieId=
 //   cancel a booking         -> PATCH /api/admin/bookings/:id?branchId=
+//
+// Choosing a showtime: pick a cinema, then a date from the date strip, then a
+// showtime card. Typing in "Search movie" lists every matching showtime across
+// all dates instead, so it still works when there are hundreds of showtimes.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate } from "react-router";
 import "../../styles/SeatSelectionManagement.css";
 import "../../styles/AdminLive.css";
+import "../../styles/SeatShowtimePicker.css";
 
 import AdminSidebar from "../../components/AdminSidebar.jsx";
 
@@ -40,6 +45,9 @@ const STATUS_LABEL = {
 
 const EMPTY_ROWS = [];
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
@@ -55,6 +63,55 @@ function plural(count, word) {
 function showtimeLabel(showtime) {
 	const suffix = showtime.status === "scheduled" ? "" : ` (${showtime.status})`;
 	return `${showtime.movieTitle} · ${formatDate(showtime.date)}, ${formatTime(showtime.time)}${suffix}`;
+}
+
+// "YYYY-MM-DD" for today in local time (showtime dates are plain date strings).
+function todayKey() {
+	const now = new Date();
+	const month = String(now.getMonth() + 1).padStart(2, "0");
+	const day = String(now.getDate()).padStart(2, "0");
+	return `${now.getFullYear()}-${month}-${day}`;
+}
+
+function dateParts(dateKey) {
+	const [year, month, day] = dateKey.split("-").map(Number);
+	const date = new Date(year, month - 1, day);
+	return { weekday: WEEKDAYS[date.getDay()], month: MONTHS[date.getMonth()], day };
+}
+
+function startsAt(showtime) {
+	return new Date(`${showtime.date}T${showtime.time}`);
+}
+
+function byStart(a, b) {
+	return `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`);
+}
+
+// Upcoming / Started / Cancelled / Completed tag for a showtime card.
+function showtimeState(showtime, now) {
+	if (showtime.status === "cancelled") return { key: "cancelled", label: "Cancelled" };
+	if (showtime.status === "completed") return { key: "completed", label: "Completed" };
+	return startsAt(showtime) < now
+		? { key: "started", label: "Started" }
+		: { key: "upcoming", label: "Upcoming" };
+}
+
+// The page opens on the nearest upcoming showtime. If everything is already
+// in the past, it opens on the latest one.
+function pickDefaultShowtime(list) {
+	if (list.length === 0) return null;
+	const now = new Date();
+	return list.find((s) => s.status === "scheduled" && startsAt(s) >= now) ?? list[list.length - 1];
+}
+
+// [{ date, list }] in date order, from a list that is already sorted by start.
+function groupByDate(list) {
+	const groups = new Map();
+	list.forEach((showtime) => {
+		if (!groups.has(showtime.date)) groups.set(showtime.date, []);
+		groups.get(showtime.date).push(showtime);
+	});
+	return [...groups.entries()].map(([date, items]) => ({ date, list: items }));
 }
 
 /* ------------------------------------------------------------------ */
@@ -225,6 +282,27 @@ function SeatButton({ seat, isSelected, onToggle }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* One showtime card                                                   */
+/* ------------------------------------------------------------------ */
+
+function ShowtimeCard({ showtime, isSelected, now, onSelect }) {
+	const state = showtimeState(showtime, now);
+
+	return (
+		<button
+			type="button"
+			className={`ssm-card ssm-card--${state.key}${isSelected ? " is-selected" : ""}`}
+			aria-pressed={isSelected}
+			onClick={() => onSelect(showtime.id)}
+		>
+			<span className="ssm-card-time">{formatTime(showtime.time)}</span>
+			<span className="ssm-card-title">{showtime.movieTitle}</span>
+			<span className={`ssm-card-tag ssm-card-tag--${state.key}`}>{state.label}</span>
+		</button>
+	);
+}
+
+/* ------------------------------------------------------------------ */
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -269,19 +347,48 @@ function SeatSelectionManagement({ branchId }) {
 
 	const [pickedCinema, setPickedCinema] = useState(null);
 	const [pickedShowtime, setPickedShowtime] = useState(null);
+	const [search, setSearch] = useState("");
 
-	// Fall back to the first option whenever the pick is missing or no longer valid.
+	// Fall back to the first cinema whenever the pick is missing or no longer valid.
 	const cinemaId = cinemas.some((c) => c.id === pickedCinema)
 		? pickedCinema
 		: (cinemas[0]?.id ?? null);
-	const cinemaShowtimes = showtimes.filter((s) => s.cinemaId === cinemaId);
-	const showtime =
-		cinemaShowtimes.find((s) => s.id === pickedShowtime) ?? cinemaShowtimes[0] ?? null;
+	const cinemaName = cinemas.find((c) => c.id === cinemaId)?.name ?? "";
+
+	// This cinema's showtimes in date/time order.
+	const cinemaShowtimes = useMemo(
+		() => showtimes.filter((s) => s.cinemaId === cinemaId).sort(byStart),
+		[showtimes, cinemaId],
+	);
+	const defaultShowtime = useMemo(() => pickDefaultShowtime(cinemaShowtimes), [cinemaShowtimes]);
+	const showtime = cinemaShowtimes.find((s) => s.id === pickedShowtime) ?? defaultShowtime;
 
 	const showtimeId = showtime?.id ?? null;
 	const showtimeCinemaId = showtime?.cinemaId ?? null;
 	const showDate = showtime?.date ?? null;
 	const showMovieId = showtime?.movieId ?? null;
+
+	/* ---------- What the picker shows ---------- */
+
+	const query = search.trim().toLowerCase();
+	const dateGroups = useMemo(() => groupByDate(cinemaShowtimes), [cinemaShowtimes]);
+	const dayShowtimes = dateGroups.find((group) => group.date === showDate)?.list ?? EMPTY_ROWS;
+	const searchGroups = useMemo(
+		() =>
+			query
+				? groupByDate(cinemaShowtimes.filter((s) => s.movieTitle.toLowerCase().includes(query)))
+				: EMPTY_ROWS,
+		[cinemaShowtimes, query],
+	);
+	const searchMatchCount = searchGroups.reduce((sum, group) => sum + group.list.length, 0);
+
+	// Keep the chosen date visible when the date strip is long.
+	const stripRef = useRef(null);
+	useEffect(() => {
+		stripRef.current
+			?.querySelector('[aria-pressed="true"]')
+			?.scrollIntoView?.({ inline: "center", block: "nearest" });
+	}, [showDate, cinemaId, query]);
 
 	/* ---------- Load the seat map for that showtime ---------- */
 
@@ -382,9 +489,17 @@ function SeatSelectionManagement({ branchId }) {
 		resetSelection();
 	}
 
-	function handleShowtimeChange(event) {
-		setPickedShowtime(Number(event.target.value));
+	function handleSelectShowtime(id) {
+		if (id === showtimeId) return;
+		setPickedShowtime(id);
 		resetSelection();
+	}
+
+	// Choosing a date opens its first showtime, so the seat map always matches
+	// a card you can see.
+	function handleSelectDate(dateKey) {
+		const first = dateGroups.find((group) => group.date === dateKey)?.list[0];
+		if (first) handleSelectShowtime(first.id);
 	}
 
 	function toggleSeat(seatId) {
@@ -487,6 +602,9 @@ function SeatSelectionManagement({ branchId }) {
 		);
 	}
 
+	const now = new Date();
+	const today = todayKey();
+
 	const STAT_CARDS = [
 		{
 			label: "Total Seats",
@@ -539,6 +657,16 @@ function SeatSelectionManagement({ branchId }) {
 		</button>
 	);
 
+	const renderCard = (item) => (
+		<ShowtimeCard
+			key={item.id}
+			showtime={item}
+			isSelected={item.id === showtimeId}
+			now={now}
+			onSelect={handleSelectShowtime}
+		/>
+	);
+
 	let mapSection;
 	if (mapFresh?.error) {
 		mapSection = (
@@ -574,7 +702,7 @@ function SeatSelectionManagement({ branchId }) {
 				)
 			}
 		>
-			<section className="ssm-filters" aria-label="Choose showtime">
+			<section className="ssm-filters" aria-label="Choose cinema and search">
 				<div className="ssm-field">
 					<label htmlFor="ssm-cinema">Cinema</label>
 					<select
@@ -591,21 +719,93 @@ function SeatSelectionManagement({ branchId }) {
 					</select>
 				</div>
 
-				<div className="ssm-field">
-					<label htmlFor="ssm-showtime">Showtime</label>
-					<select
-						id="ssm-showtime"
-						className="ssm-select ssm-select--showtime"
-						value={showtimeId}
-						onChange={handleShowtimeChange}
-					>
-						{cinemaShowtimes.map((s) => (
-							<option key={s.id} value={s.id}>
-								{showtimeLabel(s)}
-							</option>
-						))}
-					</select>
+				<div className="ssm-field ssm-field--search">
+					<label htmlFor="ssm-search">Search movie</label>
+					<div className="ssm-search">
+						<input
+							id="ssm-search"
+							type="search"
+							className="ssm-search-input"
+							placeholder="Type a movie title…"
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+						/>
+						{search && (
+							<button
+								type="button"
+								className="ssm-search-clear"
+								aria-label="Clear search"
+								onClick={() => setSearch("")}
+							>
+								×
+							</button>
+						)}
+					</div>
 				</div>
+			</section>
+
+			<section className="ssm-picker" aria-label="Choose showtime">
+				<header className="ssm-picker-head">
+					<h3>Showtime</h3>
+					<span>
+						{query
+							? `${searchMatchCount} ${searchMatchCount === 1 ? "match" : "matches"} in ${cinemaName}`
+							: `${plural(cinemaShowtimes.length, "showtime")} in ${cinemaName}`}
+					</span>
+				</header>
+
+				{query ? (
+					searchGroups.length === 0 ? (
+						<p className="ssm-picker-empty">
+							No showtimes match “{search.trim()}” in {cinemaName}.
+						</p>
+					) : (
+						searchGroups.map((group) => (
+							<div className="ssm-result-group" key={group.date}>
+								<h4 className="ssm-result-date">{formatDate(group.date)}</h4>
+								<div className="ssm-cards">{group.list.map(renderCard)}</div>
+							</div>
+						))
+					)
+				) : (
+					<>
+						<div className="ssm-dates" ref={stripRef} role="group" aria-label="Show date">
+							{dateGroups.map((group) => {
+								const parts = dateParts(group.date);
+								const isSelected = group.date === showDate;
+								const classes = [
+									"ssm-date",
+									isSelected ? "is-selected" : "",
+									group.date < today ? "is-past" : "",
+								]
+									.filter(Boolean)
+									.join(" ");
+
+								return (
+									<button
+										key={group.date}
+										type="button"
+										className={classes}
+										aria-pressed={isSelected}
+										onClick={() => handleSelectDate(group.date)}
+									>
+										<span className="ssm-date-weekday">
+											{group.date === today ? "Today" : parts.weekday}
+										</span>
+										<span className="ssm-date-day">
+											{parts.month} {parts.day}
+										</span>
+										<span className="ssm-date-count">
+											{plural(group.list.length, "show")}
+										</span>
+									</button>
+								);
+							})}
+						</div>
+
+						<div className="ssm-cards">{dayShowtimes.map(renderCard)}</div>
+					</>
+				)}
 			</section>
 
 			{mapData?.bookingsFailed && (
@@ -639,6 +839,7 @@ function SeatSelectionManagement({ branchId }) {
 								<IconSeat size={20} />
 							</span>
 							<h3>Select Seats</h3>
+							<span className="ssm-panel-sub">{showtimeLabel(showtime)}</span>
 						</header>
 
 						<ul className="ssm-legend">

@@ -569,12 +569,13 @@
 
 .ssm-btn--danger {
 	border-color: var(--color-red);
-	background-color: transparent;
-	color: var(--color-red);
+	background-color: var(--color-red);
+	color: var(--color-white);
 }
 
 .ssm-btn--danger:hover {
-	background-color: rgba(238, 17, 43, 0.12);
+	border-color: #d10f26;
+	background-color: #d10f26;
 }
 
 .ssm-btn--ghost {

@@ -315,26 +315,52 @@ const deleteShowtime = async (req, res) => {
     return res.status(400).json({ success: false, message: "Invalid showtime ID." });
   }
 
+  let conn;
   try {
-    const [existing] = await pool.query(
-      "SELECT screening_id, booked_seats FROM SCREENING WHERE screening_id = ?",
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+
+    const [existing] = await conn.query(
+      "SELECT screening_id, booked_seats FROM SCREENING WHERE screening_id = ? FOR UPDATE",
       [id]
     );
     if (existing.length === 0) {
+      await conn.rollback();
       return res.status(404).json({ success: false, message: "Showtime not found." });
     }
-    if (existing[0].booked_seats > 0) {
+
+    const [activeBookings] = await conn.query(
+      `SELECT COUNT(*) AS active_count
+       FROM TICKET t
+       JOIN TOTAL_PURCHASE p ON p.purchase_id = t.purchase_id
+       WHERE t.screening_id = ? AND p.status <> 'cancelled'`,
+      [id]
+    );
+
+    if (Number(activeBookings[0].active_count) > 0) {
+      await conn.rollback();
       return res.status(409).json({
         success: false,
         message: "Cannot delete a showtime that already has bookings.",
       });
     }
 
-    await pool.query("DELETE FROM SCREENING WHERE screening_id = ?", [id]);
+    // Remove historical/cancelled tickets and seat-booking entries for this screening
+    // so TICKET's foreign key to SCREENING does not block deletion.
+    await conn.query("DELETE FROM TICKET WHERE screening_id = ?", [id]);
+    await conn.query("DELETE FROM SEATBOOKING WHERE screening_id = ?", [id]);
+    await conn.query("DELETE FROM SCREENING WHERE screening_id = ?", [id]);
+
+    await conn.commit();
     return res.status(200).json({ success: true, message: "Showtime deleted." });
   } catch (error) {
+    if (conn) {
+      try { await conn.rollback(); } catch { /* ignore */ }
+    }
     console.error("deleteShowtime error:", error);
     return res.status(500).json({ success: false, message: "Failed to delete showtime." });
+  } finally {
+    conn?.release();
   }
 };
 

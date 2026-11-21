@@ -911,6 +911,7 @@ function Checkout() {
 				seatIds,
 				ticketTypes: typesBySeatId,
 				paymentMethod,
+				contactEmail: email.trim(),
 				snacks: foodItems.map((f) => ({
 					snackId: f.id,
 					quantity: f.qty,

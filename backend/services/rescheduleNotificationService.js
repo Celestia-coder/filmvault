@@ -4,7 +4,8 @@ const { sendRescheduleNotice } = require("./emailService");
 // One row per ticket, restricted to the changed screening and its branch.
 // The recipient is always read from USER, never from the admin request.
 const AFFECTED_BOOKINGS_SQL = `
-  SELECT p.purchase_id, p.reference_code, u.email AS customer_email,
+    SELECT p.purchase_id, p.reference_code,
+         COALESCE(NULLIF(TRIM(p.contact_email), ''), u.email) AS customer_email,
          u.name AS customer_name, m.title AS movie_title,
          se.row_num, se.seat_num
   FROM TICKET t

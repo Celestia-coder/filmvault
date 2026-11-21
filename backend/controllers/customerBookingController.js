@@ -42,6 +42,7 @@ const PURCHASE_TYPES = Object.keys(TICKET_TYPE_NAMES);
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I, easy to read aloud
 const MAX_REFERENCE_ATTEMPTS = 5;
 const ID_FIELD_RE = /^idImage_(\d+)$/; // upload field name: idImage_<seatId>
+const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 
 const isPositiveInt = (value) => Number.isInteger(value) && value > 0;
 const rowLabel = (rowNum) => String.fromCharCode(64 + rowNum); // 1 -> "A"
@@ -494,6 +495,24 @@ const createCreateBooking =
 					"VALIDATION_ERROR",
 					"paymentMethod can't be empty.",
 				);
+			// Where the e-ticket and later booking notices are emailed. Optional:
+			// when missing, notices go to the account's own email (USER.email).
+			const rawContactEmail = pick(body, "contactEmail", "contact_email");
+			let contactEmail = null;
+			if (rawContactEmail !== undefined) {
+				contactEmail = String(rawContactEmail).trim().toLowerCase();
+				if (
+					contactEmail.length > 255 ||
+					!EMAIL_PATTERN.test(contactEmail)
+				) {
+					return fail(
+						400,
+						"VALIDATION_ERROR",
+						"Enter a valid contact email address.",
+						{ field: "contactEmail" },
+					);
+				}
+			}
 			if (
 				discountTypeInput !== "none" &&
 				!PURCHASE_TYPES.includes(discountTypeInput)
@@ -894,8 +913,8 @@ const createCreateBooking =
 						const [result] = await conn.query(
 							`INSERT INTO TOTAL_PURCHASE
                (user_id, payment_method, total_price, purchase_datetime, status, reference_code,
-                payment_status, discount_type, verification_token)
-             VALUES (?, ?, ?, NOW(), 'confirmed', ?, 'paid', ?, ?)`,
+                payment_status, discount_type, verification_token, contact_email)
+             VALUES (?, ?, ?, NOW(), 'confirmed', ?, 'paid', ?, ?, ?)`,
 							[
 								userId,
 								paymentMethod,
@@ -903,6 +922,7 @@ const createCreateBooking =
 								referenceCode,
 								discountType,
 								crypto.randomBytes(16).toString("hex"),
+								contactEmail,
 							],
 						);
 						purchaseId = result.insertId;

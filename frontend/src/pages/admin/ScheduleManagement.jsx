@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { clearUser } from "../../api/session.js";
+import { getToken } from "../../api/authToken.js";
 import "../../styles/ScheduleManagement.css";
 
 import AdminSidebar from "../../components/AdminSidebar";
@@ -388,9 +389,14 @@ function getOccupancyPercent(row) {
 // message on a non-2xx response, so every caller can just `await` and
 // `catch`.
 async function apiRequest(path, options = {}) {
+	const token = getToken();
 	const response = await fetch(`${API_BASE}${path}`, {
-		headers: { "Content-Type": "application/json" },
 		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...(token ? { Authorization: `Bearer ${token}` } : {}),
+			...options.headers,
+		},
 	});
 	let body = null;
 	try {

@@ -6,6 +6,7 @@ import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
 import { request } from "../../api/movies.js";
 import { saveUser } from "../../api/session.js";
+import { saveToken } from "../../api/authToken.js";
 import "../../styles/Login.css";
 
 const IconMail = (props) => (
@@ -223,6 +224,7 @@ function Login() {
 
 			// Remember who logged in. Seat Selection, Checkout, Tickets and Profile all read this.
 			saveUser(data.user);
+			saveToken(data.token);
 			navigate(from ?? "/movies", {
 				replace: true,
 				state: from ? fromState : undefined,

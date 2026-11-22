@@ -1,11 +1,13 @@
 // Route: "/tickets/:bookingId"
 // The e-ticket / booking confirmation. Checkout sends people here right after a
-// successful payment; the Tickets list links here too. Loads GET /api/bookings/:id.
+// successful payment; "View ticket" on the Tickets list links here too. Loads GET /api/bookings/:id.
+// Shows the booking as a tear-off ticket, with the order (prices, payment, QR code) below it.
 import { useCallback, useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
-import ETicket from "../../components/ETicket.jsx";
+import BookingTearTicket from "../../components/BookingTearTicket.jsx";
+import OrderDetails from "../../components/OrderDetails.jsx";
 import DownloadTicketButton from "../../components/DownloadTicketButton.jsx";
 import { fetchBooking } from "../../api/bookings.js";
 import { getUser } from "../../api/session.js";
@@ -92,7 +94,8 @@ function TicketView({ bookingId }) {
           </p>
         )}
 
-        <ETicket booking={booking} qrSrc={qrSrc} />
+        <BookingTearTicket booking={booking} />
+        <OrderDetails booking={booking} qrSrc={qrSrc} />
 
         <div className="eticket-actions">
           <DownloadTicketButton booking={booking} />

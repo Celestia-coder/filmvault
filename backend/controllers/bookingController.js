@@ -3,12 +3,16 @@
 //
 //   GET   /api/admin/bookings                        list bookings for the admin's branch
 //   PATCH /api/admin/bookings/:id                    cancel a booking and release its seats
-//   GET   /api/admin/bookings/:id/id-image           URL to view a booking's ID photo
+//   GET   /api/admin/bookings/:id/id-images          URLs to view all of a booking's ID photos
+//   GET   /api/admin/bookings/:id/id-image           same as id-images (older name)
 //   GET   /api/admin/bookings/:id/id-image/file      serves a locally stored ID photo
 //
 // A "booking" is one TOTAL_PURCHASE row. Its movie, showtime and branch are not
 // stored on the purchase: they come from its TICKETs, so queries join
 // TICKET -> SCREENING -> CINEMA. purchase_id is returned as booking_id.
+//
+// ID photos: each discounted (senior/PWD) seat has its own photo, stored in
+// BOOKING_ID_IMAGE (one row per purchase + seat).
 //
 // TODO: no auth yet. Branch scoping relies on ?branchId= from the client.
 
@@ -26,7 +30,7 @@ const bookingNotifier = createBookingNotifier();
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const VALID_STATUSES = ["pending", "confirmed", "cancelled"];
 
-// How customerBookingController saves the ID photo reference in id_image_url.
+// How customerBookingController saves each ID photo reference in id_image_url.
 const CLOUD_ID_PREFIX = "cloudinary:"; // cloudinary:<public_id>
 const LOCAL_ID_PREFIX = "private/id-uploads/"; // private/id-uploads/<uuid>.<ext>
 const LOCAL_ID_DIR = path.join(__dirname, "..", "private", "id-uploads");
@@ -42,7 +46,12 @@ const BOOKING_SELECT = `
     p.payment_method,
     p.total_price,
     p.purchase_datetime,
-    (p.id_image_url IS NOT NULL) AS has_id_image,
+    EXISTS (
+      SELECT 1 FROM BOOKING_ID_IMAGE bi WHERE bi.purchase_id = p.purchase_id
+    ) AS has_id_image,
+    (
+      SELECT COUNT(*) FROM BOOKING_ID_IMAGE bi WHERE bi.purchase_id = p.purchase_id
+    ) AS id_image_count,
     MIN(t.booking_ref) AS booking_ref,
     u.user_id,
     u.name AS customer_name,
@@ -81,6 +90,7 @@ const formatBooking = (row) => ({
 	...row,
 	total_price: Number(row.total_price),
 	has_id_image: Boolean(row.has_id_image),
+	id_image_count: Number(row.id_image_count ?? 0),
 	seats: row.seats ? row.seats.split(",") : [],
 	// One entry per seat, same order as `seats` (e.g. ["Regular", "Senior"]).
 	ticket_types: row.ticket_types ? row.ticket_types.split(",") : [],
@@ -320,30 +330,64 @@ const cancelBooking = createCancelBooking();
 
 /* ------------------------------ ID photos ------------------------------ */
 
-// Returns the booking's stored ID reference, but only when the booking has a
-// ticket in the admin's branch. Anything else returns null, so another branch's
-// booking looks like "no ID photo".
-const findIdReference = async (bookingId, branchId) => {
+const seatLabel = (rowNum, seatNum) =>
+	`${String.fromCharCode(64 + rowNum)}${seatNum}`; // 1 -> "A"
+
+// The ID photo references saved for a booking, one per discounted seat, in seat order.
+// The branch is checked through the seat's cinema (not the tickets), so this still
+// works for a cancelled booking whose tickets were removed when its seats were resold.
+// Another branch's booking returns no rows, so it looks like "no ID photo".
+// Pass seatId to get just that seat's photo.
+const findIdReferences = async (bookingId, branchId, seatId = null) => {
+	const params = [bookingId, branchId];
+	let seatFilter = "";
+	if (seatId !== null) {
+		seatFilter = "AND bi.seat_id = ?";
+		params.push(seatId);
+	}
 	const [rows] = await pool.query(
-		`SELECT p.id_image_url
-     FROM TOTAL_PURCHASE p
-     WHERE p.purchase_id = ?
-       AND EXISTS (
-         SELECT 1 FROM TICKET t
-         JOIN SCREENING s ON s.screening_id = t.screening_id
-         JOIN CINEMA c ON c.cinema_id = s.cinema_id
-         WHERE t.purchase_id = p.purchase_id AND c.branch_id = ?
-       )`,
-		[bookingId, branchId],
+		`SELECT bi.seat_id, bi.id_image_url, se.row_num, se.seat_num, tt.type AS ticket_type
+     FROM BOOKING_ID_IMAGE bi
+     JOIN SEAT se ON se.seat_id = bi.seat_id
+     JOIN CINEMA c ON c.cinema_id = se.cinema_id
+     LEFT JOIN TICKET t ON t.purchase_id = bi.purchase_id AND t.seat_id = bi.seat_id
+     LEFT JOIN TICKET_TYPE tt ON tt.type_id = t.type_id
+     WHERE bi.purchase_id = ? AND c.branch_id = ? ${seatFilter}
+     ORDER BY se.row_num, se.seat_num`,
+		params,
 	);
-	return rows[0]?.id_image_url ?? null;
+	return rows;
 };
 
-// GET /api/admin/bookings/:id/id-image?branchId=
-// Returns { url } that the admin page can show in an <img>:
+// A URL the admin page can show in an <img>:
 //   cloud photo -> signed Cloudinary URL
 //   local photo -> the /id-image/file route below
-const getBookingIdImage = async (req, res) => {
+// Returns null when the stored reference is in an unknown format.
+const buildIdImageUrl = (req, bookingId, branchId, row) => {
+	const stored = row.id_image_url;
+
+	if (stored?.startsWith(CLOUD_ID_PREFIX)) {
+		return cloudinary.url(stored.slice(CLOUD_ID_PREFIX.length), {
+			type: "authenticated",
+			sign_url: true,
+			secure: true,
+			resource_type: "image",
+		});
+	}
+
+	if (stored?.startsWith(LOCAL_ID_PREFIX)) {
+		// Absolute URL: the admin page runs on a different port than this server.
+		return `${req.protocol}://${req.get("host")}/api/admin/bookings/${bookingId}/id-image/file?branchId=${branchId}&seatId=${row.seat_id}`;
+	}
+
+	return null;
+};
+
+// GET /api/admin/bookings/:id/id-images?branchId=
+// Returns every ID photo of the booking, one per discounted seat:
+//   { success, images: [{ seat_id, seat, ticket_type, url }], url }
+// `url` is the first photo's URL, kept so an admin page written for one photo keeps working.
+const getBookingIdImages = async (req, res) => {
 	const id = Number(req.params.id);
 	if (!Number.isInteger(id) || id <= 0) {
 		return res
@@ -357,39 +401,38 @@ const getBookingIdImage = async (req, res) => {
 	}
 
 	try {
-		const stored = await findIdReference(id, scope.branchId);
+		const rows = await findIdReferences(id, scope.branchId);
+		const images = rows
+			.map((row) => ({
+				seat_id: row.seat_id,
+				seat: seatLabel(row.row_num, row.seat_num),
+				ticket_type: row.ticket_type ?? null,
+				url: buildIdImageUrl(req, id, scope.branchId, row),
+			}))
+			.filter((image) => image.url !== null);
 
-		if (stored?.startsWith(CLOUD_ID_PREFIX)) {
-			const url = cloudinary.url(stored.slice(CLOUD_ID_PREFIX.length), {
-				type: "authenticated",
-				sign_url: true,
-				secure: true,
-				resource_type: "image",
+		if (images.length === 0) {
+			return res.status(404).json({
+				success: false,
+				message: "This booking has no ID photo.",
 			});
-			return res.status(200).json({ success: true, url });
 		}
-
-		if (stored?.startsWith(LOCAL_ID_PREFIX)) {
-			// Absolute URL: the admin page runs on a different port than this server.
-			const url = `${req.protocol}://${req.get("host")}/api/admin/bookings/${id}/id-image/file?branchId=${scope.branchId}`;
-			return res.status(200).json({ success: true, url });
-		}
-
 		return res
-			.status(404)
-			.json({ success: false, message: "This booking has no ID photo." });
+			.status(200)
+			.json({ success: true, url: images[0].url, images });
 	} catch (error) {
-		console.error("getBookingIdImage error:", error);
+		console.error("getBookingIdImages error:", error);
 		return res
 			.status(500)
-			.json({ success: false, message: "Failed to load the ID image." });
+			.json({ success: false, message: "Failed to load the ID images." });
 	}
 };
 
-// GET /api/admin/bookings/:id/id-image/file?branchId=
-// Sends a locally stored ID photo (the fallback storage). The file name comes
-// from the database and must match the server-generated pattern, so no other
-// path on the server can be requested.
+// GET /api/admin/bookings/:id/id-image/file?branchId=&seatId=
+// Sends a locally stored ID photo (the fallback storage). seatId picks which seat's
+// photo; without it, the first local photo is sent. The file name comes from the
+// database and must match the server-generated pattern, so no other path on the
+// server can be requested.
 const getBookingIdImageFile = async (req, res) => {
 	const id = Number(req.params.id);
 	if (!Number.isInteger(id) || id <= 0) {
@@ -403,11 +446,23 @@ const getBookingIdImageFile = async (req, res) => {
 		return res.status(400).json({ success: false, message: scope.error });
 	}
 
+	let seatId = null;
+	if (req.query.seatId !== undefined) {
+		if (!isPositiveInt(req.query.seatId)) {
+			return res.status(400).json({
+				success: false,
+				message: "seatId must be a positive integer.",
+			});
+		}
+		seatId = Number(req.query.seatId);
+	}
+
 	try {
-		const stored = await findIdReference(id, scope.branchId);
-		const fileName = stored?.startsWith(LOCAL_ID_PREFIX)
-			? stored.slice(LOCAL_ID_PREFIX.length)
-			: null;
+		const rows = await findIdReferences(id, scope.branchId, seatId);
+		const stored = rows
+			.map((row) => row.id_image_url)
+			.find((ref) => ref?.startsWith(LOCAL_ID_PREFIX));
+		const fileName = stored ? stored.slice(LOCAL_ID_PREFIX.length) : null;
 		if (!fileName || !LOCAL_ID_FILE_RE.test(fileName)) {
 			return res.status(404).json({
 				success: false,
@@ -440,6 +495,7 @@ module.exports = {
 	getAdminBookings,
 	cancelBooking,
 	createCancelBooking,
-	getBookingIdImage,
+	getBookingIdImages,
+	getBookingIdImage: getBookingIdImages, // older name
 	getBookingIdImageFile,
 };

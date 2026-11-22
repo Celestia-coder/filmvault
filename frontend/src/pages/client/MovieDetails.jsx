@@ -129,7 +129,7 @@ function MovieDetails() {
     }, [movieId, isValidId, requestKey]);
 
     const backButton = (
-        <button type="button" className="btn-back" onClick={() => navigate(-1)}>
+        <button type="button" className="btn-back" onClick={() => navigate(`/movies`)}>
             ← Back
         </button>
     );

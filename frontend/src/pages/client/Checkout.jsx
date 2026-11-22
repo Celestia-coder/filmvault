@@ -1,10 +1,11 @@
 // Route: "/checkout"
 // Reached from SeatSelection, which passes the held seats and the hold expiry in route state.
 // Next page: "/tickets/:bookedId" (after a successful booking).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
+import IdPhotoCard from "../../components/IdPhotoCard.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
 import moviePoster from "../../assets/images/movie-poster.webp";
 import { getUser } from "../../api/session.js";
@@ -72,11 +73,6 @@ const IconWarning = (p) => (
 		<path d="M12 9v4M12 17h.01" />
 	</Icon>
 );
-const IconUpload = (p) => (
-	<Icon {...p}>
-		<path d="M12 16V4M7 9l5-5 5 5M4 16v4h16v-4" />
-	</Icon>
-);
 const IconLock = (p) => (
 	<Icon {...p}>
 		<rect x="3" y="11" width="18" height="11" rx="2" />
@@ -97,12 +93,6 @@ const IconCheckCircle = (p) => (
 	<Icon size={40} strokeWidth="1.8" {...p}>
 		<circle cx="12" cy="12" r="10" />
 		<path d="m8 12.5 3 3 5-6" />
-	</Icon>
-);
-const IconCamera = (p) => (
-	<Icon {...p}>
-		<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z" />
-		<circle cx="12" cy="13" r="4" />
 	</Icon>
 );
 const IconInfo = (p) => (
@@ -399,204 +389,6 @@ function PaymentSuccessModal({ onViewTicket }) {
 }
 
 /* ---------------------------------------------------------------- */
-/* Simulated ID scan (DEMO ONLY)                                    */
-/* ---------------------------------------------------------------- */
-
-/**
- * Opens the camera and plays a fake "scanning" animation. It does NOT read
- * or check the ID. Swap it for a real provider's SDK (Stripe Identity,
- * Veriff, Sumsub, ...) if real verification is ever needed.
- *
- * What it does do: when the scan ends, it takes a photo of the camera frame
- * and gives it to onVerified(file). That photo is the ID image the booking
- * needs, so scanning works as another way to upload a file.
- */
-function IdScanModal({ seat, typeLabel, onVerified, onClose }) {
-	const videoRef = useRef(null);
-	const streamRef = useRef(null);
-	const [status, setStatus] = useState("starting"); // starting | ready | scanning | done | error
-	const [errorMsg, setErrorMsg] = useState("");
-	const [shot, setShot] = useState(null); // the photo taken when the scan ends
-
-	// Start the camera when the modal opens.
-	useEffect(() => {
-		let cancelled = false;
-
-		const startCamera = async () => {
-			if (!navigator.mediaDevices?.getUserMedia) {
-				setErrorMsg(
-					"Camera isn't available here. Open the site on localhost or HTTPS.",
-				);
-				setStatus("error");
-				return;
-			}
-			try {
-				const stream = await navigator.mediaDevices.getUserMedia({
-					video: { facingMode: "environment" },
-					audio: false,
-				});
-				if (cancelled) {
-					stream.getTracks().forEach((t) => t.stop());
-					return;
-				}
-				streamRef.current = stream;
-				if (videoRef.current) videoRef.current.srcObject = stream;
-				setStatus("ready");
-			} catch {
-				setErrorMsg(
-					"Camera access was blocked. Allow camera permission and try again.",
-				);
-				setStatus("error");
-			}
-		};
-
-		startCamera();
-
-		// Always release the camera when the modal closes.
-		return () => {
-			cancelled = true;
-			streamRef.current?.getTracks().forEach((t) => t.stop());
-		};
-	}, []);
-
-	// Fake 3-second scan, then take a photo of the frame as the ID image.
-	useEffect(() => {
-		if (status !== "scanning") return undefined;
-
-		const captureFailed = () => {
-			setErrorMsg(
-				"Couldn't capture the ID. Try again, or close this and upload a photo instead.",
-			);
-			setStatus("error");
-		};
-
-		const id = setTimeout(() => {
-			const video = videoRef.current;
-			if (!video || !video.videoWidth) {
-				captureFailed();
-				return;
-			}
-			const canvas = document.createElement("canvas");
-			canvas.width = video.videoWidth;
-			canvas.height = video.videoHeight;
-			canvas.getContext("2d").drawImage(video, 0, 0);
-			canvas.toBlob(
-				(blob) => {
-					if (!blob) {
-						captureFailed();
-						return;
-					}
-					setShot(
-						new File([blob], `id-scan-${seat}.jpg`, {
-							type: "image/jpeg",
-						}),
-					);
-					setStatus("done");
-				},
-				"image/jpeg",
-				0.85,
-			);
-		}, 3000);
-
-		return () => clearTimeout(id);
-	}, [status, seat]);
-
-	return (
-		<div
-			className="co-modal-overlay"
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="co-scan-title"
-		>
-			<div className="co-scan-modal">
-				<p className="co-scan-title" id="co-scan-title">
-					Verify ID · Seat {seat}
-				</p>
-				<p className="co-scan-sub">
-					{typeLabel} ID · Hold your ID inside the frame
-				</p>
-
-				<div
-					className={
-						"co-scan-view" +
-						(status === "scanning" ? " scanning" : "")
-					}
-				>
-					<video
-						ref={videoRef}
-						className="co-scan-video"
-						autoPlay
-						playsInline
-						muted
-					/>
-					{(status === "ready" || status === "scanning") && (
-						<span className="co-scan-frame" />
-					)}
-					{status === "scanning" && <span className="co-scan-line" />}
-					{status === "starting" && (
-						<p className="co-scan-overlay-text">Starting camera…</p>
-					)}
-					{status === "error" && (
-						<p className="co-scan-overlay-text">{errorMsg}</p>
-					)}
-					{status === "done" && (
-						<div className="co-scan-overlay-text co-scan-done">
-							<IconCheckCircle />
-							<span>Scan complete</span>
-						</div>
-					)}
-				</div>
-
-				<p className="co-scan-demo">
-					Demo mode — this scan is simulated and doesn't check your
-					ID.
-				</p>
-
-				<div className="co-scan-actions">
-					{status !== "done" && (
-						<button
-							type="button"
-							className="co-scan-btn"
-							onClick={onClose}
-						>
-							Cancel
-						</button>
-					)}
-					{status === "ready" && (
-						<button
-							type="button"
-							className="co-scan-btn co-scan-btn--primary"
-							onClick={() => setStatus("scanning")}
-						>
-							Start scan
-						</button>
-					)}
-					{status === "scanning" && (
-						<button
-							type="button"
-							className="co-scan-btn co-scan-btn--primary"
-							disabled
-						>
-							Scanning…
-						</button>
-					)}
-					{status === "done" && (
-						<button
-							type="button"
-							className="co-scan-btn co-scan-btn--primary"
-							onClick={() => onVerified(shot)}
-							disabled={!shot}
-						>
-							Done
-						</button>
-					)}
-				</div>
-			</div>
-		</div>
-	);
-}
-
-/* ---------------------------------------------------------------- */
 /* Page                                                             */
 /* ---------------------------------------------------------------- */
 function Checkout() {
@@ -653,13 +445,9 @@ function Checkout() {
 	const [ticketTypes, setTicketTypes] = useState(() =>
 		Object.fromEntries(seats.map((seat) => [seat, "regular"])),
 	);
-	const [idFiles, setIdFiles] = useState({}); // { A1: File }
+	const [idFiles, setIdFiles] = useState({}); // { A1: File } (uploaded or taken with the camera)
 	const [idErrors, setIdErrors] = useState({}); // { A1: "message" }
 	const [idHolders, setIdHolders] = useState({}); // { A1: { name, number } }
-	const [idVerified, setIdVerified] = useState({}); // { A1: true } (simulated scan only)
-	const [draggingSeat, setDraggingSeat] = useState(null); // seat whose upload box is being dragged over
-	const [scanSeat, setScanSeat] = useState(null); // seat whose scan pop-up is open
-	const fileInputRefs = useRef({});
 
 	/* ---- state: food ---- */
 	const [food, setFood] = useState([]); // [{ id, icon, name, price, qty }]
@@ -774,7 +562,7 @@ function Checkout() {
 	/* ---- validation ---- */
 	const emailValid = EMAIL_REGEX.test(email.trim());
 	// Every discounted seat needs its own ID photo, holder name and ID number.
-	// A camera scan counts too, because it saves its photo into idFiles.
+	// A photo taken with the camera counts too, because it is saved into idFiles.
 	const idOk = discountedSeats.every(
 		(seat) =>
 			Boolean(idFiles[seat]) &&
@@ -818,7 +606,6 @@ function Checkout() {
 		setIdFiles(dropSeat(seat));
 		setIdErrors(dropSeat(seat));
 		setIdHolders(dropSeat(seat));
-		setIdVerified(dropSeat(seat));
 	};
 
 	/** Changes a seat's ticket type. Going back to Regular removes its ID details. */
@@ -835,7 +622,6 @@ function Checkout() {
 			...prev,
 			[seat]: { name: "", number: "", ...prev[seat], [field]: value },
 		}));
-		setIdVerified(dropSeat(seat)); // details changed, so the demo scan no longer applies
 	};
 
 	/** Reloads the food menu after a failed load. */
@@ -857,7 +643,10 @@ function Checkout() {
 	const setSeatError = (seat, message) =>
 		setIdErrors((prev) => ({ ...prev, [seat]: message }));
 
-	/** Checks an uploaded ID photo (type and size) and saves it for a seat. */
+	/**
+	 * Checks an ID photo (type and size) and saves it for a seat.
+	 * Used for both uploaded files and photos taken with the camera.
+	 */
 	const handleFile = (seat, file) => {
 		if (!file) return;
 		if (!ID_FILE_PATTERN.test(file.name)) {
@@ -870,14 +659,12 @@ function Checkout() {
 		}
 		setSeatError(seat, "");
 		setIdFiles((prev) => ({ ...prev, [seat]: file }));
-		setIdVerified(dropSeat(seat)); // new file, so the demo scan no longer applies
 	};
 
-	/** Handles a file dropped on a seat's upload box. */
-	const handleDrop = (seat) => (e) => {
-		e.preventDefault();
-		setDraggingSeat(null);
-		handleFile(seat, e.dataTransfer.files?.[0]);
+	/** Removes a seat's saved ID photo (the name and number stay). */
+	const removeSeatPhoto = (seat) => {
+		setIdFiles(dropSeat(seat));
+		setSeatError(seat, "");
 	};
 
 	/** Opens the confirm pop-up (the real payment happens in handlePay). */
@@ -1054,7 +841,6 @@ function Checkout() {
 									const discounted =
 										TICKET_TYPES[type].discounted;
 									const row = seat.charAt(0);
-									const idFile = idFiles[seat];
 									const holder = idHolders[seat] || {
 										name: "",
 										number: "",
@@ -1204,106 +990,20 @@ function Checkout() {
 														</div>
 													</div>
 
-													<input
-														ref={(el) =>
-															(fileInputRefs.current[
-																seat
-															] = el)
+													{/* Upload File / Take Photo */}
+													<IdPhotoCard
+														seat={seat}
+														file={idFiles[seat]}
+														error={idErrors[seat]}
+														onFile={(f) =>
+															handleFile(seat, f)
 														}
-														type="file"
-														accept=".jpg,.jpeg,.png,.webp"
-														hidden
-														onChange={(e) =>
-															handleFile(
+														onRemove={() =>
+															removeSeatPhoto(
 																seat,
-																e.target
-																	.files?.[0],
 															)
 														}
 													/>
-													<button
-														type="button"
-														className={
-															"co-id-drop" +
-															(draggingSeat ===
-															seat
-																? " dragging"
-																: "") +
-															(idFile
-																? " uploaded"
-																: "")
-														}
-														onClick={() =>
-															fileInputRefs.current[
-																seat
-															]?.click()
-														}
-														onDragOver={(e) => {
-															e.preventDefault();
-															setDraggingSeat(
-																seat,
-															);
-														}}
-														onDragLeave={() =>
-															setDraggingSeat(
-																null,
-															)
-														}
-														onDrop={handleDrop(
-															seat,
-														)}
-													>
-														<IconUpload size={24} />
-														<span className="co-id-drop-title">
-															{idFile
-																? `✓ ${idFile.name}`
-																: "Click to upload or drag & drop"}
-														</span>
-														<span className="co-id-drop-desc">
-															JPG, PNG or WebP ·
-															max 5 MB
-														</span>
-													</button>
-													{idErrors[seat] && (
-														<p className="co-error">
-															{idErrors[seat]}
-														</p>
-													)}
-
-													<div className="co-id-actions">
-														<button
-															type="button"
-															className={
-																"co-scan-open" +
-																(idVerified[
-																	seat
-																]
-																	? " done"
-																	: "")
-															}
-															onClick={() =>
-																setScanSeat(
-																	seat,
-																)
-															}
-															title={
-																idVerified[seat]
-																	? "Click to scan again"
-																	: undefined
-															}
-														>
-															<IconCamera />{" "}
-															{idVerified[seat]
-																? "✓ ID scanned (demo)"
-																: "Scan ID with camera"}
-														</button>
-														{!idVerified[seat] && (
-															<span className="co-id-optional">
-																Or upload a
-																photo above
-															</span>
-														)}
-													</div>
 												</div>
 											)}
 										</div>
@@ -1673,27 +1373,6 @@ function Checkout() {
 			</section>
 
 			<Footer />
-
-			{/* ============ ID SCAN (DEMO) POP-UP ============ */}
-			{scanSeat && (
-				<IdScanModal
-					seat={scanSeat}
-					typeLabel={
-						TICKET_TYPES[ticketTypes[scanSeat]]?.label ?? "Discount"
-					}
-					onClose={() => setScanSeat(null)}
-					onVerified={(photo) => {
-						// The scan's photo counts as this seat's ID image, same as an upload.
-						setIdFiles((prev) => ({ ...prev, [scanSeat]: photo }));
-						setSeatError(scanSeat, "");
-						setIdVerified((prev) => ({
-							...prev,
-							[scanSeat]: true,
-						}));
-						setScanSeat(null);
-					}}
-				/>
-			)}
 
 			{/* ============ CONFIRM BOOKING POP-UP ============ */}
 			{confirmOpen && !paid && (

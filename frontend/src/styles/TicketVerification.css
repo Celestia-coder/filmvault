@@ -1,8 +1,5 @@
 @import "./variables.css";
 
-/* Page shell (.admin-dashboard, .admin-header…) comes from Dashboard.css. */
-
-/* Header stays on top; the intro + card sit centered in the space below it. */
 .tv-main {
 	display: flex;
 	flex-direction: column;
@@ -79,7 +76,9 @@
 	color: var(--color-text-muted);
 	border: 2px dashed rgba(255, 255, 255, 0.2);
 	border-radius: 12px;
-	transition: border-color 0.2s, background-color 0.2s;
+	transition:
+		border-color 0.2s,
+		background-color 0.2s;
 }
 
 .tv-drop-title {
@@ -199,4 +198,118 @@
 	background-color: var(--color-bg-dark2);
 	border-color: rgba(255, 255, 255, 0.12);
 	border-radius: 14px;
+}
+
+/* ---------- Upload / Camera tabs ---------- */
+.tv-tabs {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 16px;
+	padding: 4px;
+	background: var(--color-bg-dark);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 12px;
+}
+
+.tv-tab {
+	flex: 1;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 10px 12px;
+	background: transparent;
+	border: none;
+	border-radius: 8px;
+	color: rgba(255, 255, 255, 0.6);
+	font-family: var(--font-main);
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	transition:
+		background 0.15s ease,
+		color 0.15s ease;
+}
+
+.tv-tab:hover:not(:disabled) {
+	background: rgba(255, 255, 255, 0.1);
+	color: var(--color-white);
+}
+
+.tv-tab--active {
+	background: var(--color-red);
+	color: var(--color-white);
+}
+
+.tv-tab--active:hover:not(:disabled) {
+	background: var(--color-red);
+}
+
+.tv-tab:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+/* ---------- Camera scanner ---------- */
+.tv-scanner {
+	position: relative;
+	aspect-ratio: 4 / 3;
+	margin-bottom: 16px;
+	overflow: hidden;
+	background: var(--color-surface);
+	border-radius: 12px;
+}
+
+.tv-scanner-video {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.tv-scan-frame {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 55%;
+	aspect-ratio: 1;
+	transform: translate(-50%, -50%);
+	border: 3px solid var(--color-red);
+	border-radius: 16px;
+	box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+	pointer-events: none;
+}
+
+.tv-scan-hint {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 12px;
+	margin: 0;
+	text-align: center;
+	font-size: 13px;
+	color: var(--color-white);
+	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+.tv-scan-error {
+	position: absolute;
+	left: 16px;
+	right: 16px;
+	top: 50%;
+	transform: translateY(-50%);
+	margin: 0;
+}
+
+.tv-scan-done {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	aspect-ratio: 4 / 3;
+	margin-bottom: 16px;
+	background: var(--color-surface);
+	border-radius: 12px;
+	color: var(--color-text-muted);
 }

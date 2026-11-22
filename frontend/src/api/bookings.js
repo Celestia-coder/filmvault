@@ -24,6 +24,8 @@ export const BOOKING_ERRORS = {
 	HOLD_EXPIRED: "HOLD_EXPIRED", // the hold ran out: pick seats again
 	SEAT_TAKEN: "SEAT_TAKEN", // someone else got a seat: pick seats again
 	PAYMENT_FAILED: "PAYMENT_FAILED", // seats were released: pick seats again
+	PAYMENT_REQUIRED: "PAYMENT_REQUIRED", // Xendit: pay error.data.invoice.url, then resend with paymentRef
+	PAYMENT_ALREADY_USED: "PAYMENT_ALREADY_USED", // that invoice already confirmed another booking
 	ID_IMAGE_REQUIRED: "ID_IMAGE_REQUIRED", // a senior/pwd seat has no ID photo
 	INVALID_UPLOAD: "INVALID_UPLOAD", // a photo was sent in the wrong field, twice, or too many
 	INVALID_FILE_TYPE: "INVALID_FILE_TYPE",
@@ -168,6 +170,7 @@ export async function createBooking(
 		paymentMethod,
 		snacks = [],
 		idImages = {},
+		paymentRef,
 	},
 	signal,
 ) {
@@ -177,6 +180,7 @@ export async function createBooking(
 	form.append("seatIds", JSON.stringify(seatIds));
 	form.append("ticketTypes", JSON.stringify(ticketTypes));
 	form.append("paymentMethod", paymentMethod);
+	if (paymentRef) form.append("paymentRef", paymentRef);
 	if (snacks.length > 0) form.append("snacks", JSON.stringify(snacks));
 
 	// discount_type is only sent when every discounted seat has the same type.
@@ -200,6 +204,15 @@ export async function createBooking(
 }
 
 // GET /api/bookings?userId=   newest first
+// Xendit invoice status while the customer pays in another tab: PENDING | PAID | SETTLED | EXPIRED
+export async function fetchInvoiceStatus(invoiceId, { signal } = {}) {
+	const body = await request(
+		`/api/payments/invoices/${encodeURIComponent(invoiceId)}`,
+		{ signal },
+	);
+	return body.status;
+}
+
 export async function fetchBookings(userId, { signal } = {}) {
 	const body = await request("/api/bookings", { signal, params: { userId } });
 	return body.bookings.map(mapBooking);

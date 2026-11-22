@@ -1,22 +1,56 @@
 // services/paymentService.js
 // The ONE place payment happens. createBooking() calls verifyPayment() and
-// nothing else in the codebase talks to a payment provider.
+// nothing else in the booking code talks to a payment provider.
 //
-// TODAY: it auto-passes, so every booking is "paid".
-// LATER (payment simulation / a real gateway): only this function changes.
-// Keep the contract the same and the booking code does not need to be touched:
-//
-//   verifyPayment({ userId, amount, paymentMethod })
+//   verifyPayment({ userId, amount, paymentMethod, paymentRef })
 //     -> resolves { ok: true,  transactionId? }
-//     -> resolves { ok: false, reason }          (payment declined/failed)
-//     -> or throws                               (treated as a failed payment)
+//     -> resolves { ok: false, reason }                     (payment declined/failed)
+//     -> resolves { ok: false, pending: true, invoice }     (Xendit: pay first, then retry
+//                                                            the booking with paymentRef)
+//     -> or throws                                          (treated as a failed payment)
 //
 // amount is the server-calculated total in pesos (a number with 2 decimals).
+//
+// PAYMENT_PROVIDER=xendit turns on Xendit (test mode with a xnd_development_ key).
+// Anything else keeps the old behaviour: every booking auto-passes as "paid".
 
-const verifyPayment = async ({ userId, amount, paymentMethod }) => {
-  // eslint-disable-next-line no-unused-vars
-  void userId, amount, paymentMethod;
-  return { ok: true, transactionId: null };
-};
+const xenditClient = require("./xendit");
 
-module.exports = { verifyPayment };
+const PAID_STATUSES = new Set(["PAID", "SETTLED"]);
+// Seats are held for 10 minutes; the invoice must not outlive the hold.
+const INVOICE_SECONDS = 10 * 60;
+
+const createVerifyPayment =
+  ({ provider = () => process.env.PAYMENT_PROVIDER, xendit = xenditClient } = {}) =>
+  async ({ userId, amount, paymentRef }) => {
+    if (provider() !== "xendit") return { ok: true, transactionId: null };
+
+    // First attempt: no invoice yet, so make one for the server's total.
+    if (!paymentRef) {
+      const invoice = await xendit.createInvoice({
+        externalId: `filmvault-${userId}-${Date.now()}`,
+        amount,
+        description: "FilmVault booking",
+        durationSeconds: INVOICE_SECONDS,
+      });
+      return {
+        ok: false,
+        pending: true,
+        invoice: { id: invoice.id, url: invoice.invoice_url },
+      };
+    }
+
+    // Retry after paying: Xendit, not the browser, says whether it was paid.
+    const invoice = await xendit.getInvoice(paymentRef);
+    if (!String(invoice.external_id).startsWith(`filmvault-${userId}-`))
+      return { ok: false, reason: "This payment belongs to another account." };
+    if (!PAID_STATUSES.has(invoice.status))
+      return { ok: false, reason: "Payment was not completed." };
+    if (Math.round(invoice.amount * 100) !== Math.round(amount * 100))
+      return { ok: false, reason: "Paid amount doesn't match the booking total." };
+    return { ok: true, transactionId: invoice.id };
+  };
+
+const verifyPayment = createVerifyPayment();
+
+module.exports = { verifyPayment, createVerifyPayment };

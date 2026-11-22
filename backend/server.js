@@ -14,6 +14,7 @@ const seatHoldRoutes = require("./routes/seatHoldRoutes");
 const customerBookingRoutes = require("./routes/customerBookingRoutes");
 const snackRoutes = require("./routes/snackRoutes");
 const uploadRoutes = require("./routes/upload");
+const paymentRoutes = require("./routes/paymentRoutes");
 
 const app = express();
 
@@ -59,6 +60,9 @@ app.use("/api", snackRoutes);
 // Image uploads to Cloudinary: POST /api/upload/poster and /api/upload/profile.
 // ID photos are not uploaded here; they go through POST /api/bookings.
 app.use("/api/upload", uploadRoutes);
+
+// Payments: Xendit invoice status (Checkout polls it)
+app.use("/api", paymentRoutes);
 
 const PORT = process.env.PORT || 5000;
 

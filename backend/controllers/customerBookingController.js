@@ -18,6 +18,8 @@
 //   SEAT_TAKEN (409)          seat no longer available; failedSeats lists them
 //   SHOWTIME_UNAVAILABLE (409)
 //   PAYMENT_FAILED (402)      payment failed; seats were released
+//   PAYMENT_REQUIRED (402)    Xendit: pay `invoice.url`, then resend with paymentRef = invoice.id
+//   PAYMENT_ALREADY_USED (409) that paid invoice is already on another booking
 //
 // TODO: userId comes from the request because there is no real auth yet.
 // Take it from the session once login sessions exist.
@@ -449,6 +451,7 @@ const discardIdFile = (file) => {
 //   seatIds              optional JSON array, e.g. [41,42]. Omit to book every seat
 //                        the user currently holds for the showtime.
 //   paymentMethod        e.g. "gcash" (default "simulated")
+//   paymentRef           Xendit invoice id, only on the retry after paying
 //   discount_type        "none" | "senior" | "pwd", applies to every seat
 //   ticketTypes          optional JSON { "41": "senior", "42": "regular" } for mixed
 //                        bookings. Wins over discount_type.
@@ -480,6 +483,11 @@ const createCreateBooking =
 			)
 				.trim()
 				.slice(0, 50);
+			// Xendit invoice id, sent on the retry after the customer has paid.
+			const paymentRef =
+				String(pick(body, "paymentRef", "payment_ref") ?? "")
+					.trim()
+					.slice(0, 100) || undefined;
 			const discountTypeInput = String(
 				pick(body, "discountType", "discount_type") ?? "none",
 			).toLowerCase();
@@ -849,6 +857,7 @@ const createCreateBooking =
 						userId,
 						amount: price.total,
 						paymentMethod,
+						paymentRef,
 					});
 				} catch (paymentError) {
 					console.error("verifyPayment threw:", paymentError);
@@ -856,6 +865,27 @@ const createCreateBooking =
 						ok: false,
 						reason: "Payment could not be processed.",
 					};
+				}
+				// Not paid yet: send the invoice back and keep the seats held.
+				if (payment?.pending) {
+					throw new BookingError(
+						402,
+						"PAYMENT_REQUIRED",
+						"Complete your payment to confirm the booking.",
+						{ invoice: payment.invoice },
+					);
+				}
+				if (payment?.ok && payment.transactionId) {
+					const [used] = await conn.query(
+						"SELECT purchase_id FROM TOTAL_PURCHASE WHERE payment_ref = ?",
+						[payment.transactionId],
+					);
+					if (used.length > 0)
+						throw new BookingError(
+							409,
+							"PAYMENT_ALREADY_USED",
+							"This payment was already used for another booking.",
+						);
 				}
 				if (!payment?.ok) {
 					throw new BookingError(
@@ -884,6 +914,9 @@ const createCreateBooking =
 				// verification_token is the secret behind the e-ticket QR code.
 				let referenceCode;
 				let purchaseId;
+				// payment_ref is only written when a provider returned one, so databases
+				// without the column (database/xendit_payment.sql) keep working in auto-pass mode.
+				const paymentRefValue = payment.transactionId || null;
 				for (
 					let attempt = 1;
 					attempt <= MAX_REFERENCE_ATTEMPTS;
@@ -894,8 +927,8 @@ const createCreateBooking =
 						const [result] = await conn.query(
 							`INSERT INTO TOTAL_PURCHASE
                (user_id, payment_method, total_price, purchase_datetime, status, reference_code,
-                payment_status, discount_type, verification_token)
-             VALUES (?, ?, ?, NOW(), 'confirmed', ?, 'paid', ?, ?)`,
+                payment_status, discount_type, verification_token${paymentRefValue ? ", payment_ref" : ""})
+             VALUES (?, ?, ?, NOW(), 'confirmed', ?, 'paid', ?, ?${paymentRefValue ? ", ?" : ""})`,
 							[
 								userId,
 								paymentMethod,
@@ -903,11 +936,22 @@ const createCreateBooking =
 								referenceCode,
 								discountType,
 								crypto.randomBytes(16).toString("hex"),
+								...(paymentRefValue ? [paymentRefValue] : []),
 							],
 						);
 						purchaseId = result.insertId;
 						break;
 					} catch (insertError) {
+						// Same payment submitted twice at once: the UNIQUE payment_ref stops the second.
+						if (
+							insertError.code === "ER_DUP_ENTRY" &&
+							String(insertError.sqlMessage).includes("payment_ref")
+						)
+							throw new BookingError(
+								409,
+								"PAYMENT_ALREADY_USED",
+								"This payment was already used for another booking.",
+							);
 						if (
 							insertError.code !== "ER_DUP_ENTRY" ||
 							attempt === MAX_REFERENCE_ATTEMPTS

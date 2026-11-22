@@ -2,9 +2,23 @@ import { Link, useLocation } from "react-router";
 import "../styles/AdminSidebar.css";
 
 import avatarUser from "../assets/images/dashboard/avatar-user.svg";
+import { getAdminSession } from "../api/admin.js";
 
-// Central list of nav items. Add a real `to` path here as each page's
-// branch gets merged — until then it renders as a non-clickable placeholder.
+// Paste each branch's logo link here once you have it.
+// Empty string = show the placeholder avatar.
+const BRANCH_LOGOS = {
+	"Market Market": "",
+	Venice: "",
+	Vista: "",
+};
+
+// Match these ids to the branches table in your database.
+const BRANCH_NAMES = {
+	1: "Vista Mall",
+	2: "Market! Market!",
+	3: "Venice McKinley",
+};
+
 const NAV_ITEMS = [
 	{ label: "Dashboard", icon: "dashboard", to: "/admin/dashboard" },
 	{ label: "Movie Management", icon: "movie", to: "/admin/movies" },
@@ -14,16 +28,27 @@ const NAV_ITEMS = [
 ];
 
 function AdminSidebar() {
-	// Active state is derived from the current URL, so any page using this
-	// component gets correct highlighting automatically — no prop needed.
 	const { pathname } = useLocation();
+
+	const admin = getAdminSession();
+	const branchName = admin?.branchName ?? BRANCH_NAMES[admin?.branchId] ?? "";
+	const logo = BRANCH_LOGOS[branchName] || "";
 
 	return (
 		<aside className="admin-sidebar">
 			<div className="admin-profile">
 				<div className="admin-avatar">
-					<img src={avatarUser} alt="" />
+					{logo ? (
+						<img
+							className="admin-avatar-logo"
+							src={logo}
+							alt={`${branchName} logo`}
+						/>
+					) : (
+						<img src={avatarUser} alt="" />
+					)}
 				</div>
+				{branchName && <p className="admin-branch">{branchName}</p>}
 				<p className="admin-role">Admin</p>
 			</div>
 

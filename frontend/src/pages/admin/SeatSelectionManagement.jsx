@@ -8,17 +8,18 @@
 //   customer for a sold seat -> GET /api/admin/bookings?branchId=&date=&movieId=
 //   cancel a booking         -> PATCH /api/admin/bookings/:id?branchId=
 //
-// Choosing a showtime: pick a cinema, then a date from the date strip, then a
-// showtime card. Typing in "Search movie" lists every matching showtime across
-// all dates instead, so it still works when there are hundreds of showtimes.
+// Choosing a showtime: pick a cinema, then use the ShowtimePicker bar. Its
+// arrows step through showtimes; its popover has a week date strip, showtimes
+// grouped by movie, and a search that works across all dates.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router";
 import "../../styles/SeatSelectionManagement.css";
 import "../../styles/AdminLive.css";
-import "../../styles/SeatShowtimePicker.css";
+import "../../styles/ShowtimePicker.css";
 
 import AdminSidebar from "../../components/AdminSidebar.jsx";
+import ShowtimePicker from "../../components/ShowtimePicker.jsx";
 
 import iconSeat from "../../assets/images/seatSelection/icon-seat.svg";
 import iconAvailable from "../../assets/images/seatSelection/icon-available.svg";
@@ -40,13 +41,10 @@ const STATUS_LABEL = {
 	available: "Available",
 	booked: "Reserved",
 	blocked: "Blocked",
-	held: "Held",
+	// held: "Held",
 };
 
 const EMPTY_ROWS = [];
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -61,22 +59,9 @@ function plural(count, word) {
 }
 
 function showtimeLabel(showtime) {
-	const suffix = showtime.status === "scheduled" ? "" : ` (${showtime.status})`;
+	const suffix =
+		showtime.status === "scheduled" ? "" : ` (${showtime.status})`;
 	return `${showtime.movieTitle} · ${formatDate(showtime.date)}, ${formatTime(showtime.time)}${suffix}`;
-}
-
-// "YYYY-MM-DD" for today in local time (showtime dates are plain date strings).
-function todayKey() {
-	const now = new Date();
-	const month = String(now.getMonth() + 1).padStart(2, "0");
-	const day = String(now.getDate()).padStart(2, "0");
-	return `${now.getFullYear()}-${month}-${day}`;
-}
-
-function dateParts(dateKey) {
-	const [year, month, day] = dateKey.split("-").map(Number);
-	const date = new Date(year, month - 1, day);
-	return { weekday: WEEKDAYS[date.getDay()], month: MONTHS[date.getMonth()], day };
 }
 
 function startsAt(showtime) {
@@ -87,31 +72,15 @@ function byStart(a, b) {
 	return `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`);
 }
 
-// Upcoming / Started / Cancelled / Completed tag for a showtime card.
-function showtimeState(showtime, now) {
-	if (showtime.status === "cancelled") return { key: "cancelled", label: "Cancelled" };
-	if (showtime.status === "completed") return { key: "completed", label: "Completed" };
-	return startsAt(showtime) < now
-		? { key: "started", label: "Started" }
-		: { key: "upcoming", label: "Upcoming" };
-}
-
 // The page opens on the nearest upcoming showtime. If everything is already
 // in the past, it opens on the latest one.
 function pickDefaultShowtime(list) {
 	if (list.length === 0) return null;
 	const now = new Date();
-	return list.find((s) => s.status === "scheduled" && startsAt(s) >= now) ?? list[list.length - 1];
-}
-
-// [{ date, list }] in date order, from a list that is already sorted by start.
-function groupByDate(list) {
-	const groups = new Map();
-	list.forEach((showtime) => {
-		if (!groups.has(showtime.date)) groups.set(showtime.date, []);
-		groups.get(showtime.date).push(showtime);
-	});
-	return [...groups.entries()].map(([date, items]) => ({ date, list: items }));
+	return (
+		list.find((s) => s.status === "scheduled" && startsAt(s) >= now) ??
+		list[list.length - 1]
+	);
 }
 
 /* ------------------------------------------------------------------ */
@@ -233,9 +202,10 @@ function CancelBookingModal({ booking, busy, onKeep, onConfirm }) {
 				</span>
 				<h3 id="ssm-modal-title">Cancel booking {booking.ref}?</h3>
 				<p>
-					{booking.customer}'s {plural(booking.seatIds.length, "seat")} (
-					{booking.seatIds.join(", ")}) will become available again. This
-					can't be undone.
+					{booking.customer}'s{" "}
+					{plural(booking.seatIds.length, "seat")} (
+					{booking.seatIds.join(", ")}) will become available again.
+					This can't be undone.
 				</p>
 				<div className="ssm-modal-actions">
 					<button
@@ -277,27 +247,6 @@ function SeatButton({ seat, isSelected, onToggle }) {
 			onClick={() => onToggle(seat.id)}
 		>
 			{seat.number}
-		</button>
-	);
-}
-
-/* ------------------------------------------------------------------ */
-/* One showtime card                                                   */
-/* ------------------------------------------------------------------ */
-
-function ShowtimeCard({ showtime, isSelected, now, onSelect }) {
-	const state = showtimeState(showtime, now);
-
-	return (
-		<button
-			type="button"
-			className={`ssm-card ssm-card--${state.key}${isSelected ? " is-selected" : ""}`}
-			aria-pressed={isSelected}
-			onClick={() => onSelect(showtime.id)}
-		>
-			<span className="ssm-card-time">{formatTime(showtime.time)}</span>
-			<span className="ssm-card-title">{showtime.movieTitle}</span>
-			<span className={`ssm-card-tag ssm-card-tag--${state.key}`}>{state.label}</span>
 		</button>
 	);
 }
@@ -347,7 +296,6 @@ function SeatSelectionManagement({ branchId }) {
 
 	const [pickedCinema, setPickedCinema] = useState(null);
 	const [pickedShowtime, setPickedShowtime] = useState(null);
-	const [search, setSearch] = useState("");
 
 	// Fall back to the first cinema whenever the pick is missing or no longer valid.
 	const cinemaId = cinemas.some((c) => c.id === pickedCinema)
@@ -360,35 +308,17 @@ function SeatSelectionManagement({ branchId }) {
 		() => showtimes.filter((s) => s.cinemaId === cinemaId).sort(byStart),
 		[showtimes, cinemaId],
 	);
-	const defaultShowtime = useMemo(() => pickDefaultShowtime(cinemaShowtimes), [cinemaShowtimes]);
-	const showtime = cinemaShowtimes.find((s) => s.id === pickedShowtime) ?? defaultShowtime;
+	const defaultShowtime = useMemo(
+		() => pickDefaultShowtime(cinemaShowtimes),
+		[cinemaShowtimes],
+	);
+	const showtime =
+		cinemaShowtimes.find((s) => s.id === pickedShowtime) ?? defaultShowtime;
 
 	const showtimeId = showtime?.id ?? null;
 	const showtimeCinemaId = showtime?.cinemaId ?? null;
 	const showDate = showtime?.date ?? null;
 	const showMovieId = showtime?.movieId ?? null;
-
-	/* ---------- What the picker shows ---------- */
-
-	const query = search.trim().toLowerCase();
-	const dateGroups = useMemo(() => groupByDate(cinemaShowtimes), [cinemaShowtimes]);
-	const dayShowtimes = dateGroups.find((group) => group.date === showDate)?.list ?? EMPTY_ROWS;
-	const searchGroups = useMemo(
-		() =>
-			query
-				? groupByDate(cinemaShowtimes.filter((s) => s.movieTitle.toLowerCase().includes(query)))
-				: EMPTY_ROWS,
-		[cinemaShowtimes, query],
-	);
-	const searchMatchCount = searchGroups.reduce((sum, group) => sum + group.list.length, 0);
-
-	// Keep the chosen date visible when the date strip is long.
-	const stripRef = useRef(null);
-	useEffect(() => {
-		stripRef.current
-			?.querySelector('[aria-pressed="true"]')
-			?.scrollIntoView?.({ inline: "center", block: "nearest" });
-	}, [showDate, cinemaId, query]);
 
 	/* ---------- Load the seat map for that showtime ---------- */
 
@@ -447,7 +377,10 @@ function SeatSelectionManagement({ branchId }) {
 	const bookingsById = mapData?.bookingsById ?? null;
 
 	const flatSeats = useMemo(() => rows.flatMap((row) => row.seats), [rows]);
-	const seatsPerRow = rows.reduce((max, row) => Math.max(max, row.seats.length), 0);
+	const seatsPerRow = rows.reduce(
+		(max, row) => Math.max(max, row.seats.length),
+		0,
+	);
 	const leftCols = Math.ceil(seatsPerRow / 2);
 	const rightCols = seatsPerRow - leftCols;
 
@@ -472,7 +405,9 @@ function SeatSelectionManagement({ branchId }) {
 			ref: info?.reference ?? `#${bookingId}`,
 			customer: info?.customer.name ?? "Customer unavailable",
 			seatIds: selectedSeats.map((seat) => seat.label),
-			total: info?.amount ?? selectedSeats.reduce((sum, seat) => sum + seat.price, 0),
+			total:
+				info?.amount ??
+				selectedSeats.reduce((sum, seat) => sum + seat.price, 0),
 			discount: info?.discountLabel ?? "",
 		};
 	}
@@ -495,13 +430,6 @@ function SeatSelectionManagement({ branchId }) {
 		resetSelection();
 	}
 
-	// Choosing a date opens its first showtime, so the seat map always matches
-	// a card you can see.
-	function handleSelectDate(dateKey) {
-		const first = dateGroups.find((group) => group.date === dateKey)?.list[0];
-		if (first) handleSelectShowtime(first.id);
-	}
-
 	function toggleSeat(seatId) {
 		setNotice(null);
 		const seat = flatSeats.find((s) => s.id === seatId);
@@ -512,7 +440,9 @@ function SeatSelectionManagement({ branchId }) {
 			const bookingSeatIds = flatSeats
 				.filter((s) => s.bookingId === seat.bookingId)
 				.map((s) => s.id);
-			setSelected((prev) => (prev.includes(seatId) ? [] : bookingSeatIds));
+			setSelected((prev) =>
+				prev.includes(seatId) ? [] : bookingSeatIds,
+			);
 			return;
 		}
 
@@ -522,7 +452,9 @@ function SeatSelectionManagement({ branchId }) {
 			return;
 		}
 		setSelected((prev) =>
-			prev.includes(seatId) ? prev.filter((id) => id !== seatId) : [...prev, seatId],
+			prev.includes(seatId)
+				? prev.filter((id) => id !== seatId)
+				: [...prev, seatId],
 		);
 	}
 
@@ -531,7 +463,9 @@ function SeatSelectionManagement({ branchId }) {
 		setBusy(true);
 		setNotice(null);
 		const results = await Promise.allSettled(
-			selected.map((seatId) => setSeatStatus({ showtimeId, seatId, branchId, action })),
+			selected.map((seatId) =>
+				setSeatStatus({ showtimeId, seatId, branchId, action }),
+			),
 		);
 		const failed = results.filter((result) => result.status === "rejected");
 		const done = results.length - failed.length;
@@ -553,7 +487,10 @@ function SeatSelectionManagement({ branchId }) {
 	async function handleCancelBooking() {
 		setBusy(true);
 		try {
-			const { seatsReleased } = await cancelBooking({ bookingId: booking.id, branchId });
+			const { seatsReleased } = await cancelBooking({
+				bookingId: booking.id,
+				branchId,
+			});
 			setNotice({
 				type: "ok",
 				text: `Cancelled booking ${booking.ref}. ${plural(seatsReleased, "seat")} released.`,
@@ -603,7 +540,6 @@ function SeatSelectionManagement({ branchId }) {
 	}
 
 	const now = new Date();
-	const today = todayKey();
 
 	const STAT_CARDS = [
 		{
@@ -657,16 +593,6 @@ function SeatSelectionManagement({ branchId }) {
 		</button>
 	);
 
-	const renderCard = (item) => (
-		<ShowtimeCard
-			key={item.id}
-			showtime={item}
-			isSelected={item.id === showtimeId}
-			now={now}
-			onSelect={handleSelectShowtime}
-		/>
-	);
-
 	let mapSection;
 	if (mapFresh?.error) {
 		mapSection = (
@@ -702,7 +628,10 @@ function SeatSelectionManagement({ branchId }) {
 				)
 			}
 		>
-			<section className="ssm-filters" aria-label="Choose cinema and search">
+			<section
+				className="ssm-filters"
+				aria-label="Choose cinema and showtime"
+			>
 				<div className="ssm-field">
 					<label htmlFor="ssm-cinema">Cinema</label>
 					<select
@@ -719,98 +648,22 @@ function SeatSelectionManagement({ branchId }) {
 					</select>
 				</div>
 
-				<div className="ssm-field ssm-field--search">
-					<label htmlFor="ssm-search">Search movie</label>
-					<div className="ssm-search">
-						<input
-							id="ssm-search"
-							type="search"
-							className="ssm-search-input"
-							placeholder="Type a movie title…"
-							value={search}
-							onChange={(event) => setSearch(event.target.value)}
-						/>
-						{search && (
-							<button
-								type="button"
-								className="ssm-search-clear"
-								aria-label="Clear search"
-								onClick={() => setSearch("")}
-							>
-								×
-							</button>
-						)}
-					</div>
+				<div className="ssm-field ssm-field--picker">
+					<span className="ssm-field-label">Showtime</span>
+					<ShowtimePicker
+						showtimes={cinemaShowtimes}
+						current={showtime}
+						now={now}
+						cinemaName={cinemaName}
+						onSelect={handleSelectShowtime}
+					/>
 				</div>
-			</section>
-
-			<section className="ssm-picker" aria-label="Choose showtime">
-				<header className="ssm-picker-head">
-					<h3>Showtime</h3>
-					<span>
-						{query
-							? `${searchMatchCount} ${searchMatchCount === 1 ? "match" : "matches"} in ${cinemaName}`
-							: `${plural(cinemaShowtimes.length, "showtime")} in ${cinemaName}`}
-					</span>
-				</header>
-
-				{query ? (
-					searchGroups.length === 0 ? (
-						<p className="ssm-picker-empty">
-							No showtimes match “{search.trim()}” in {cinemaName}.
-						</p>
-					) : (
-						searchGroups.map((group) => (
-							<div className="ssm-result-group" key={group.date}>
-								<h4 className="ssm-result-date">{formatDate(group.date)}</h4>
-								<div className="ssm-cards">{group.list.map(renderCard)}</div>
-							</div>
-						))
-					)
-				) : (
-					<>
-						<div className="ssm-dates" ref={stripRef} role="group" aria-label="Show date">
-							{dateGroups.map((group) => {
-								const parts = dateParts(group.date);
-								const isSelected = group.date === showDate;
-								const classes = [
-									"ssm-date",
-									isSelected ? "is-selected" : "",
-									group.date < today ? "is-past" : "",
-								]
-									.filter(Boolean)
-									.join(" ");
-
-								return (
-									<button
-										key={group.date}
-										type="button"
-										className={classes}
-										aria-pressed={isSelected}
-										onClick={() => handleSelectDate(group.date)}
-									>
-										<span className="ssm-date-weekday">
-											{group.date === today ? "Today" : parts.weekday}
-										</span>
-										<span className="ssm-date-day">
-											{parts.month} {parts.day}
-										</span>
-										<span className="ssm-date-count">
-											{plural(group.list.length, "show")}
-										</span>
-									</button>
-								);
-							})}
-						</div>
-
-						<div className="ssm-cards">{dayShowtimes.map(renderCard)}</div>
-					</>
-				)}
 			</section>
 
 			{mapData?.bookingsFailed && (
 				<p className="adm-notice adm-notice--error" role="status">
-					Couldn't load customer details for sold seats. The map is still accurate.
+					Couldn't load customer details for sold seats. The map is
+					still accurate.
 				</p>
 			)}
 
@@ -819,8 +672,12 @@ function SeatSelectionManagement({ branchId }) {
 					<article className="ssm-stat-card" key={card.label}>
 						<div className="ssm-stat-text">
 							<p className="ssm-stat-label">{card.label}</p>
-							<p className={`ssm-stat-value ${card.tone}`}>{card.value}</p>
-							{card.sub && <p className="adm-stat-sub">{card.sub}</p>}
+							<p className={`ssm-stat-value ${card.tone}`}>
+								{card.value}
+							</p>
+							{card.sub && (
+								<p className="adm-stat-sub">{card.sub}</p>
+							)}
 						</div>
 						<img className="ssm-stat-icon" src={card.icon} alt="" />
 					</article>
@@ -835,11 +692,16 @@ function SeatSelectionManagement({ branchId }) {
 						aria-busy={mapRefreshing}
 					>
 						<header className="ssm-panel-head">
-							<span className="ssm-panel-icon">
-								<IconSeat size={20} />
+							<div className="ssm-panel-title">
+								<span className="ssm-panel-icon">
+									<IconSeat size={20} />
+								</span>
+								<h3>Select Seats</h3>
+							</div>
+
+							<span className="ssm-panel-sub">
+								{showtimeLabel(showtime)}
 							</span>
-							<h3>Select Seats</h3>
-							<span className="ssm-panel-sub">{showtimeLabel(showtime)}</span>
 						</header>
 
 						<ul className="ssm-legend">
@@ -851,10 +713,10 @@ function SeatSelectionManagement({ branchId }) {
 								<span className="ssm-seat ssm-seat--booked ssm-legend-swatch" />
 								Reserved
 							</li>
-							<li>
+							{/* <li>
 								<span className="ssm-seat ssm-seat--held ssm-legend-swatch" />
 								Held
-							</li>
+							</li> */}
 							<li>
 								<span className="ssm-seat ssm-seat--blocked ssm-legend-swatch" />
 								Blocked
@@ -881,28 +743,38 @@ function SeatSelectionManagement({ branchId }) {
 
 								{rows.map((row) => (
 									<div className="ssm-row" key={row.label}>
-										<span className="ssm-row-label">{row.label}</span>
+										<span className="ssm-row-label">
+											{row.label}
+										</span>
 
 										<div className="ssm-group ssm-group--left">
-											{row.seats.slice(0, leftCols).map((seat) => (
-												<SeatButton
-													key={seat.id}
-													seat={seat}
-													isSelected={selectedSet.has(seat.id)}
-													onToggle={toggleSeat}
-												/>
-											))}
+											{row.seats
+												.slice(0, leftCols)
+												.map((seat) => (
+													<SeatButton
+														key={seat.id}
+														seat={seat}
+														isSelected={selectedSet.has(
+															seat.id,
+														)}
+														onToggle={toggleSeat}
+													/>
+												))}
 										</div>
 
 										<div className="ssm-group ssm-group--right">
-											{row.seats.slice(leftCols).map((seat) => (
-												<SeatButton
-													key={seat.id}
-													seat={seat}
-													isSelected={selectedSet.has(seat.id)}
-													onToggle={toggleSeat}
-												/>
-											))}
+											{row.seats
+												.slice(leftCols)
+												.map((seat) => (
+													<SeatButton
+														key={seat.id}
+														seat={seat}
+														isSelected={selectedSet.has(
+															seat.id,
+														)}
+														onToggle={toggleSeat}
+													/>
+												))}
 										</div>
 									</div>
 								))}
@@ -910,7 +782,10 @@ function SeatSelectionManagement({ branchId }) {
 						</div>
 					</section>
 
-					<aside className="ssm-inspector" aria-label="Seat inspector">
+					<aside
+						className="ssm-inspector"
+						aria-label="Seat inspector"
+					>
 						<header className="ssm-inspector-head">
 							<h3>Seat Inspector</h3>
 							<p>{inspectorSubtitle}</p>
@@ -931,17 +806,21 @@ function SeatSelectionManagement({ branchId }) {
 									<span className="ssm-empty-icon">
 										<IconCursor size={22} />
 									</span>
-									<p className="ssm-empty-title">No seats selected</p>
+									<p className="ssm-empty-title">
+										No seats selected
+									</p>
 									<p className="ssm-empty-text">
-										Click any seat to view its booking or to block,
-										release, or cancel it.
+										Click any seat to view its booking or to
+										block, release, or cancel it.
 									</p>
 								</div>
 							)}
 
 							{booking && (
 								<>
-									<span className="ssm-tag ssm-tag--booked">Reserved</span>
+									<span className="ssm-tag ssm-tag--booked">
+										Reserved
+									</span>
 									<dl className="ssm-details">
 										<div>
 											<dt>Customer</dt>
@@ -952,8 +831,14 @@ function SeatSelectionManagement({ branchId }) {
 											<dd>{booking.ref}</dd>
 										</div>
 										<div>
-											<dt>{booking.seatIds.length === 1 ? "Seat" : "Seats"}</dt>
-											<dd>{booking.seatIds.join(", ")}</dd>
+											<dt>
+												{booking.seatIds.length === 1
+													? "Seat"
+													: "Seats"}
+											</dt>
+											<dd>
+												{booking.seatIds.join(", ")}
+											</dd>
 										</div>
 										{booking.discount && (
 											<div>
@@ -971,7 +856,9 @@ function SeatSelectionManagement({ branchId }) {
 										<button
 											type="button"
 											className="ssm-btn ssm-btn--danger"
-											onClick={() => setConfirmingCancel(true)}
+											onClick={() =>
+												setConfirmingCancel(true)
+											}
 											disabled={busy}
 										>
 											Cancel booking
@@ -983,18 +870,23 @@ function SeatSelectionManagement({ branchId }) {
 
 							{selectionStatus === "available" && (
 								<>
-									<span className="ssm-tag ssm-tag--available">Available</span>
+									<span className="ssm-tag ssm-tag--available">
+										Available
+									</span>
 									{chips}
 									<p className="ssm-hint">
-										Blocked seats can't be booked by customers. Click more
-										open seats to block them together.
+										Blocked seats can't be booked by
+										customers. Click more open seats to
+										block them together.
 									</p>
 
 									<div className="ssm-actions">
 										<button
 											type="button"
 											className="ssm-btn ssm-btn--primary"
-											onClick={() => runSeatAction("block")}
+											onClick={() =>
+												runSeatAction("block")
+											}
 											disabled={busy}
 										>
 											{busy
@@ -1008,17 +900,22 @@ function SeatSelectionManagement({ branchId }) {
 
 							{selectionStatus === "blocked" && (
 								<>
-									<span className="ssm-tag ssm-tag--blocked">Blocked</span>
+									<span className="ssm-tag ssm-tag--blocked">
+										Blocked
+									</span>
 									{chips}
 									<p className="ssm-hint">
-										Release these seats to let customers book them again.
+										Release these seats to let customers
+										book them again.
 									</p>
 
 									<div className="ssm-actions">
 										<button
 											type="button"
 											className="ssm-btn ssm-btn--outline"
-											onClick={() => runSeatAction("release")}
+											onClick={() =>
+												runSeatAction("release")
+											}
 											disabled={busy}
 										>
 											{busy
@@ -1032,19 +929,24 @@ function SeatSelectionManagement({ branchId }) {
 
 							{selectionStatus === "held" && (
 								<>
-									<span className="ssm-tag ssm-tag--blocked">Held</span>
+									<span className="ssm-tag ssm-tag--blocked">
+										Held
+									</span>
 									{chips}
 									<p className="ssm-hint">
-										A customer is checking out with these seats. They free up
-										on their own after 10 minutes; release them now only for
-										a stuck checkout.
+										A customer is checking out with these
+										seats. They free up on their own after
+										10 minutes; release them now only for a
+										stuck checkout.
 									</p>
 
 									<div className="ssm-actions">
 										<button
 											type="button"
 											className="ssm-btn ssm-btn--outline"
-											onClick={() => runSeatAction("release")}
+											onClick={() =>
+												runSeatAction("release")
+											}
 											disabled={busy}
 										>
 											{busy

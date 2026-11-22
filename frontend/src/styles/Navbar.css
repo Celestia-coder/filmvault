@@ -151,3 +151,84 @@
 .navbar-search-clear:hover {
 	color: var(--color-white);
 }
+/* ---------- Responsive ---------- */
+/* Tablet + mobile: open search covers the bar instead of colliding with the links */
+@media (max-width: 1100px) {
+	.navbar-search-wrapper {
+		position: static;
+	}
+
+	.navbar-search--open {
+		left: 48px;
+		right: 48px;
+		width: auto;
+		transform: translateY(-50%);
+		background-color: rgba(25, 25, 25, 0.95);
+		z-index: 2;
+	}
+}
+
+@media (max-width: 768px) {
+	.navbar {
+		height: 72px;
+		padding: 0 16px;
+	}
+
+	.navbar-logo {
+		font-size: 1.1rem;
+	}
+
+	/* In-flow (not absolutely centered) so logo, links and icons can't overlap */
+	.navbar-links {
+		position: static;
+		transform: none;
+		gap: 0;
+		padding: 6px 8px;
+	}
+
+	.navbar-links a {
+		font-size: 0.85rem;
+		padding: 6px 8px;
+	}
+
+	.navbar-icons {
+		gap: 4px;
+		margin-left: 0;
+	}
+
+	.icon-img {
+		width: 36px;
+	}
+
+	.navbar-search-wrapper {
+		width: 36px;
+		height: 36px;
+	}
+
+	.navbar-search--open {
+		left: 16px;
+		right: 16px;
+	}
+}
+
+/* Phones: leave a clear gap between the logo and the links pill */
+@media (max-width: 480px) {
+	.navbar {
+		gap: 8px;
+	}
+
+	.navbar-logo {
+		font-size: 1rem;
+	}
+
+	.navbar-links a {
+		font-size: 0.8rem;
+		padding: 6px;
+	}
+}
+
+/* iPad (portrait + landscape): larger nav text */
+@media (min-width: 769px) and (max-width: 1400px) {
+	.navbar-logo { font-size: 1.7rem; }
+	.navbar-links a { font-size: 1.1rem; }
+}

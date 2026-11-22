@@ -97,3 +97,10 @@
 .btn-secondary:hover {
 	background-color: rgba(238, 17, 43, 0.194);
 }
+
+/* iPad (portrait + landscape): larger hero text */
+@media (min-width: 769px) and (max-width: 1400px) {
+	.hero-content p {
+		font-size: 1.2rem;
+	}
+}

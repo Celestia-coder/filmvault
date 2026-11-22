@@ -104,3 +104,12 @@
 		gap: 12px 20px;
 	}
 }
+
+/* iPad (portrait + landscape): larger footer text */
+@media (min-width: 769px) and (max-width: 1400px) {
+  .footer-brand h3 { font-size: 20px; }
+  .footer-brand p,
+  .footer-column a { font-size: 16px; }
+  .footer-column h4 { font-size: 17px; }
+  .footer-bottom { font-size: 15px; }
+}

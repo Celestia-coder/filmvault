@@ -10,7 +10,9 @@ import heroBg from "../../assets/images/hero-bg.png";
 import { placeholderPoster as moviePoster } from "../../api/movies.js";
 import { getUser } from "../../api/session.js";
 import {
+	BOOKING_ERRORS,
 	createBooking,
+	fetchInvoiceStatus,
 	fetchSnacks,
 	NEEDS_NEW_SEATS,
 	PAYMENT_METHODS,
@@ -354,6 +356,46 @@ function ConfirmModal({
 	);
 }
 
+/** Xendit: the customer pays on Xendit's page in a new tab while this waits. */
+function AwaitingPaymentModal({ invoiceUrl, onCancel }) {
+	return (
+		<div
+			className="co-modal-overlay"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="co-pay-title"
+		>
+			<div className="co-modal">
+				<h2 className="co-modal-title" id="co-pay-title">
+					Complete your payment
+				</h2>
+				<p className="co-modal-text" aria-live="polite">
+					Pay on Xendit's secure page. This window updates by itself
+					once the payment goes through. Test mode: use the
+					"Simulate payment" option on that page.
+				</p>
+				<div className="co-confirm-actions">
+					<button
+						type="button"
+						className="co-modal-btn co-modal-btn--ghost"
+						onClick={onCancel}
+					>
+						Cancel
+					</button>
+					<a
+						className="co-modal-btn"
+						href={invoiceUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+					>
+						Open payment page
+					</a>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 /** Shown after the booking succeeds. */
 function PaymentSuccessModal({ onViewTicket }) {
 	return (
@@ -461,6 +503,7 @@ function Checkout() {
 	const [submitError, setSubmitError] = useState(null); // { message, needsNewSeats }
 	const [paid, setPaid] = useState(false);
 	const [bookedId, setBookedId] = useState(null);
+	const [invoice, setInvoice] = useState(null); // Xendit { id, url } while waiting for payment
 	// Count down from the hold's real expiry (set by Seat Selection), not a fresh 10 minutes.
 	const [secondsLeft, setSecondsLeft] = useState(() =>
 		holdExpiresAt
@@ -672,8 +715,11 @@ function Checkout() {
 		if (canPay) setConfirmOpen(true);
 	};
 
-	/** Sends the booking to the server. Called from the confirm pop-up. */
-	const handlePay = async () => {
+	/**
+	 * Sends the booking to the server. Called from the confirm pop-up, and again with
+	 * paymentRef (the Xendit invoice id) once that invoice is paid.
+	 */
+	const handlePay = async (paymentRef) => {
 		if (!canPay) return;
 		setSubmitting(true);
 		setSubmitError(null);
@@ -703,10 +749,18 @@ function Checkout() {
 					quantity: f.qty,
 				})),
 				idImages,
+				paymentRef,
 			});
+			setInvoice(null);
 			setBookedId(booked.id);
 			setPaid(true); // shows the "Payment Successful" pop-up
 		} catch (error) {
+			setInvoice(null);
+			// Xendit: seats stay held; pay the invoice, then the effect below retries.
+			if (error.data?.code === BOOKING_ERRORS.PAYMENT_REQUIRED) {
+				setInvoice(error.data.invoice);
+				return;
+			}
 			setSubmitError({
 				message: error.message,
 				needsNewSeats: NEEDS_NEW_SEATS.includes(error.data?.code),
@@ -716,6 +770,36 @@ function Checkout() {
 			setConfirmOpen(false); // on an error, this shows the message in the sidebar
 		}
 	};
+
+	// Xendit: check the invoice every 3 s; once paid, send the booking again with its id.
+	useEffect(() => {
+		if (!invoice) return undefined;
+		const controller = new AbortController();
+		const id = setInterval(async () => {
+			try {
+				const status = await fetchInvoiceStatus(invoice.id, {
+					signal: controller.signal,
+				});
+				if (status === "PAID" || status === "SETTLED") {
+					clearInterval(id);
+					handlePay(invoice.id);
+				} else if (status === "EXPIRED") {
+					clearInterval(id);
+					setInvoice(null);
+					setSubmitError({
+						message: "The payment page expired. Please try again.",
+						needsNewSeats: false,
+					});
+				}
+			} catch {
+				// network blip or aborted: try again on the next tick
+			}
+		}, 3000);
+		return () => {
+			clearInterval(id);
+			controller.abort();
+		};
+	}, [invoice]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	return (
 		<div className="checkout-page">
@@ -1391,7 +1475,15 @@ function Checkout() {
 					secondsLeft={secondsLeft}
 					submitting={submitting}
 					onEdit={() => setConfirmOpen(false)}
-					onConfirm={handlePay}
+					onConfirm={() => handlePay()}
+				/>
+			)}
+
+			{/* ============ WAITING FOR XENDIT PAYMENT ============ */}
+			{invoice && !paid && (
+				<AwaitingPaymentModal
+					invoiceUrl={invoice.url}
+					onCancel={() => setInvoice(null)}
 				/>
 			)}
 

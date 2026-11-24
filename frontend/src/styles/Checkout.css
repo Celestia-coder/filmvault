@@ -1177,6 +1177,14 @@
 	cursor: pointer;
 }
 
+/* "Open payment page" is a link styled as this button */
+a.co-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .co-modal-btn:hover {
 	background: #c90e25;
 }

@@ -153,6 +153,8 @@ function mapShowtime(raw) {
     time: raw.show_time,
     seatsAvailable: raw.seatsAvailable,
     status: raw.status,
+    // Monday/Tuesday first screening of the senior promo (Taguig seniors watch free).
+    seniorFreeTicket: Boolean(raw.seniorFreeTicket),
   };
 }
 

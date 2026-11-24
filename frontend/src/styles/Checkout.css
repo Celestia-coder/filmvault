@@ -1394,3 +1394,30 @@
     transition: none;
   }
 }
+
+/* ---------- Senior free-ticket promo: "I live in Taguig City" ---------- */
+.co-taguig {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--co-divider);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #d6d6d6;
+  font-size: 13px;
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.co-taguig input {
+  margin-top: 3px;
+  flex-shrink: 0;
+  accent-color: var(--color-green);
+}
+
+.co-taguig strong {
+  color: var(--color-white);
+  font-weight: 600;
+}

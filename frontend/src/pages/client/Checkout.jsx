@@ -117,7 +117,7 @@ const IconInfo = (p) => (
 /* ---------------------------------------------------------------- */
 
 const DISCOUNT_RATE = 0.2; // PWD + Senior Citizen
-const BOOKING_FEE_PER_TICKET = 30; // ₱30 per ticket, never discounted
+const BOOKING_FEE_PER_TICKET = 30; // ₱30 per ticket, never discounted (waived on a free ticket)
 
 const TICKET_TYPES = {
 	regular: { label: "Regular", discounted: false },
@@ -284,12 +284,13 @@ function ConfirmModal({
 								seat,
 								typeLabel,
 								discounted,
+								free,
 								price,
 								holderName,
 							}) => (
 								<ConfirmRow
 									key={seat}
-									label={`Seat ${seat} · ${typeLabel}${discounted ? " (−20%)" : ""}`}
+									label={`Seat ${seat} · ${typeLabel}${free ? " (FREE · Taguig senior)" : discounted ? " (−20%)" : ""}`}
 									note={
 										holderName
 											? `Name on ID: ${holderName}`
@@ -321,7 +322,10 @@ function ConfirmModal({
 							Contact &amp; Payment
 						</p>
 						<ConfirmRow label="Email" value={email.trim()} />
-						<ConfirmRow label="Payment" value={paymentName} />
+						<ConfirmRow
+							label="Payment"
+							value={paymentName || "No payment needed"}
+						/>
 					</section>
 
 					<section className="co-confirm-section">
@@ -643,6 +647,9 @@ function Checkout() {
 		user && showtimeId && seatIds?.length === seats.length,
 	);
 	const basePrice = showtime.price;
+	// Monday/Tuesday first screening: Taguig seniors get a free ticket and no booking fee.
+	// This is only a flag from the showtime list. The server decides the real price.
+	const seniorPromo = Boolean(showtime.seniorFreeTicket);
 
 	/* ---- state: contact ---- */
 	const [email, setEmail] = useState("");
@@ -657,6 +664,7 @@ function Checkout() {
 	const [idErrors, setIdErrors] = useState({}); // { A1: "message" }
 	const [idHolders, setIdHolders] = useState({}); // { A1: { name, number } }
 	const [idVerified, setIdVerified] = useState({}); // { A1: true } (simulated scan only)
+	const [taguigSeats, setTaguigSeats] = useState({}); // { A1: true } senior says they live in Taguig City
 	const [draggingSeat, setDraggingSeat] = useState(null); // seat whose upload box is being dragged over
 	const [scanSeat, setScanSeat] = useState(null); // seat whose scan pop-up is open
 	const fileInputRefs = useRef({});
@@ -744,31 +752,45 @@ function Checkout() {
 			? Math.round(basePrice * (1 - DISCOUNT_RATE))
 			: basePrice;
 
+	/** True when this seat is a Taguig senior ticket on the free-ticket screening. */
+	const isFreeSeat = (seat) =>
+		seniorPromo &&
+		ticketTypes[seat] === "senior" &&
+		Boolean(taguigSeats[seat]);
+
+	/** Price of one seat: free for a Taguig senior on the promo, otherwise by type. */
+	const priceForSeat = (seat) =>
+		isFreeSeat(seat) ? 0 : priceFor(ticketTypes[seat]);
+
 	const discountedSeats = seats.filter(
 		(s) => TICKET_TYPES[ticketTypes[s]].discounted,
 	);
 	const hasDiscountedTicket = discountedSeats.length > 0;
 
-	// Tickets grouped by type for the sidebar, e.g. [{ type: "regular", count: 2 }].
+	// Tickets grouped for the sidebar, e.g. [{ type: "regular", free: false, count: 2 }].
+	// Free Taguig senior tickets are their own group so they show ₱0 next to paid seniors.
 	const ticketSummary = useMemo(() => {
 		const groups = {};
 		seats.forEach((seat) => {
 			const type = ticketTypes[seat];
-			groups[type] = (groups[type] || 0) + 1;
+			const free =
+				seniorPromo && type === "senior" && Boolean(taguigSeats[seat]);
+			const key = free ? "senior-free" : type;
+			groups[key] = groups[key] || { type, free, count: 0 };
+			groups[key].count += 1;
 		});
-		return Object.entries(groups).map(([type, count]) => ({ type, count }));
-	}, [seats, ticketTypes]);
+		return Object.values(groups);
+	}, [seats, ticketTypes, taguigSeats, seniorPromo]);
 
 	const foodItems = food.filter((f) => f.qty > 0);
 	const foodTotal = foodItems.reduce((sum, f) => sum + f.price * f.qty, 0);
-	const ticketsTotal = seats.reduce(
-		(sum, s) => sum + priceFor(ticketTypes[s]),
-		0,
-	);
+	const ticketsTotal = seats.reduce((sum, s) => sum + priceForSeat(s), 0);
 	const fullPriceTotal = seats.length * basePrice;
 	const discountTotal = fullPriceTotal - ticketsTotal;
 	const subtotal = fullPriceTotal + foodTotal; // tickets at full price + food, before discounts
-	const bookingFee = seats.length * BOOKING_FEE_PER_TICKET; // not discounted
+	// Not discounted, but a free ticket has no booking fee.
+	const bookingFee =
+		seats.filter((s) => !isFreeSeat(s)).length * BOOKING_FEE_PER_TICKET;
 	const total = subtotal - discountTotal + bookingFee;
 
 	/* ---- validation ---- */
@@ -784,7 +806,7 @@ function Checkout() {
 	const canPay =
 		emailValid &&
 		idOk &&
-		Boolean(paymentMethod) &&
+		(Boolean(paymentMethod) || total === 0) &&
 		seats.length > 0 &&
 		canBook &&
 		!paid &&
@@ -797,7 +819,8 @@ function Checkout() {
 			seat,
 			typeLabel: TICKET_TYPES[type].label,
 			discounted: TICKET_TYPES[type].discounted,
-			price: priceFor(type),
+			free: isFreeSeat(seat),
+			price: priceForSeat(seat),
 			holderName: idHolders[seat]?.name?.trim(),
 		};
 	});
@@ -819,14 +842,19 @@ function Checkout() {
 		setIdErrors(dropSeat(seat));
 		setIdHolders(dropSeat(seat));
 		setIdVerified(dropSeat(seat));
-	};
+			setTaguigSeats(dropSeat(seat));
+		};
 
-	/** Changes a seat's ticket type. Going back to Regular removes its ID details. */
+		/** Changes a seat's ticket type. Going back to Regular removes its ID details. */
 	const handleTicketType = (seat) => (e) => {
 		const type = e.target.value;
 		setTicketTypes((prev) => ({ ...prev, [seat]: type }));
 		if (!TICKET_TYPES[type].discounted) clearSeatId(seat);
 	};
+
+	/** Ticks or unticks "I live in Taguig City" for a senior seat. */
+	const handleTaguig = (seat) => (e) =>
+		setTaguigSeats((prev) => ({ ...prev, [seat]: e.target.checked }));
 
 	/** Saves the ID holder's name or number for a seat. */
 	const handleHolderChange = (seat, field) => (e) => {
@@ -910,7 +938,10 @@ function Checkout() {
 				showtimeId,
 				seatIds,
 				ticketTypes: typesBySeatId,
-				paymentMethod,
+				paymentMethod: paymentMethod || "free", // nothing to pay on a free booking
+				taguigSeatIds: seats
+					.filter(isFreeSeat)
+					.map((label) => seatIds[seats.indexOf(label)]),
 				snacks: foodItems.map((f) => ({
 					snackId: f.id,
 					quantity: f.qty,
@@ -1083,10 +1114,15 @@ function Checkout() {
 																: "")
 														}
 													>
-														{discounted ? (
+														{isFreeSeat(seat) ? (
 															<>
-																<strong>
-																	20% off
+																<strong>FREE</strong> · Taguig senior ·
+																ID checked at the counter
+															</>
+														) : discounted ? (
+														<>
+														<strong>
+														20% off
 																</strong>{" "}
 																·{" "}
 																{peso(
@@ -1204,9 +1240,25 @@ function Checkout() {
 														</div>
 													</div>
 
+													{seniorPromo && type === "senior" && (
+														<label className="co-taguig">
+															<input
+																type="checkbox"
+																checked={Boolean(taguigSeats[seat])}
+																onChange={handleTaguig(seat)}
+															/>
+															<span>
+																<strong>I live in Taguig City.</strong>{" "}
+																Taguig seniors watch free (no booking fee) on
+																this screening. Without this you get the
+																regular 20% senior discount.
+															</span>
+														</label>
+													)}
+
 													<input
-														ref={(el) =>
-															(fileInputRefs.current[
+													ref={(el) =>
+													(fileInputRefs.current[
 																seat
 															] = el)
 														}
@@ -1322,6 +1374,8 @@ function Checkout() {
 											match the ticket holder, the
 											difference is payable at the
 											counter.
+											{seats.some(isFreeSeat) &&
+												" Free tickets need a valid Senior Citizen ID with a Taguig City address."}
 										</span>
 									</div>
 								)}
@@ -1517,32 +1571,34 @@ function Checkout() {
 
 							<div className="co-summary-section">
 								<p className="co-eyebrow">Tickets</p>
-								{ticketSummary.map(({ type, count }) => {
-									const t = TICKET_TYPES[type];
-									return (
-										<div className="co-line" key={type}>
-											<div>
-												<p className="co-line-name">
-													{t.label} ×{count}
-													{t.discounted && (
-														<span className="co-discount-badge">
-															−20%
-														</span>
-													)}
-												</p>
-												<p className="co-line-sub">
-													{peso(priceFor(type))} each
-												</p>
-											</div>
-											<p className="co-line-price">
-												{t.discounted && (
+								{ticketSummary.map(({ type, free, count }) => {
+								const t = TICKET_TYPES[type];
+								const unitPrice = free ? 0 : priceFor(type);
+								return (
+								<div className="co-line" key={free ? "senior-free" : type}>
+								<div>
+								<p className="co-line-name">
+								{t.label} ×{count}
+								{t.discounted && (
+								<span className="co-discount-badge">
+								{free ? "FREE" : "−20%"}
+								</span>
+								)}
+								</p>
+								<p className="co-line-sub">
+								{peso(unitPrice)} each
+								{free && " · Taguig senior, no booking fee"}
+								</p>
+								</div>
+								<p className="co-line-price">
+								{t.discounted && (
 													<span className="co-line-old">
 														{peso(
 															basePrice * count,
 														)}
 													</span>
 												)}
-												{peso(priceFor(type) * count)}
+												{peso(unitPrice * count)}
 											</p>
 										</div>
 									);

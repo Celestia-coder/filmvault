@@ -7,7 +7,7 @@ import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import IdPhotoCard from "../../components/IdPhotoCard.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
-import moviePoster from "../../assets/images/movie-poster.webp";
+import { placeholderPoster as moviePoster } from "../../api/movies.js";
 import { getUser } from "../../api/session.js";
 import {
 	createBooking,

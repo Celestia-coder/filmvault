@@ -68,7 +68,8 @@
 	gap: 8px;
 }
 
-.ssm-field label {
+.ssm-field > label,
+.ssm-field-label {
 	font-size: 13px;
 	font-weight: 600;
 	letter-spacing: 0.06em;
@@ -187,6 +188,7 @@
 
 .ssm-panel-head {
 	display: flex;
+	justify-content: space-between;
 	align-items: center;
 	gap: 12px;
 	padding: 16px 24px;
@@ -208,6 +210,20 @@
 	border-radius: 8px;
 	background-color: rgba(238, 17, 43, 0.15);
 	color: var(--color-red);
+}
+
+.ssm-panel-title {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-shrink: 0;
+}
+
+.ssm-panel-sub {
+	min-width: 0;
+	font-size: 13px;
+	color: var(--color-text-muted);
+	text-align: right;
 }
 
 /* ---------- Legend ---------- */
@@ -569,12 +585,13 @@
 
 .ssm-btn--danger {
 	border-color: var(--color-red);
-	background-color: transparent;
-	color: var(--color-red);
+	background-color: var(--color-red);
+	color: var(--color-white);
 }
 
 .ssm-btn--danger:hover {
-	background-color: rgba(238, 17, 43, 0.12);
+	border-color: #d10f26;
+	background-color: #d10f26;
 }
 
 .ssm-btn--ghost {
@@ -695,6 +712,14 @@
 
 	.ssm-legend {
 		margin: 20px 12px 0;
+	}
+
+	.ssm-panel-head {
+		flex-wrap: wrap;
+	}
+
+	.ssm-panel-sub {
+		text-align: left;
 	}
 }
 

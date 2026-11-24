@@ -7,13 +7,19 @@
 //   block / release          -> PUT /api/admin/showtimes/:id/seats/:seatId?branchId=
 //   customer for a sold seat -> GET /api/admin/bookings?branchId=&date=&movieId=
 //   cancel a booking         -> PATCH /api/admin/bookings/:id?branchId=
+//
+// Choosing a showtime: pick a cinema, then use the ShowtimePicker bar. Its
+// arrows step through showtimes; its popover has a week date strip, showtimes
+// grouped by movie, and a search that works across all dates.
 
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router";
 import "../../styles/SeatSelectionManagement.css";
 import "../../styles/AdminLive.css";
+import "../../styles/ShowtimePicker.css";
 
 import AdminSidebar from "../../components/AdminSidebar.jsx";
+import ShowtimePicker from "../../components/ShowtimePicker.jsx";
 
 import iconSeat from "../../assets/images/seatSelection/icon-seat.svg";
 import iconAvailable from "../../assets/images/seatSelection/icon-available.svg";
@@ -35,7 +41,7 @@ const STATUS_LABEL = {
 	available: "Available",
 	booked: "Reserved",
 	blocked: "Blocked",
-	held: "Held",
+	// held: "Held",
 };
 
 const EMPTY_ROWS = [];
@@ -53,8 +59,28 @@ function plural(count, word) {
 }
 
 function showtimeLabel(showtime) {
-	const suffix = showtime.status === "scheduled" ? "" : ` (${showtime.status})`;
+	const suffix =
+		showtime.status === "scheduled" ? "" : ` (${showtime.status})`;
 	return `${showtime.movieTitle} · ${formatDate(showtime.date)}, ${formatTime(showtime.time)}${suffix}`;
+}
+
+function startsAt(showtime) {
+	return new Date(`${showtime.date}T${showtime.time}`);
+}
+
+function byStart(a, b) {
+	return `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`);
+}
+
+// The page opens on the nearest upcoming showtime. If everything is already
+// in the past, it opens on the latest one.
+function pickDefaultShowtime(list) {
+	if (list.length === 0) return null;
+	const now = new Date();
+	return (
+		list.find((s) => s.status === "scheduled" && startsAt(s) >= now) ??
+		list[list.length - 1]
+	);
 }
 
 /* ------------------------------------------------------------------ */
@@ -176,9 +202,10 @@ function CancelBookingModal({ booking, busy, onKeep, onConfirm }) {
 				</span>
 				<h3 id="ssm-modal-title">Cancel booking {booking.ref}?</h3>
 				<p>
-					{booking.customer}'s {plural(booking.seatIds.length, "seat")} (
-					{booking.seatIds.join(", ")}) will become available again. This
-					can't be undone.
+					{booking.customer}'s{" "}
+					{plural(booking.seatIds.length, "seat")} (
+					{booking.seatIds.join(", ")}) will become available again.
+					This can't be undone.
 				</p>
 				<div className="ssm-modal-actions">
 					<button
@@ -270,13 +297,23 @@ function SeatSelectionManagement({ branchId }) {
 	const [pickedCinema, setPickedCinema] = useState(null);
 	const [pickedShowtime, setPickedShowtime] = useState(null);
 
-	// Fall back to the first option whenever the pick is missing or no longer valid.
+	// Fall back to the first cinema whenever the pick is missing or no longer valid.
 	const cinemaId = cinemas.some((c) => c.id === pickedCinema)
 		? pickedCinema
 		: (cinemas[0]?.id ?? null);
-	const cinemaShowtimes = showtimes.filter((s) => s.cinemaId === cinemaId);
+	const cinemaName = cinemas.find((c) => c.id === cinemaId)?.name ?? "";
+
+	// This cinema's showtimes in date/time order.
+	const cinemaShowtimes = useMemo(
+		() => showtimes.filter((s) => s.cinemaId === cinemaId).sort(byStart),
+		[showtimes, cinemaId],
+	);
+	const defaultShowtime = useMemo(
+		() => pickDefaultShowtime(cinemaShowtimes),
+		[cinemaShowtimes],
+	);
 	const showtime =
-		cinemaShowtimes.find((s) => s.id === pickedShowtime) ?? cinemaShowtimes[0] ?? null;
+		cinemaShowtimes.find((s) => s.id === pickedShowtime) ?? defaultShowtime;
 
 	const showtimeId = showtime?.id ?? null;
 	const showtimeCinemaId = showtime?.cinemaId ?? null;
@@ -340,7 +377,10 @@ function SeatSelectionManagement({ branchId }) {
 	const bookingsById = mapData?.bookingsById ?? null;
 
 	const flatSeats = useMemo(() => rows.flatMap((row) => row.seats), [rows]);
-	const seatsPerRow = rows.reduce((max, row) => Math.max(max, row.seats.length), 0);
+	const seatsPerRow = rows.reduce(
+		(max, row) => Math.max(max, row.seats.length),
+		0,
+	);
 	const leftCols = Math.ceil(seatsPerRow / 2);
 	const rightCols = seatsPerRow - leftCols;
 
@@ -365,7 +405,9 @@ function SeatSelectionManagement({ branchId }) {
 			ref: info?.reference ?? `#${bookingId}`,
 			customer: info?.customer.name ?? "Customer unavailable",
 			seatIds: selectedSeats.map((seat) => seat.label),
-			total: info?.amount ?? selectedSeats.reduce((sum, seat) => sum + seat.price, 0),
+			total:
+				info?.amount ??
+				selectedSeats.reduce((sum, seat) => sum + seat.price, 0),
 			discount: info?.discountLabel ?? "",
 		};
 	}
@@ -382,8 +424,9 @@ function SeatSelectionManagement({ branchId }) {
 		resetSelection();
 	}
 
-	function handleShowtimeChange(event) {
-		setPickedShowtime(Number(event.target.value));
+	function handleSelectShowtime(id) {
+		if (id === showtimeId) return;
+		setPickedShowtime(id);
 		resetSelection();
 	}
 
@@ -397,7 +440,9 @@ function SeatSelectionManagement({ branchId }) {
 			const bookingSeatIds = flatSeats
 				.filter((s) => s.bookingId === seat.bookingId)
 				.map((s) => s.id);
-			setSelected((prev) => (prev.includes(seatId) ? [] : bookingSeatIds));
+			setSelected((prev) =>
+				prev.includes(seatId) ? [] : bookingSeatIds,
+			);
 			return;
 		}
 
@@ -407,7 +452,9 @@ function SeatSelectionManagement({ branchId }) {
 			return;
 		}
 		setSelected((prev) =>
-			prev.includes(seatId) ? prev.filter((id) => id !== seatId) : [...prev, seatId],
+			prev.includes(seatId)
+				? prev.filter((id) => id !== seatId)
+				: [...prev, seatId],
 		);
 	}
 
@@ -416,7 +463,9 @@ function SeatSelectionManagement({ branchId }) {
 		setBusy(true);
 		setNotice(null);
 		const results = await Promise.allSettled(
-			selected.map((seatId) => setSeatStatus({ showtimeId, seatId, branchId, action })),
+			selected.map((seatId) =>
+				setSeatStatus({ showtimeId, seatId, branchId, action }),
+			),
 		);
 		const failed = results.filter((result) => result.status === "rejected");
 		const done = results.length - failed.length;
@@ -438,7 +487,10 @@ function SeatSelectionManagement({ branchId }) {
 	async function handleCancelBooking() {
 		setBusy(true);
 		try {
-			const { seatsReleased } = await cancelBooking({ bookingId: booking.id, branchId });
+			const { seatsReleased } = await cancelBooking({
+				bookingId: booking.id,
+				branchId,
+			});
 			setNotice({
 				type: "ok",
 				text: `Cancelled booking ${booking.ref}. ${plural(seatsReleased, "seat")} released.`,
@@ -486,6 +538,8 @@ function SeatSelectionManagement({ branchId }) {
 			</PageFrame>
 		);
 	}
+
+	const now = new Date();
 
 	const STAT_CARDS = [
 		{
@@ -574,7 +628,10 @@ function SeatSelectionManagement({ branchId }) {
 				)
 			}
 		>
-			<section className="ssm-filters" aria-label="Choose showtime">
+			<section
+				className="ssm-filters"
+				aria-label="Choose cinema and showtime"
+			>
 				<div className="ssm-field">
 					<label htmlFor="ssm-cinema">Cinema</label>
 					<select
@@ -591,26 +648,22 @@ function SeatSelectionManagement({ branchId }) {
 					</select>
 				</div>
 
-				<div className="ssm-field">
-					<label htmlFor="ssm-showtime">Showtime</label>
-					<select
-						id="ssm-showtime"
-						className="ssm-select ssm-select--showtime"
-						value={showtimeId}
-						onChange={handleShowtimeChange}
-					>
-						{cinemaShowtimes.map((s) => (
-							<option key={s.id} value={s.id}>
-								{showtimeLabel(s)}
-							</option>
-						))}
-					</select>
+				<div className="ssm-field ssm-field--picker">
+					<span className="ssm-field-label">Showtime</span>
+					<ShowtimePicker
+						showtimes={cinemaShowtimes}
+						current={showtime}
+						now={now}
+						cinemaName={cinemaName}
+						onSelect={handleSelectShowtime}
+					/>
 				</div>
 			</section>
 
 			{mapData?.bookingsFailed && (
 				<p className="adm-notice adm-notice--error" role="status">
-					Couldn't load customer details for sold seats. The map is still accurate.
+					Couldn't load customer details for sold seats. The map is
+					still accurate.
 				</p>
 			)}
 
@@ -619,8 +672,12 @@ function SeatSelectionManagement({ branchId }) {
 					<article className="ssm-stat-card" key={card.label}>
 						<div className="ssm-stat-text">
 							<p className="ssm-stat-label">{card.label}</p>
-							<p className={`ssm-stat-value ${card.tone}`}>{card.value}</p>
-							{card.sub && <p className="adm-stat-sub">{card.sub}</p>}
+							<p className={`ssm-stat-value ${card.tone}`}>
+								{card.value}
+							</p>
+							{card.sub && (
+								<p className="adm-stat-sub">{card.sub}</p>
+							)}
 						</div>
 						<img className="ssm-stat-icon" src={card.icon} alt="" />
 					</article>
@@ -635,10 +692,16 @@ function SeatSelectionManagement({ branchId }) {
 						aria-busy={mapRefreshing}
 					>
 						<header className="ssm-panel-head">
-							<span className="ssm-panel-icon">
-								<IconSeat size={20} />
+							<div className="ssm-panel-title">
+								<span className="ssm-panel-icon">
+									<IconSeat size={20} />
+								</span>
+								<h3>Select Seats</h3>
+							</div>
+
+							<span className="ssm-panel-sub">
+								{showtimeLabel(showtime)}
 							</span>
-							<h3>Select Seats</h3>
 						</header>
 
 						<ul className="ssm-legend">
@@ -650,10 +713,10 @@ function SeatSelectionManagement({ branchId }) {
 								<span className="ssm-seat ssm-seat--booked ssm-legend-swatch" />
 								Reserved
 							</li>
-							<li>
+							{/* <li>
 								<span className="ssm-seat ssm-seat--held ssm-legend-swatch" />
 								Held
-							</li>
+							</li> */}
 							<li>
 								<span className="ssm-seat ssm-seat--blocked ssm-legend-swatch" />
 								Blocked
@@ -680,28 +743,38 @@ function SeatSelectionManagement({ branchId }) {
 
 								{rows.map((row) => (
 									<div className="ssm-row" key={row.label}>
-										<span className="ssm-row-label">{row.label}</span>
+										<span className="ssm-row-label">
+											{row.label}
+										</span>
 
 										<div className="ssm-group ssm-group--left">
-											{row.seats.slice(0, leftCols).map((seat) => (
-												<SeatButton
-													key={seat.id}
-													seat={seat}
-													isSelected={selectedSet.has(seat.id)}
-													onToggle={toggleSeat}
-												/>
-											))}
+											{row.seats
+												.slice(0, leftCols)
+												.map((seat) => (
+													<SeatButton
+														key={seat.id}
+														seat={seat}
+														isSelected={selectedSet.has(
+															seat.id,
+														)}
+														onToggle={toggleSeat}
+													/>
+												))}
 										</div>
 
 										<div className="ssm-group ssm-group--right">
-											{row.seats.slice(leftCols).map((seat) => (
-												<SeatButton
-													key={seat.id}
-													seat={seat}
-													isSelected={selectedSet.has(seat.id)}
-													onToggle={toggleSeat}
-												/>
-											))}
+											{row.seats
+												.slice(leftCols)
+												.map((seat) => (
+													<SeatButton
+														key={seat.id}
+														seat={seat}
+														isSelected={selectedSet.has(
+															seat.id,
+														)}
+														onToggle={toggleSeat}
+													/>
+												))}
 										</div>
 									</div>
 								))}
@@ -709,7 +782,10 @@ function SeatSelectionManagement({ branchId }) {
 						</div>
 					</section>
 
-					<aside className="ssm-inspector" aria-label="Seat inspector">
+					<aside
+						className="ssm-inspector"
+						aria-label="Seat inspector"
+					>
 						<header className="ssm-inspector-head">
 							<h3>Seat Inspector</h3>
 							<p>{inspectorSubtitle}</p>
@@ -730,17 +806,21 @@ function SeatSelectionManagement({ branchId }) {
 									<span className="ssm-empty-icon">
 										<IconCursor size={22} />
 									</span>
-									<p className="ssm-empty-title">No seats selected</p>
+									<p className="ssm-empty-title">
+										No seats selected
+									</p>
 									<p className="ssm-empty-text">
-										Click any seat to view its booking or to block,
-										release, or cancel it.
+										Click any seat to view its booking or to
+										block, release, or cancel it.
 									</p>
 								</div>
 							)}
 
 							{booking && (
 								<>
-									<span className="ssm-tag ssm-tag--booked">Reserved</span>
+									<span className="ssm-tag ssm-tag--booked">
+										Reserved
+									</span>
 									<dl className="ssm-details">
 										<div>
 											<dt>Customer</dt>
@@ -751,8 +831,14 @@ function SeatSelectionManagement({ branchId }) {
 											<dd>{booking.ref}</dd>
 										</div>
 										<div>
-											<dt>{booking.seatIds.length === 1 ? "Seat" : "Seats"}</dt>
-											<dd>{booking.seatIds.join(", ")}</dd>
+											<dt>
+												{booking.seatIds.length === 1
+													? "Seat"
+													: "Seats"}
+											</dt>
+											<dd>
+												{booking.seatIds.join(", ")}
+											</dd>
 										</div>
 										{booking.discount && (
 											<div>
@@ -770,7 +856,9 @@ function SeatSelectionManagement({ branchId }) {
 										<button
 											type="button"
 											className="ssm-btn ssm-btn--danger"
-											onClick={() => setConfirmingCancel(true)}
+											onClick={() =>
+												setConfirmingCancel(true)
+											}
 											disabled={busy}
 										>
 											Cancel booking
@@ -782,18 +870,23 @@ function SeatSelectionManagement({ branchId }) {
 
 							{selectionStatus === "available" && (
 								<>
-									<span className="ssm-tag ssm-tag--available">Available</span>
+									<span className="ssm-tag ssm-tag--available">
+										Available
+									</span>
 									{chips}
 									<p className="ssm-hint">
-										Blocked seats can't be booked by customers. Click more
-										open seats to block them together.
+										Blocked seats can't be booked by
+										customers. Click more open seats to
+										block them together.
 									</p>
 
 									<div className="ssm-actions">
 										<button
 											type="button"
 											className="ssm-btn ssm-btn--primary"
-											onClick={() => runSeatAction("block")}
+											onClick={() =>
+												runSeatAction("block")
+											}
 											disabled={busy}
 										>
 											{busy
@@ -807,17 +900,22 @@ function SeatSelectionManagement({ branchId }) {
 
 							{selectionStatus === "blocked" && (
 								<>
-									<span className="ssm-tag ssm-tag--blocked">Blocked</span>
+									<span className="ssm-tag ssm-tag--blocked">
+										Blocked
+									</span>
 									{chips}
 									<p className="ssm-hint">
-										Release these seats to let customers book them again.
+										Release these seats to let customers
+										book them again.
 									</p>
 
 									<div className="ssm-actions">
 										<button
 											type="button"
 											className="ssm-btn ssm-btn--outline"
-											onClick={() => runSeatAction("release")}
+											onClick={() =>
+												runSeatAction("release")
+											}
 											disabled={busy}
 										>
 											{busy
@@ -831,19 +929,24 @@ function SeatSelectionManagement({ branchId }) {
 
 							{selectionStatus === "held" && (
 								<>
-									<span className="ssm-tag ssm-tag--blocked">Held</span>
+									<span className="ssm-tag ssm-tag--blocked">
+										Held
+									</span>
 									{chips}
 									<p className="ssm-hint">
-										A customer is checking out with these seats. They free up
-										on their own after 10 minutes; release them now only for
-										a stuck checkout.
+										A customer is checking out with these
+										seats. They free up on their own after
+										10 minutes; release them now only for a
+										stuck checkout.
 									</p>
 
 									<div className="ssm-actions">
 										<button
 											type="button"
 											className="ssm-btn ssm-btn--outline"
-											onClick={() => runSeatAction("release")}
+											onClick={() =>
+												runSeatAction("release")
+											}
 											disabled={busy}
 										>
 											{busy

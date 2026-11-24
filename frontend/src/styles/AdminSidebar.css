@@ -54,7 +54,9 @@
 	text-decoration: none;
 	cursor: default;
 	background-color: var(--color-bg-dark2);
-	transition: background-color 0.15s ease, color 0.15s ease;
+	transition:
+		background-color 0.15s ease,
+		color 0.15s ease;
 }
 
 .admin-nav-item.active {
@@ -128,6 +130,27 @@
 	bottom: 0;
 	width: 4px;
 	background-color: var(--color-red);
+}
+
+.admin-profile .admin-branch {
+	margin-top: 12px;
+	font-size: 18px;
+	font-weight: 600;
+	text-align: center;
+}
+
+.admin-profile .admin-role {
+	margin-top: 2px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--color-text-muted);
+}
+
+.admin-avatar-logo {
+	width: 100%;
+	height: 100%;
+	border-radius: 50%;
+	object-fit: cover;
 }
 
 @media (max-width: 900px) {

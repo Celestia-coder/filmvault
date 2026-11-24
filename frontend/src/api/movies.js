@@ -12,7 +12,9 @@
 //   genres (array)         ->  genres (array)
 //   cast (array of names)  ->  cast (array of names)
 
-import placeholderPoster from "../assets/images/movie-poster.webp";
+export const placeholderPoster = "data:image/svg+xml," + encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450"><rect width="300" height="450" fill="#1c1c24"/><g fill="none" stroke="#6b6b7b" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"><rect x="105" y="170" width="90" height="70" rx="8"/><circle cx="130" cy="193" r="8"/><path d="M105 230l25-22 20 16 15-12 30 18"/></g><text x="150" y="285" fill="#8a8a9a" font-family="sans-serif" font-size="20" text-anchor="middle">No poster</text></svg>`
+);
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 

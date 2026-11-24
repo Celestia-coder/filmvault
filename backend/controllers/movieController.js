@@ -19,6 +19,20 @@ const formatMovie = (row) => ({
   genres: row.genres ? row.genres.split(",") : [],
 });
 
+// Replaces a movie's cast with the given names, reusing existing CAST rows by name.
+const saveCast = async (conn, movieId, cast) => {
+  const names = [...new Set((Array.isArray(cast) ? cast : []).map((n) => String(n).trim()).filter(Boolean))];
+  await conn.query("DELETE FROM MOVIE_CAST WHERE movie_id = ?", [movieId]);
+  for (const name of names) {
+    const [found] = await conn.query("SELECT cast_id FROM `CAST` WHERE cast_name = ? LIMIT 1", [name]);
+    const castId = found.length
+      ? found[0].cast_id
+      : (await conn.query("INSERT INTO `CAST` (cast_name) VALUES (?)", [name]))[0].insertId;
+    await conn.query("INSERT INTO MOVIE_CAST (movie_id, cast_id) VALUES (?, ?)", [movieId, castId]);
+  }
+};
+
+// GET /api/movies?status=now-showing,upcoming  (status is optional)
 // GET /api/movies?status=now-showing,upcoming  (status is optional)
 const getAllMovies = async (req, res) => {
   const { statuses, error } = parseStatusFilter(req.query.status);
@@ -26,12 +40,18 @@ const getAllMovies = async (req, res) => {
     return res.status(400).json({ success: false, message: error });
   }
 
-  const where = statuses.length ? "WHERE m.status IN (?)" : "";
+  const conditions = ["m.deleted_at IS NULL"];
+  const params = [];
+  if (statuses.length) {
+    conditions.push("m.status IN (?)");
+    params.push(statuses);
+  }
+  const where = `WHERE ${conditions.join(" AND ")}`;
 
   try {
     const [rows] = await pool.query(
       `${MOVIE_SELECT} ${where} GROUP BY m.movie_id ORDER BY m.movie_id`,
-      statuses.length ? [statuses] : []
+      params
     );
     return res.status(200).json({ success: true, movies: rows.map(formatMovie) });
   } catch (error) {
@@ -49,7 +69,7 @@ const getMovieById = async (req, res) => {
 
   try {
     const [rows] = await pool.query(
-      `${MOVIE_SELECT} WHERE m.movie_id = ? GROUP BY m.movie_id`,
+      `${MOVIE_SELECT} WHERE m.movie_id = ? AND m.deleted_at IS NULL GROUP BY m.movie_id`,
       [id]
     );
     if (rows.length === 0) {
@@ -80,14 +100,14 @@ const getMovieById = async (req, res) => {
 const createMovie = async (req, res) => {
   const {
     title, synopsis, duration, ageRating, language,
-    price, poster, director, releaseDate, status, trailerUrl, genres,
+    price, poster, director, releaseDate, status, trailerUrl, genres, cast,
   } = req.body;
 
-  if (!title || !director || !poster || !price || !duration || !status ||
+  if (!title || !director || !price || !duration || !status ||
       !Array.isArray(genres) || genres.length === 0) {
     return res.status(400).json({
       success: false,
-      message: "title, director, poster, price, duration, status, and at least one genre are required.",
+      message: "title, director, price, duration, status, and at least one genre are required.",
     });
   }
   if (Number(price) <= 0 || Number(duration) <= 0) {
@@ -123,7 +143,7 @@ const createMovie = async (req, res) => {
          poster, director, release_date, status, trailer_url)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [title, synopsis || null, duration, ageRating || null, language || null,
-       price, poster, director, releaseDate || null, status, trailerUrl || null]
+       price, poster || null, director, releaseDate || null, status, trailerUrl || null]
     );
 
     const movieId = result.insertId;
@@ -131,6 +151,7 @@ const createMovie = async (req, res) => {
       "INSERT INTO MOVIE_GENRE (movie_id, genre_id) VALUES ?",
       [genreRows.map((g) => [movieId, g.genre_id])]
     );
+    await saveCast(conn, movieId, cast);
 
     await conn.commit();
 
@@ -157,14 +178,14 @@ const updateMovie = async (req, res) => {
 
   const {
     title, synopsis, duration, ageRating, language,
-    price, poster, director, releaseDate, status, trailerUrl, genres,
+    price, poster, director, releaseDate, status, trailerUrl, genres, cast,
   } = req.body;
 
-  if (!title || !director || !poster || !price || !duration || !status ||
+  if (!title || !director || !price || !duration || !status ||
       !Array.isArray(genres) || genres.length === 0) {
     return res.status(400).json({
       success: false,
-      message: "title, director, poster, price, duration, status, and at least one genre are required.",
+      message: "title, director, price, duration, status, and at least one genre are required.",
     });
   }
   if (Number(price) <= 0 || Number(duration) <= 0) {
@@ -205,7 +226,7 @@ const updateMovie = async (req, res) => {
          base_price = ?, poster = ?, director = ?, release_date = ?, status = ?, trailer_url = ?
        WHERE movie_id = ?`,
       [title, synopsis || null, duration, ageRating || null, language || null,
-       price, poster, director, releaseDate || null, status, trailerUrl || null, id]
+       price, poster || null, director, releaseDate || null, status, trailerUrl || null, id]
     );
 
     // Simplest correct way to sync genres: wipe and re-insert rather than diffing.
@@ -214,6 +235,7 @@ const updateMovie = async (req, res) => {
       "INSERT INTO MOVIE_GENRE (movie_id, genre_id) VALUES ?",
       [genreRows.map((g) => [id, g.genre_id])]
     );
+    await saveCast(conn, id, cast);
 
     await conn.commit();
 
@@ -232,13 +254,8 @@ const updateMovie = async (req, res) => {
 };
 
 // DELETE /api/admin/movies/:id
-//
-// Decision (documented per Week 3 checklist): deletion is BLOCKED if the movie
-// has any existing showtimes (rows in SCREENING), rather than cascading or
-// leaving them orphaned. SCREENING is ON DELETE CASCADE from MOVIE, so without
-// this check, deleting a movie would silently wipe its showtimes and seat
-// data. Admin must remove the movie's showtimes first. Revisit with
-// Database/QA if an "archive instead of delete" approach is preferred later.
+// Soft-deletes the movie (sets deleted_at) once it has no active (non-deleted)
+// showtimes, preserving historical bookings/tickets.
 const deleteMovie = async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
@@ -246,13 +263,16 @@ const deleteMovie = async (req, res) => {
   }
 
   try {
-    const [existing] = await pool.query("SELECT movie_id FROM MOVIE WHERE movie_id = ?", [id]);
-    if (existing.length === 0) {
+    const [existing] = await pool.query(
+      "SELECT movie_id, deleted_at FROM MOVIE WHERE movie_id = ?",
+      [id]
+    );
+    if (existing.length === 0 || existing[0].deleted_at !== null) {
       return res.status(404).json({ success: false, message: "Movie not found." });
     }
 
     const [showtimes] = await pool.query(
-      "SELECT screening_id FROM SCREENING WHERE movie_id = ? LIMIT 1",
+      "SELECT screening_id FROM SCREENING WHERE movie_id = ? AND deleted_at IS NULL LIMIT 1",
       [id]
     );
     if (showtimes.length > 0) {
@@ -262,11 +282,7 @@ const deleteMovie = async (req, res) => {
       });
     }
 
-    // MOVIE_GENRE and MOVIE_CAST have no ON DELETE CASCADE, so clear them first
-    // to avoid a foreign key error.
-    await pool.query("DELETE FROM MOVIE_GENRE WHERE movie_id = ?", [id]);
-    await pool.query("DELETE FROM MOVIE_CAST WHERE movie_id = ?", [id]);
-    await pool.query("DELETE FROM MOVIE WHERE movie_id = ?", [id]);
+    await pool.query("UPDATE MOVIE SET deleted_at = NOW() WHERE movie_id = ?", [id]);
 
     return res.status(200).json({ success: true, message: "Movie deleted." });
   } catch (error) {

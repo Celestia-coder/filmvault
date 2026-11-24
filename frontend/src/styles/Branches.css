@@ -1,5 +1,17 @@
 @import './variables.css';
 
+.branches-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.branches-page .branches {
+  flex: 1;
+  width: 100%;
+}
+
 .branches {
   /* derived from the shared tokens — only values variables.css does not define */
   --branch-red-dark: #c40e23;

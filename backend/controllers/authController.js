@@ -6,10 +6,13 @@ const bcrypt = require("bcryptjs");
 const pool = require("../config/database");
 const { normalizePhone } = require("../utils/phone");
 const { signAuthToken } = require("../utils/authToken");
+const { createOtpService } = require("../services/otpService");
 
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,}$/;
 const MIN_PASSWORD_LENGTH = 8;
+
+const otpService = createOtpService();
 
 // Profile photos must be images uploaded to our own Cloudinary folder
 // (POST /api/upload/profile), so the column can't hold links to other sites.
@@ -22,9 +25,118 @@ const isOurProfilePhoto = (url) =>
 	) &&
 	url.includes("/filmvault/profiles/");
 
+// Existing account with the same email or username, or null.
+const findDuplicateAccount = async (cleanEmail, cleanUsername) => {
+	const [existing] = await pool.query(
+		"SELECT email, username FROM `USER` WHERE email = ? OR username = ?",
+		[cleanEmail, cleanUsername],
+	);
+	if (
+		existing.some(
+			(row) => row.email.toLowerCase() === cleanEmail.toLowerCase(),
+		)
+	) {
+		return {
+			field: "email",
+			message: "An account with this email already exists.",
+		};
+	}
+	if (existing.length > 0) {
+		return {
+			field: "username",
+			message:
+				"That display name is already taken. Please choose another.",
+		};
+	}
+	return null;
+};
+
+const otpFailureMessage = ({ status, attemptsLeft }) => {
+	switch (status) {
+		case "invalid":
+			return attemptsLeft > 0
+				? `Incorrect code. ${attemptsLeft} attempt${attemptsLeft === 1 ? "" : "s"} left.`
+				: "Incorrect code. Request a new one.";
+		case "too_many_attempts":
+			return "Too many incorrect attempts. Request a new code.";
+		case "expired":
+			return "That code has expired or was never sent. Request a new one.";
+		default:
+			return "Enter the 6-digit code sent to your email.";
+	}
+};
+
+// POST /api/auth/register/send-otp
+// body: { email, username }
+// Step 1 of sign up: checks the email/username are free, then emails a code.
+// The account is only created by POST /api/auth/register with that code.
+const sendRegisterOtp = async (req, res) => {
+	const cleanEmail = String(req.body?.email ?? "").trim();
+	const cleanUsername = String(req.body?.username ?? "").trim();
+
+	if (!EMAIL_PATTERN.test(cleanEmail)) {
+		return res.status(400).json({
+			success: false,
+			field: "email",
+			message: "Enter a valid email address.",
+		});
+	}
+	if (!USERNAME_PATTERN.test(cleanUsername)) {
+		return res.status(400).json({
+			success: false,
+			field: "username",
+			message:
+				"Display name must be at least 3 characters: letters, numbers and underscores only.",
+		});
+	}
+
+	try {
+		const duplicate = await findDuplicateAccount(cleanEmail, cleanUsername);
+		if (duplicate) {
+			return res.status(409).json({ success: false, ...duplicate });
+		}
+
+		const result = await otpService.issue(cleanEmail);
+		switch (result.status) {
+			case "sent":
+				return res.status(200).json({
+					success: true,
+					message: "Verification code sent.",
+				});
+			case "cooldown":
+				res.set("Retry-After", String(result.retryAfter));
+				return res.status(429).json({
+					success: false,
+					retryAfter: result.retryAfter,
+					message: `A code was just sent. You can request another in ${result.retryAfter}s.`,
+				});
+			case "email_unavailable":
+				return res.status(503).json({
+					success: false,
+					message:
+						"Email verification is unavailable right now. Please try again later.",
+				});
+			default:
+				return res.status(502).json({
+					success: false,
+					message:
+						"We couldn't send the verification code. Please try again.",
+				});
+		}
+	} catch (error) {
+		console.error("Send OTP error:", error);
+		return res.status(500).json({
+			success: false,
+			message:
+				"Something went wrong while sending the verification code.",
+		});
+	}
+};
+
 // POST /api/auth/register
+// body also needs `otp`: the 6-digit code from POST /api/auth/register/send-otp.
 const register = async (req, res) => {
-	const { firstName, lastName, email, password, username, phoneNum } =
+	const { firstName, lastName, email, password, username, phoneNum, otp } =
 		req.body ?? {};
 
 	if (
@@ -75,28 +187,18 @@ const register = async (req, res) => {
 	}
 
 	try {
-		const [existing] = await pool.query(
-			"SELECT email, username FROM `USER` WHERE email = ? OR username = ?",
-			[cleanEmail, cleanUsername],
-		);
-
-		if (
-			existing.some(
-				(row) => row.email.toLowerCase() === cleanEmail.toLowerCase(),
-			)
-		) {
-			return res.status(409).json({
-				success: false,
-				field: "email",
-				message: "An account with this email already exists.",
-			});
+		const duplicate = await findDuplicateAccount(cleanEmail, cleanUsername);
+		if (duplicate) {
+			return res.status(409).json({ success: false, ...duplicate });
 		}
-		if (existing.length > 0) {
-			return res.status(409).json({
+
+		// The code must have been sent to this exact email.
+		const otpCheck = await otpService.verify(cleanEmail, otp);
+		if (otpCheck.status !== "ok") {
+			return res.status(400).json({
 				success: false,
-				field: "username",
-				message:
-					"That display name is already taken. Please choose another.",
+				field: "otp",
+				message: otpFailureMessage(otpCheck),
 			});
 		}
 
@@ -114,6 +216,9 @@ const register = async (req, res) => {
 				phone,
 			],
 		);
+
+		// Code is single-use. A failed cleanup must not undo the sign up.
+		await otpService.consume(cleanEmail).catch(() => {});
 
 		return res.status(201).json({
 			success: true,
@@ -429,4 +534,10 @@ const updateProfile = async (req, res) => {
 	}
 };
 
-module.exports = { register, login, getProfile, updateProfile };
+module.exports = {
+	register,
+	sendRegisterOtp,
+	login,
+	getProfile,
+	updateProfile,
+};

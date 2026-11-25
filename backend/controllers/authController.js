@@ -5,6 +5,7 @@
 const bcrypt = require("bcryptjs");
 const pool = require("../config/database");
 const { normalizePhone } = require("../utils/phone");
+const { signAuthToken } = require("../utils/authToken");
 
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,}$/;
@@ -136,8 +137,11 @@ const register = async (req, res) => {
 };
 
 // POST /api/auth/login
+// Returns the user plus a signed token. The frontend sends the token as
+// `Authorization: Bearer <token>` so middleware/authenticate.js can set
+// req.auth from the verified token and the current USER row.
 const login = async (req, res) => {
-	const { email, password } = req.body;
+	const { email, password } = req.body ?? {};
 
 	if (!email || !password) {
 		return res.status(400).json({
@@ -172,6 +176,7 @@ const login = async (req, res) => {
 		return res.status(200).json({
 			success: true,
 			message: "Login successful.",
+			token: signAuthToken(matchedUser.user_id),
 			user: {
 				userId: matchedUser.user_id,
 				username: matchedUser.username,
@@ -193,8 +198,9 @@ const login = async (req, res) => {
 
 /* -------------------------------- profile --------------------------------- */
 // TODO (before real deployment): like the booking endpoints, these trust the
-// userId sent by the client. Once real sessions/tokens exist, read the user
-// from the verified token instead.
+// userId sent by the client. Now that login issues a token and
+// middleware/authenticate.js sets req.auth, switch these to read the user from
+// req.auth instead of the request.
 
 const parseUserId = (raw) => {
 	const userId = Number(raw);

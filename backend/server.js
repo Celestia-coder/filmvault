@@ -24,6 +24,11 @@ app.use(cors());
 // Read JSON request bodies (req.body)
 app.use(express.json());
 
+app.use(require("./middleware/authenticate"));
+
+// temporary test route; delete it once emails work
+app.get("/api/auth/me", (req, res) => res.json({ auth: req.auth ?? null }));
+
 // Health check
 app.get("/", (req, res) => {
 	res.send("FilmVault backend server is running.");

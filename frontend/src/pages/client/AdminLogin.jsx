@@ -6,6 +6,7 @@ import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
 import { request } from "../../api/movies.js";
 import { saveUser } from "../../api/session.js";
+import { saveToken } from "../../api/authToken.js";
 import "../../styles/AdminLogin.css";
 
 const IconMail = (props) => (
@@ -147,7 +148,7 @@ function AdminLogin() {
     setSubmitting(true);
     try {
       // POST /api/auth/login -> { user: { userId, username, name, email, role, branchId } }
-      const { user } = await request("/api/auth/login", {
+      const { user, token } = await request("/api/auth/login", {
         method: "POST",
         body: { email: email.trim(), password },
       });
@@ -170,6 +171,7 @@ function AdminLogin() {
       }
 
       saveUser(user);
+      saveToken(token);
       const name = BRANCHES.find((b) => b.id === branchId).name;
       setStatus({ type: "success", message: `Login successful! Redirecting to the ${name} dashboard...` });
       navigate(afterLogin);

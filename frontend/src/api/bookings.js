@@ -168,6 +168,7 @@ export async function createBooking(
 		seatIds,
 		ticketTypes,
 		paymentMethod,
+		contactEmail,
 		snacks = [],
 		idImages = {},
 		paymentRef,
@@ -182,6 +183,7 @@ export async function createBooking(
 	form.append("paymentMethod", paymentMethod);
 	if (paymentRef) form.append("paymentRef", paymentRef);
 	if (snacks.length > 0) form.append("snacks", JSON.stringify(snacks));
+	if (contactEmail) form.append("contactEmail", contactEmail);
 
 	// discount_type is only sent when every discounted seat has the same type.
 	const kinds = new Set(

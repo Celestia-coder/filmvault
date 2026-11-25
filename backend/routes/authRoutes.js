@@ -5,6 +5,7 @@ const {
 	register,
 	sendRegisterOtp,
 	login,
+	googleAuth,
 	getProfile,
 	updateProfile,
 } = require("../controllers/authController");
@@ -12,6 +13,7 @@ const {
 router.post("/register/send-otp", sendRegisterOtp);
 router.post("/register", register);
 router.post("/login", login);
+router.post("/google", googleAuth);
 router.get("/profile", getProfile); // ?userId=
 router.put("/profile", updateProfile);
 

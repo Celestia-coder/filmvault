@@ -40,6 +40,17 @@ export function registerUser(
 	});
 }
 
+// POST /api/auth/google
+// `credential` is the ID token from <GoogleButton />. Logs in or creates the
+// customer and resolves to the same { token, user } body as login, plus isNewUser.
+export function googleLogin(credential, signal) {
+	return request("/api/auth/google", {
+		method: "POST",
+		signal,
+		body: { credential },
+	});
+}
+
 // GET /api/auth/profile?userId=  ->  profile object
 export async function fetchProfile(userId, signal) {
 	const body = await request("/api/auth/profile", {

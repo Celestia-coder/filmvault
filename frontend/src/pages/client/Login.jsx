@@ -5,6 +5,8 @@ import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
 import { request } from "../../api/movies.js";
+import { googleLogin } from "../../api/auth.js";
+import GoogleButton from "../../components/GoogleButton.jsx";
 import { saveUser } from "../../api/session.js";
 import { saveToken } from "../../api/authToken.js";
 import "../../styles/Login.css";
@@ -241,6 +243,30 @@ function Login() {
 		}
 	};
 
+	// "Continue with Google": the backend logs in the customer (or creates one),
+	// then the session is saved and redirected exactly like the password login.
+	const handleGoogleCredential = async (credential) => {
+		setStatus(null);
+		setSubmitting(true);
+		try {
+			const data = await googleLogin(credential);
+			saveUser(data.user);
+			saveToken(data.token);
+			navigate(from ?? "/movies", {
+				replace: true,
+				state: from ? fromState : undefined,
+			});
+		} catch (err) {
+			setStatus({
+				type: "error",
+				message: err.status
+					? err.message
+					: "Unable to reach the server. Please try again.",
+			});
+			setSubmitting(false);
+		}
+	};
+
 	return (
 		<div className="login-page">
 			<div
@@ -398,9 +424,21 @@ function Login() {
 
 							<div className="divider">or continue with</div>
 
-							<button type="button" className="btn-google">
-								<IconGoogle /> Continue with Google
-							</button>
+							<GoogleButton
+								text="signin_with"
+								onCredential={handleGoogleCredential}
+								onError={(message) =>
+									setStatus({ type: "error", message })
+								}
+							>
+								<button
+									type="button"
+									className="btn-google"
+									tabIndex={-1}
+								>
+									<IconGoogle /> Continue with Google
+								</button>
+							</GoogleButton>
 
 							<p className="signup-hint">
 								Don't have an account?{" "}

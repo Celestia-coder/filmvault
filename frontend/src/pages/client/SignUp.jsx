@@ -6,7 +6,10 @@ import SignUpConfirm from "../../components/SignUpConfirm.jsx";
 import SignUpSuccess from "../../components/SignUpSuccess.jsx";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
-import { registerUser, sendRegisterOtp } from "../../api/auth.js";
+import { registerUser, sendRegisterOtp, googleLogin } from "../../api/auth.js";
+import { saveToken } from "../../api/authToken.js";
+import { saveUser } from "../../api/session.js";
+import GoogleButton from "../../components/GoogleButton.jsx";
 import heroBg from "../../assets/images/hero-bg.png";
 import "../../styles/SignUp.css";
 
@@ -368,6 +371,7 @@ function SignUp() {
 	const [errors, setErrors] = useState({});
 	const [submitError, setSubmitError] = useState("");
 	const [codeError, setCodeError] = useState("");
+	const [googleError, setGoogleError] = useState("");
 	const [sendingCode, setSendingCode] = useState(false);
 	const [resendSeconds, setResendSeconds] = useState(60);
 	const photoInputRef = useRef(null);
@@ -569,6 +573,23 @@ function SignUp() {
 			}
 		} finally {
 			setSendingCode(false);
+		}
+	};
+
+	// "Continue with Google": the backend creates the customer (or logs in an
+	// existing one), then we save the session the same way Login does.
+	const handleGoogleCredential = async (credential) => {
+		setGoogleError("");
+
+		try {
+			const data = await googleLogin(credential);
+			saveToken(data.token);
+			saveUser(data.user);
+			navigate("/");
+		} catch (err) {
+			setGoogleError(
+				err.message || "Google sign-up failed. Please try again.",
+			);
 		}
 	};
 
@@ -904,10 +925,24 @@ function SignUp() {
 
 								<div className="divider">or sign up with</div>
 
-								<button type="button" className="btn-google">
-									<IconGoogle />
-									Continue with Google
-								</button>
+								<GoogleButton
+									text="signup_with"
+									onCredential={handleGoogleCredential}
+									onError={setGoogleError}
+								>
+									<button
+										type="button"
+										className="btn-google"
+										tabIndex={-1}
+									>
+										<IconGoogle />
+										Continue with Google
+									</button>
+								</GoogleButton>
+
+								{googleError && (
+									<p className="field-error">{googleError}</p>
+								)}
 
 								<p className="signin-hint">
 									Already have an account?{" "}

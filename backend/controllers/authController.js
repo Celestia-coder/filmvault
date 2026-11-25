@@ -3,10 +3,15 @@
 // the profile photo). Backed by the MySQL `USER` table via config/database.js.
 
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const pool = require("../config/database");
 const { normalizePhone } = require("../utils/phone");
 const { signAuthToken } = require("../utils/authToken");
 const { createOtpService } = require("../services/otpService");
+const {
+	GoogleConfigError,
+	verifyGoogleIdToken,
+} = require("../services/googleAuthService");
 
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,}$/;
@@ -301,6 +306,166 @@ const login = async (req, res) => {
 	}
 };
 
+/* ---------------------------------- google --------------------------------- */
+
+// Username from the email's local part: letters/digits/underscore, 3+ chars.
+const usernameCandidates = function* (email) {
+	let base = email
+		.split("@")[0]
+		.replace(/[^a-zA-Z0-9_]/g, "_")
+		.slice(0, 30);
+	if (base.length < 3) base = `user_${base}`;
+	yield base;
+	for (let i = 0; i < 4; i += 1)
+		yield `${base}${crypto.randomInt(100, 10000)}`;
+	yield `user_${crypto.randomBytes(5).toString("hex")}`;
+};
+
+const findUserForGoogle = async ({ googleId, email }) => {
+	const [rows] = await pool.query(
+		"SELECT * FROM `USER` WHERE google_id = ? OR email = ?",
+		[googleId, email],
+	);
+	return (
+		rows.find((row) => row.google_id === googleId) ??
+		rows.find((row) => row.email.toLowerCase() === email) ??
+		null
+	);
+};
+
+// Creates a customer for a first-time Google sign-in. Returns the USER row.
+const createGoogleUser = async ({ googleId, email, name }) => {
+	// Google accounts have no password: store a hash of random bytes nobody knows.
+	const unusablePassword = await bcrypt.hash(
+		crypto.randomBytes(32).toString("hex"),
+		10,
+	);
+	const fullName = (name || email.split("@")[0]).slice(0, 150);
+
+	for (const username of usernameCandidates(email)) {
+		try {
+			const [result] = await pool.query(
+				"INSERT INTO `USER` (role, email, password, username, name, phone_num, google_id) VALUES (?, ?, ?, ?, ?, NULL, ?)",
+				[
+					"customer",
+					email,
+					unusablePassword,
+					username,
+					fullName,
+					googleId,
+				],
+			);
+			const [rows] = await pool.query(
+				"SELECT * FROM `USER` WHERE user_id = ?",
+				[result.insertId],
+			);
+			return rows[0];
+		} catch (error) {
+			if (error.code !== "ER_DUP_ENTRY") throw error;
+			// Same person signed in twice at once: use the row that won the race.
+			const existing = await findUserForGoogle({ googleId, email });
+			if (existing) return existing;
+			// Otherwise the username was taken: try the next candidate.
+		}
+	}
+	throw new Error("Could not generate a unique username.");
+};
+
+// POST /api/auth/google
+// body: { credential }   the ID token from Google's sign-in button
+// Logs in (or creates) the customer for that Google account and returns the
+// same { token, user } shape as /login.
+const googleAuth = async (req, res) => {
+	const credential = req.body?.credential;
+	if (typeof credential !== "string" || !credential) {
+		return res
+			.status(400)
+			.json({
+				success: false,
+				message: "Google credential is required.",
+			});
+	}
+
+	let profile;
+	try {
+		profile = await verifyGoogleIdToken(credential);
+	} catch (error) {
+		console.error("Google token verification failed:", error.message);
+		if (error instanceof GoogleConfigError) {
+			return res.status(503).json({
+				success: false,
+				message: "Google sign-in is not available right now.",
+			});
+		}
+		return res.status(401).json({
+			success: false,
+			message: "Google sign-in failed. Please try again.",
+		});
+	}
+
+	if (!profile.emailVerified) {
+		return res.status(401).json({
+			success: false,
+			message: "Your Google email address is not verified.",
+		});
+	}
+
+	try {
+		let user = await findUserForGoogle(profile);
+		let isNewUser = false;
+
+		if (user) {
+			// Staff accounts sign in with a password only.
+			if (user.role !== "customer") {
+				return res.status(403).json({
+					success: false,
+					message: "Please sign in with your email and password.",
+				});
+			}
+			if (user.google_id && user.google_id !== profile.googleId) {
+				return res.status(409).json({
+					success: false,
+					message:
+						"This email is linked to a different Google account.",
+				});
+			}
+			if (!user.google_id) {
+				// Existing email/password customer: link the Google account.
+				await pool.query(
+					"UPDATE `USER` SET google_id = ? WHERE user_id = ? AND google_id IS NULL",
+					[profile.googleId, user.user_id],
+				);
+			}
+		} else {
+			user = await createGoogleUser(profile);
+			isNewUser = true;
+		}
+
+		return res.status(isNewUser ? 201 : 200).json({
+			success: true,
+			message: isNewUser
+				? "Account created with Google."
+				: "Login successful.",
+			isNewUser,
+			token: signAuthToken(user.user_id),
+			user: {
+				userId: user.user_id,
+				username: user.username,
+				name: user.name,
+				email: user.email,
+				role: user.role,
+				branchId: user.branch_id ?? null,
+			},
+		});
+	} catch (error) {
+		console.error("Google auth error:", error);
+		return res.status(500).json({
+			success: false,
+			message: "Something went wrong while signing in with Google.",
+		});
+	}
+};
+
 /* -------------------------------- profile --------------------------------- */
 // TODO (before real deployment): like the booking endpoints, these trust the
 // userId sent by the client. Now that login issues a token and
@@ -538,6 +703,7 @@ module.exports = {
 	register,
 	sendRegisterOtp,
 	login,
+	googleAuth,
 	getProfile,
 	updateProfile,
 };

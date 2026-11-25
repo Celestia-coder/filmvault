@@ -1,0 +1,22 @@
+/* Google's real button sits invisibly over your own button (see GoogleButton.jsx). */
+
+.google-btn-wrap {
+	position: relative;
+}
+
+.google-btn-slot {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 400px;
+	height: 40px;
+	opacity: 0;
+	overflow: hidden;
+	transform-origin: top left;
+	cursor: pointer;
+}
+
+/* The invisible overlay swallows the mouse, so mirror the hover style here. */
+.google-btn-wrap:hover .btn-google {
+	background: rgba(255, 255, 255, 0.05);
+}

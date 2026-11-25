@@ -1,17 +1,14 @@
-// policyContent.js
+// policyContent.jsx
 // Text for the Terms & Conditions, Privacy Policy, and Cookie Policy pages.
-// Based on the FilmVault SRS (scope, features, constraints, safety and security requirements).
-// Each section: { id, title, body: [paragraphs], list?: [bullet points] }
 
-export const LAST_UPDATED = "November 15, 2026";
+export const LAST_UPDATED = "November 25, 2026";
 
 export const POLICIES = {
 	terms: {
 		path: "/terms",
 		tab: "Terms & Conditions",
 		title: "Terms and Conditions",
-		intro:
-			"These Terms and Conditions govern your use of FilmVault, an online movie ticketing platform for FilmVault cinema branches in Taguig City. By creating an account or reserving tickets, you agree to the terms below.",
+		intro: "These Terms and Conditions govern your use of FilmVault, an online movie ticketing platform for FilmVault cinema branches in Taguig City. By creating an account or reserving tickets, you agree to the terms below.",
 		sections: [
 			{
 				id: "accounts",
@@ -60,6 +57,26 @@ export const POLICIES = {
 					"Select the correct ticket type (Regular, Senior Citizen, or PWD) for each seat.",
 					"Upload a valid government-issued or institution-issued ID for every discounted ticket.",
 					"If the ID is invalid or missing, the discount will not be applied. You may submit a valid ID or continue at the regular price.",
+				],
+			},
+			{
+				id: "free-senior-screenings",
+				title: "Free Screenings for Taguig Senior Citizens",
+				body: [
+					"Senior Citizens who reside in Taguig City can watch for free at all FilmVault branches during the following screenings. Only the first screening of the day is free.",
+				],
+				list: [
+					"Every Monday and Tuesday, first screening only.",
+					"Cinema 1: 1:00 PM",
+					"Cinema 2: 1:00 PM",
+				],
+			},
+			{
+				id: "senior-fees-outside-taguig",
+				title: "Booking Fee and Seniors Outside Taguig",
+				body: [
+					"The booking fee is waived for Taguig Senior Citizens who book a free screening. Please upload a valid Senior Citizen ID showing your Taguig residency, which will be checked at the cinema.",
+					"Senior Citizens who live outside Taguig City are not eligible for free screenings. They receive a 20% Senior Citizen discount on their tickets, and the booking fee is not discounted.",
 				],
 			},
 			{
@@ -116,8 +133,7 @@ export const POLICIES = {
 		path: "/privacy",
 		tab: "Privacy Policy",
 		title: "Privacy Policy",
-		intro:
-			"This Privacy Policy explains what information FilmVault collects, how it is used, and how it is protected when you use our platform.",
+		intro: "This Privacy Policy explains what information FilmVault collects, how it is used, and how it is protected when you use our platform.",
 		sections: [
 			{
 				id: "information-we-collect",
@@ -176,8 +192,7 @@ export const POLICIES = {
 		path: "/cookies",
 		tab: "Cookie Policy",
 		title: "Cookie Policy",
-		intro:
-			"FilmVault uses a small amount of browser storage to keep the platform working properly.",
+		intro: "FilmVault uses a small amount of browser storage to keep the platform working properly.",
 		sections: [
 			{
 				id: "what-we-store",

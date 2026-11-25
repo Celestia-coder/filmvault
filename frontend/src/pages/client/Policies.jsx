@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import { Link, useLocation } from "react-router";
 import Navbar from "../../components/Navbar.jsx";
 import Footer from "../../components/Footer.jsx";
-import { POLICIES, LAST_UPDATED } from "./policyContent.js";
+import { POLICIES, LAST_UPDATED } from "./policyContent.jsx";
 import "../../styles/Policies.css";
 
 const POLICY_LIST = Object.values(POLICIES);

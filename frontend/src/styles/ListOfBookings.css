@@ -536,30 +536,93 @@
 	font-size: 14px;
 }
 
+/* Modal buttons: same look as the buttons in Seat Selection Management
+   (.ssm-btn). Three fit in one row, so labels never wrap. */
 .modal-actions {
 	display: flex;
+	flex-wrap: nowrap;
 	justify-content: flex-end;
-	gap: 12px;
+	gap: 8px;
 	margin-top: 26px;
 }
 
 .modal-btn {
-	padding: 10px 20px;
+	height: 38px;
+	padding: 0 14px;
+	border: 1px solid transparent;
 	border-radius: 8px;
-	font-family: var(--font-main);
-	font-size: 14px;
+	font-family: inherit;
+	font-size: 13px;
 	font-weight: 600;
+	white-space: nowrap;
 	cursor: pointer;
+	transition:
+		background-color 0.15s ease,
+		border-color 0.15s ease;
 }
 
+.modal-btn:focus-visible {
+	outline: 2px solid var(--color-white);
+	outline-offset: 2px;
+}
+
+.modal-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Close, Keep booking */
 .modal-btn--ghost {
-	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-color: rgba(255, 255, 255, 0.15);
 	background-color: transparent;
+	color: rgba(255, 255, 255, 0.8);
+}
+
+.modal-btn--ghost:hover:not(:disabled) {
+	background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Cancel booking, Yes, cancel booking.
+   The double class beats .adm-btn-danger from AdminLive.css. */
+.modal-btn--primary,
+.modal-btn.adm-btn-danger {
+	border-color: var(--color-red);
+	background-color: var(--color-red);
 	color: var(--color-white);
 }
 
-.modal-btn--ghost:hover {
-	background-color: rgba(255, 255, 255, 0.08);
+.modal-btn--primary:hover:not(:disabled),
+.modal-btn.adm-btn-danger:hover:not(:disabled) {
+	border-color: #d10f26;
+	background-color: #d10f26;
+}
+
+/* Very narrow screens: let the three buttons wrap instead of overflowing. */
+@media (max-width: 420px) {
+	.modal-actions {
+		flex-wrap: wrap;
+	}
+}
+
+/* "Cancel booking ...?" warning. The box styling comes from AdminLive.css;
+   this only sets the text size (13px, like the other modal notices). The
+   extra .modal-card makes this win over AdminLive.css regardless of load order. */
+.modal-card .adm-cancel-confirm {
+	margin-top: 16px;
+}
+
+.modal-card .adm-cancel-confirm,
+.modal-card .adm-cancel-confirm p {
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.modal-card .adm-cancel-confirm p {
+	margin: 0;
+}
+
+.modal-card .adm-cancel-confirm p + p {
+	margin-top: 6px;
 }
 
 .adm-id-section {

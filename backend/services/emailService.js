@@ -62,7 +62,7 @@ function createEmailService({
 		sendCancellationNotice: (request) =>
 			sendTemplate("buildBookingCancellationEmail", request),
 		sendRescheduleNotice: (request) =>
-			sendTemplate("buildShowtimeRescheduleEmail", request),
+			sendTemplate("buildShowtimeRescheduleEmail", request, true),
 	};
 }
 

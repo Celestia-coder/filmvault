@@ -10,6 +10,7 @@ const {
 } = require("../middleware/upload");
 const authenticate = require("../middleware/authenticate");
 const requireAdmin = require("../middleware/requireAdmin");
+const { requireLogin } = require("../middleware/authGuards");
 
 const router = express.Router();
 
@@ -46,10 +47,10 @@ router.post(
 	},
 );
 
-// Profile picture (any logged-in user once auth exists), cropped to a 400x400 square
+// Profile picture (any logged-in user), cropped to a 400x400 square
 router.post(
 	"/profile",
-	/* requireAuth, */
+	requireLogin,
 	profileUpload.single("image"),
 	checkRealImage,
 	async (req, res) => {

@@ -33,7 +33,7 @@ class UploadError extends Error {
 
 const upload = multer({
 	storage: multer.memoryStorage(),
-	limits: { fileSize: MAX_BYTES, files: MAX_FILES },
+	limits: { fileSize: MAX_BYTES, files: MAX_FILES, fields: 30, parts: 40 },
 	fileFilter: (req, file, cb) => {
 		if (!FIELD_RE.test(file.fieldname)) {
 			return cb(
@@ -44,15 +44,9 @@ const upload = multer({
 				),
 			);
 		}
-		if (!ALLOWED.includes(file.mimetype)) {
-			return cb(
-				new UploadError(
-					415,
-					"INVALID_FILE_TYPE",
-					"The ID must be a JPG, PNG or WebP image.",
-				),
-			);
-		}
+		// The type label from the browser is not trusted (and some computers label real
+		// photos "application/octet-stream" or "image/jpg"). The real type is decided
+		// below from the file's first bytes.
 		return cb(null, true);
 	},
 });
@@ -141,7 +135,11 @@ const uploadIdImages = (req, res, next) => {
 				);
 			}
 			seen.add(file.fieldname);
-			if (!looksLikeImage(file.buffer, file.mimetype)) {
+			const realType = ALLOWED.find((type) =>
+				looksLikeImage(file.buffer, type),
+			);
+			if (realType) file.mimetype = realType;
+			if (!realType) {
 				return reject(
 					415,
 					"INVALID_FILE_TYPE",

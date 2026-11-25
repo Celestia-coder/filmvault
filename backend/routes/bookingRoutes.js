@@ -9,8 +9,11 @@ const {
 	getBookingIdImages,
 	getBookingIdImageFile,
 } = require("../controllers/bookingController");
+const { branchAdminOnly } = require("../middleware/authGuards");
 
-// No auth middleware yet: branch scoping comes from ?branchId=
+// Admin only. branchAdminOnly checks the login token and forces ?branchId= to the
+// admin's own branch, so a branch can only see and change its own bookings and ID photos.
+router.use("/admin/bookings", branchAdminOnly);
 router.get("/admin/bookings", getAdminBookings); // ?branchId=&status=&date=&movieId=
 router.patch("/admin/bookings/:id", cancelBooking); // ?branchId=
 router.get("/admin/bookings/:id/id-images", getBookingIdImages); // ?branchId= -> { images: [{ seat, url, ... }] }

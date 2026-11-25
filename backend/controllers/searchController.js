@@ -23,94 +23,106 @@ const MOVIE_SELECT = `
 `;
 
 const formatMovie = (row) => ({
-  ...row,
-  genres: row.genres ? row.genres.split(",") : [],
+	...row,
+	genres: row.genres ? row.genres.split(",") : [],
 });
 
 // GET /api/movies/search?title=&genre=&branch=&status=
 const searchMovies = async (req, res) => {
-  const { title, genre, branch } = req.query;
-  const { statuses, error: statusError } = parseStatusFilter(req.query.status);
-  if (statusError) {
-    return res.status(400).json({ success: false, message: statusError });
-  }
+	const { title, genre, branch } = req.query;
+	const { statuses, error: statusError } = parseStatusFilter(
+		req.query.status,
+	);
+	if (statusError) {
+		return res.status(400).json({ success: false, message: statusError });
+	}
 
-  const conditions = [];
-  const params = [];
+	// Soft-deleted movies must not show up in search (same rule as GET /api/movies).
+	const conditions = ["m.deleted_at IS NULL"];
+	const params = [];
 
-  if (statuses.length) {
-    conditions.push("m.status IN (?)");
-    params.push(statuses);
-  }
+	if (statuses.length) {
+		conditions.push("m.status IN (?)");
+		params.push(statuses);
+	}
 
-  if (title) {
-    conditions.push("LOWER(m.title) LIKE LOWER(?)");
-    params.push(`%${title}%`);
-  }
+	if (title) {
+		conditions.push("LOWER(m.title) LIKE LOWER(?)");
+		params.push(`%${title}%`);
+	}
 
-  // genre and branch both depend on a joined/many-to-many table, so they're
-  // filtered via an IN (subquery) rather than a WHERE on the joined alias
-  // directly. Filtering the joined GENRE row directly (WHERE g.genre_name
-  // LIKE ...) would also silently truncate the GROUP_CONCAT'd genres list
-  // below to just the matching genre, instead of returning each movie's
-  // full genre list the way GET /api/movies does.
-  if (genre) {
-    conditions.push(`m.movie_id IN (
+	// genre and branch both depend on a joined/many-to-many table, so they're
+	// filtered via an IN (subquery) rather than a WHERE on the joined alias
+	// directly. Filtering the joined GENRE row directly (WHERE g.genre_name
+	// LIKE ...) would also silently truncate the GROUP_CONCAT'd genres list
+	// below to just the matching genre, instead of returning each movie's
+	// full genre list the way GET /api/movies does.
+	if (genre) {
+		conditions.push(`m.movie_id IN (
       SELECT mg2.movie_id FROM MOVIE_GENRE mg2
       JOIN GENRE g2 ON g2.genre_id = mg2.genre_id
       WHERE LOWER(g2.genre_name) LIKE LOWER(?)
     )`);
-    params.push(`%${genre}%`);
-  }
+		params.push(`%${genre}%`);
+	}
 
-  if (branch) {
-    // A movie "matches" a branch if it has at least one showtime scheduled
-    // at a cinema belonging to a branch whose name matches.
-    conditions.push(`m.movie_id IN (
+	if (branch) {
+		// A movie "matches" a branch if it has at least one showtime scheduled
+		// at a cinema belonging to a branch whose name matches.
+		conditions.push(`m.movie_id IN (
       SELECT s.movie_id
       FROM SCREENING s
       JOIN CINEMA c ON c.cinema_id = s.cinema_id
       JOIN BRANCH b ON b.branch_id = c.branch_id
-      WHERE LOWER(b.branch_name) LIKE LOWER(?)
+      WHERE s.deleted_at IS NULL AND LOWER(b.branch_name) LIKE LOWER(?)
     )`);
-    params.push(`%${branch}%`);
-  }
+		params.push(`%${branch}%`);
+	}
 
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+	const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  try {
-    const [rows] = await pool.query(
-      `${MOVIE_SELECT} ${where} GROUP BY m.movie_id ORDER BY m.movie_id`,
-      params
-    );
-    // No matches is a valid successful search, not an error.
-    return res.status(200).json({ success: true, movies: rows.map(formatMovie) });
-  } catch (error) {
-    console.error("searchMovies error:", error);
-    return res.status(500).json({ success: false, message: "Failed to search movies." });
-  }
+	try {
+		const [rows] = await pool.query(
+			`${MOVIE_SELECT} ${where} GROUP BY m.movie_id ORDER BY m.movie_id`,
+			params,
+		);
+		// No matches is a valid successful search, not an error.
+		return res
+			.status(200)
+			.json({ success: true, movies: rows.map(formatMovie) });
+	} catch (error) {
+		console.error("searchMovies error:", error);
+		return res
+			.status(500)
+			.json({ success: false, message: "Failed to search movies." });
+	}
 };
 
 // GET /api/branches/search?name=
 const searchBranches = async (req, res) => {
-  const { name } = req.query;
-  const conditions = [];
-  const params = [];
+	const { name } = req.query;
+	const conditions = [];
+	const params = [];
 
-  if (name) {
-    conditions.push("LOWER(branch_name) LIKE LOWER(?)");
-    params.push(`%${name}%`);
-  }
+	if (name) {
+		conditions.push("LOWER(branch_name) LIKE LOWER(?)");
+		params.push(`%${name}%`);
+	}
 
-  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+	const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  try {
-    const [rows] = await pool.query(`SELECT * FROM BRANCH ${where} ORDER BY branch_id`, params);
-    return res.status(200).json({ success: true, branches: rows });
-  } catch (error) {
-    console.error("searchBranches error:", error);
-    return res.status(500).json({ success: false, message: "Failed to search branches." });
-  }
+	try {
+		const [rows] = await pool.query(
+			`SELECT * FROM BRANCH ${where} ORDER BY branch_id`,
+			params,
+		);
+		return res.status(200).json({ success: true, branches: rows });
+	} catch (error) {
+		console.error("searchBranches error:", error);
+		return res
+			.status(500)
+			.json({ success: false, message: "Failed to search branches." });
+	}
 };
 
 module.exports = { searchMovies, searchBranches };

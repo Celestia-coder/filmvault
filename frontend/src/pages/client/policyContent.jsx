@@ -83,7 +83,7 @@ export const POLICIES = {
 				id: "payment",
 				title: "Payment",
 				body: [
-					"Payments are processed securely through PayMongo. Accepted methods include GCash, Maya, credit and debit cards (Visa and Mastercard), and online banking.",
+					"Payments are processed securely through Xendit. Accepted methods include GCash, Maya, credit and debit cards (Visa and Mastercard), and online banking.",
 				],
 				list: [
 					"Your reservation is only confirmed after the payment is successfully completed.",
@@ -158,7 +158,7 @@ export const POLICIES = {
 				id: "payments",
 				title: "Payment Information",
 				body: [
-					"Payments are handled by PayMongo over a secure connection. FilmVault receives the payment result needed to confirm your reservation.",
+					"Payments are handled by Xendit over a secure connection. FilmVault receives the payment result needed to confirm your reservation.",
 				],
 			},
 			{

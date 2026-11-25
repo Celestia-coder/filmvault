@@ -930,6 +930,10 @@ const createCreateBooking =
 					snacks,
 				});
 
+				// A free booking has nothing to pay, whatever method the browser sent.
+				const savedPaymentMethod =
+					price.total === 0 ? "free" : paymentMethod;
+
 				// Payment hook: anything other than { ok: true } stops the booking.
 				let payment;
 				try {
@@ -1011,7 +1015,7 @@ const createCreateBooking =
 							VALUES (?, ?, ?, NOW(), 'confirmed', ?, 'paid', ?, ?, ?${paymentRefValue ? ", ?" : ""})`,
 							[
 								userId,
-								paymentMethod,
+								savedPaymentMethod,
 								price.total,
 								referenceCode,
 								discountType,

@@ -656,7 +656,9 @@ function Checkout() {
 		};
 	});
 	const paymentName =
-		PAYMENT_METHODS.find((m) => m.id === paymentMethod)?.name ?? "";
+		total === 0
+			? ""
+			: (PAYMENT_METHODS.find((m) => m.id === paymentMethod)?.name ?? "");
 
 	/* ---- handlers ---- */
 
@@ -771,7 +773,8 @@ function Checkout() {
 				showtimeId,
 				seatIds,
 				ticketTypes: typesBySeatId,
-				paymentMethod: paymentMethod || "free", // nothing to pay on a free booking
+				// A ₱0 booking is always "free", even if a payment method was ticked.
+				paymentMethod: total === 0 ? "free" : paymentMethod,
 				contactEmail: email.trim(),
 				taguigSeatIds: seats
 					.filter(isFreeSeat)

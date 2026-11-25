@@ -15,6 +15,7 @@ const {
 	sameSchedule,
 } = require("../services/rescheduleNotificationService");
 const { notificationAdmin } = require("../utils/notificationAuth");
+const { isSeniorFreeScreening } = require("../utils/seniorFreeTicket");
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}(:\d{2})?$/;
@@ -40,9 +41,17 @@ const SHOWTIME_SELECT = `
   JOIN BRANCH b ON b.branch_id = c.branch_id
 `;
 
+// seniorFreeTicket: true when the showtime is part of the Monday/Tuesday first-screening
+// senior promo. The Checkout page uses it to offer the "I live in Taguig City" checkbox;
+// the booking endpoint decides the real price again on its own.
 const formatShowtime = (row) => ({
 	...row,
 	seatsAvailable: row.total_seats - row.booked_seats,
+	seniorFreeTicket: isSeniorFreeScreening({
+		showDate: row.show_date,
+		showTime: row.show_time,
+		cinemaNum: row.cinema_num,
+	}),
 });
 
 const isPositiveInt = (value) =>

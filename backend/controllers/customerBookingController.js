@@ -12,6 +12,7 @@
 // Errors look like { success: false, code, message, ... }. Checkout branches on `code`:
 //   VALIDATION_ERROR (400)    bad or missing input
 //   ID_IMAGE_REQUIRED (400)   senior/PWD ticket needs an ID photo
+//   INVALID_TAGUIG_CLAIM (400) taguigSeatIds lists a seat that is not a Senior ticket
 //   INVALID_FILE_TYPE (415)   from the upload middleware
 //   FILE_TOO_LARGE (413)      from the upload middleware
 //   HOLD_EXPIRED (409)        hold ran out or was never made
@@ -34,6 +35,10 @@ const {
 } = require("../services/bookingNotificationService");
 const { notificationCustomer } = require("../utils/notificationAuth");
 const { calculatePrice, toCents } = require("../utils/pricing");
+const {
+	isSeniorFreeScreening,
+	SENIOR_TAGUIG_FREE,
+} = require("../utils/seniorFreeTicket");
 
 const bookingNotifier = createBookingNotifier();
 
@@ -120,6 +125,7 @@ const BOOKING_ROWS_SELECT = `
     p.user_id,
     t.ticket_id,
     t.ticket_price,
+    t.promo_code,
     tt.type AS ticket_type,
     se.row_num,
     se.seat_num,
@@ -195,6 +201,8 @@ const buildBookings = (rows) => {
 			seat: label,
 			ticket_type: r.ticket_type,
 			ticket_price: Number(r.ticket_price),
+			// "SENIOR_TAGUIG_FREE" when the ticket was free under the Taguig senior promo.
+			promo_code: r.promo_code ?? null,
 		});
 		booking.ticket_count += 1;
 		booking.tickets_total = Number(
@@ -456,6 +464,11 @@ const discardIdFile = (file) => {
 //   discount_type        "none" | "senior" | "pwd", applies to every seat
 //   ticketTypes          optional JSON { "41": "senior", "42": "regular" } for mixed
 //                        bookings. Wins over discount_type.
+//   taguigSeatIds        optional JSON array of seat ids, e.g. [41]. Senior seats whose
+//                        holder says they live in Taguig City. On a Monday/Tuesday first
+//                        screening (see utils/seniorFreeTicket.js) those tickets are free
+//                        with no booking fee; the ID is checked at the cinema counter.
+//                        Anywhere else the claim changes nothing.
 //   idImage_<seatId>     ID photo, one per discounted seat (e.g. idImage_41). Required
 //                        for every seat whose ticket type is senior or pwd.
 //   snacks               optional JSON [{ "snackId": 1, "quantity": 2 }]. Priced from
@@ -587,6 +600,23 @@ const createCreateBooking =
 				}
 			}
 
+			// Seats whose senior says they live in Taguig City (optional).
+			let taguigSeatIds = new Set();
+			const rawTaguig = parseList(
+				pick(body, "taguigSeatIds", "taguig_seat_ids"),
+			);
+			if (rawTaguig !== undefined) {
+				const ids = rawTaguig.map(Number);
+				if (!ids.every(isPositiveInt)) {
+					return fail(
+						400,
+						"VALIDATION_ERROR",
+						"taguigSeatIds must be a list of seat IDs.",
+					);
+				}
+				taguigSeatIds = new Set(ids);
+			}
+
 			// Snacks: [{ snackId, quantity }], each snack listed once.
 			const snackRequests = [];
 			const rawSnacks = parseList(pick(body, "snacks"));
@@ -640,8 +670,11 @@ const createCreateBooking =
 
 				// Showtime must exist and be open.
 				const [screenings] = await conn.query(
-					`SELECT s.screening_id, s.cinema_id, s.status, m.base_price
-         FROM SCREENING s JOIN MOVIE m ON m.movie_id = s.movie_id
+					`SELECT s.screening_id, s.cinema_id, s.status, s.show_date, s.show_time,
+                c.cinema_num, m.base_price
+         FROM SCREENING s
+         JOIN MOVIE m ON m.movie_id = s.movie_id
+         JOIN CINEMA c ON c.cinema_id = s.cinema_id
          WHERE s.screening_id = ?`,
 					[showtimeId],
 				);
@@ -797,6 +830,34 @@ const createCreateBooking =
 						"Upload a photo of the Senior Citizen/PWD ID for every discounted seat.",
 						{ missingSeatIds: missingIdSeatIds },
 					);
+				}
+
+				// Taguig senior promo: Mon/Tue first screening, Senior tickets only.
+				// The Taguig claim is only a claim: staff check the ID at the counter.
+				const seniorSeatIds = new Set(
+					seatTypes
+						.filter((s) => s.type === "senior")
+						.map((s) => s.seatId),
+				);
+				const badClaims = [...taguigSeatIds].filter(
+					(seatId) => !seniorSeatIds.has(seatId),
+				);
+				if (badClaims.length > 0) {
+					throw new BookingError(
+						400,
+						"INVALID_TAGUIG_CLAIM",
+						"Only Senior Citizen tickets can be marked as Taguig City residents.",
+						{ invalidSeatIds: badClaims },
+					);
+				}
+				const promoApplies = isSeniorFreeScreening({
+					showDate: screening.show_date,
+					showTime: screening.show_time,
+					cinemaNum: screening.cinema_num,
+				});
+				for (const seat of seatTypes) {
+					seat.freeTicket =
+						promoApplies && taguigSeatIds.has(seat.seatId);
 				}
 
 				// Prices always come from the database, never from the browser.
@@ -995,9 +1056,9 @@ const createCreateBooking =
 					price.tickets.map((t) => [t.seatId, t]),
 				);
 				await conn.query(
-					"INSERT INTO TICKET (purchase_id, screening_id, seat_id, type_id, ticket_price, booking_ref) VALUES ?",
+					"INSERT INTO TICKET (purchase_id, screening_id, seat_id, type_id, ticket_price, booking_ref, promo_code) VALUES ?",
 					[
-						seatTypes.map(({ seatId, type }) => [
+						seatTypes.map(({ seatId, type, freeTicket }) => [
 							purchaseId,
 							showtimeId,
 							seatId,
@@ -1006,6 +1067,7 @@ const createCreateBooking =
 								2,
 							),
 							referenceCode,
+							freeTicket ? SENIOR_TAGUIG_FREE : null,
 						]),
 					],
 				);

@@ -27,6 +27,7 @@ export const BOOKING_ERRORS = {
 	PAYMENT_REQUIRED: "PAYMENT_REQUIRED", // Xendit: pay error.data.invoice.url, then resend with paymentRef
 	PAYMENT_ALREADY_USED: "PAYMENT_ALREADY_USED", // that invoice already confirmed another booking
 	ID_IMAGE_REQUIRED: "ID_IMAGE_REQUIRED", // a senior/pwd seat has no ID photo
+	INVALID_TAGUIG_CLAIM: "INVALID_TAGUIG_CLAIM", // taguigSeatIds had a seat that isn't a Senior ticket
 	INVALID_UPLOAD: "INVALID_UPLOAD", // a photo was sent in the wrong field, twice, or too many
 	INVALID_FILE_TYPE: "INVALID_FILE_TYPE",
 	FILE_TOO_LARGE: "FILE_TOO_LARGE",
@@ -67,6 +68,7 @@ function mapBooking(raw) {
 			seat: t.seat,
 			type: t.ticket_type,
 			price: t.ticket_price,
+			promoCode: t.promo_code ?? null, // "SENIOR_TAGUIG_FREE" for a free Taguig senior ticket
 		})),
 		snacks: raw.snacks.map((x) => ({
 			id: x.snack_id,
@@ -158,6 +160,8 @@ export async function verifyTicket(token, { signal } = {}) {
 //   seatIds      the held seat ids, e.g. [41, 42]
 //   ticketTypes  { [seatId]: "regular" | "senior" | "pwd" }
 //   snacks       [{ snackId, quantity }]  (the server prices them from the SNACK table)
+//   taguigSeatIds  seat ids of Senior tickets whose holder lives in Taguig City. Free on
+//                Monday/Tuesday first screenings; the server decides, staff check the ID at the counter.
 //   idImages     { [seatId]: File }, one ID photo for every senior/pwd seat.
 //                Each file is sent as idImage_<seatId> so the server can match it to its seat.
 // Resolves to the confirmed booking. Rejects with an ApiError (see BOOKING_ERRORS).
@@ -172,6 +176,7 @@ export async function createBooking(
 		snacks = [],
 		idImages = {},
 		paymentRef,
+		taguigSeatIds = [],
 	},
 	signal,
 ) {
@@ -184,6 +189,8 @@ export async function createBooking(
 	if (paymentRef) form.append("paymentRef", paymentRef);
 	if (snacks.length > 0) form.append("snacks", JSON.stringify(snacks));
 	if (contactEmail) form.append("contactEmail", contactEmail);
+	if (taguigSeatIds.length > 0)
+		form.append("taguigSeatIds", JSON.stringify(taguigSeatIds));
 
 	// discount_type is only sent when every discounted seat has the same type.
 	const kinds = new Set(

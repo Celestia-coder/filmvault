@@ -241,6 +241,7 @@ function ShowtimeSelection() {
                     time: formatTime(s.time),
                     sortKey: s.time,
                     soldOut: s.seatsAvailable <= 0,
+                    seniorFreeTicket: s.seniorFreeTicket,
                 });
                 groups.set(s.cinemaId, group);
             });
@@ -278,6 +279,7 @@ function ShowtimeSelection() {
             format: FORMAT_LABEL,
             hall: screening.hall,
             price: movie?.price ?? 0,
+            seniorFreeTicket: slot.seniorFreeTicket,
         });
     };
 

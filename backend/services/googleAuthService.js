@@ -19,7 +19,7 @@ function createGoogleVerifier({
 } = {}) {
 	let client;
 
-	// Resolves to { googleId, email, emailVerified, name }. Throws if the token is
+	// Resolves to { googleId, email, emailVerified, name, givenName, familyName }. Throws if the token is
 	// forged, expired, or was issued for a different client ID.
 	return async function verifyGoogleIdToken(idToken) {
 		const clientId = env.GOOGLE_CLIENT_ID?.trim();
@@ -40,6 +40,14 @@ function createGoogleVerifier({
 			email: String(payload.email).toLowerCase(),
 			emailVerified: payload.email_verified === true,
 			name: typeof payload.name === "string" ? payload.name.trim() : "",
+			givenName:
+				typeof payload.given_name === "string"
+					? payload.given_name.trim()
+					: "",
+			familyName:
+				typeof payload.family_name === "string"
+					? payload.family_name.trim()
+					: "",
 		};
 	};
 }

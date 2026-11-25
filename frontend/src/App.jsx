@@ -17,6 +17,7 @@ import Checkout from "./pages/client/Checkout.jsx";
 import Profile from "./pages/client/Profile.jsx"; 
 import Policies from "./pages/client/Policies.jsx";
 import VerifyTicket from "./pages/client/VerifyTicket.jsx";
+import ForgotPassword from "./pages/client/ForgotPassword.jsx";
 
 {
 	/* ADMIN SIDE */
@@ -50,6 +51,7 @@ function App() {
 			<Route path="/terms" element={<Policies />} />
 			<Route path="/privacy" element={<Policies />} />
 			<Route path="/cookies" element={<Policies />} />
+			<Route path="/forgot-password" element={<ForgotPassword />} />
 			
 
 			{/* ADMIN SIDE */}

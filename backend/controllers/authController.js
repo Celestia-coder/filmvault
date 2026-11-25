@@ -16,6 +16,7 @@ const {
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 const USERNAME_PATTERN = /^[a-zA-Z0-9_]{3,}$/;
 const MIN_PASSWORD_LENGTH = 8;
+const MAX_NAME_PART = 75; // USER.first_name / USER.last_name are VARCHAR(75)
 
 const otpService = createOtpService();
 
@@ -161,6 +162,20 @@ const register = async (req, res) => {
 	const cleanEmail = email.trim();
 	const cleanUsername = username.trim();
 
+	if (firstName.trim().length > MAX_NAME_PART) {
+		return res.status(400).json({
+			success: false,
+			field: "firstName",
+			message: "First name is too long.",
+		});
+	}
+	if (lastName.trim().length > MAX_NAME_PART) {
+		return res.status(400).json({
+			success: false,
+			field: "lastName",
+			message: "Last name is too long.",
+		});
+	}
 	if (!EMAIL_PATTERN.test(cleanEmail)) {
 		return res.status(400).json({
 			success: false,
@@ -211,13 +226,15 @@ const register = async (req, res) => {
 		const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
 		const [result] = await pool.query(
-			"INSERT INTO `USER` (role, email, password, username, name, phone_num) VALUES (?, ?, ?, ?, ?, ?)",
+			"INSERT INTO `USER` (role, email, password, username, name, first_name, last_name, phone_num) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 			[
 				"customer",
 				cleanEmail,
 				hashedPassword,
 				cleanUsername,
 				fullName,
+				firstName.trim(),
+				lastName.trim(),
 				phone,
 			],
 		);
@@ -306,6 +323,115 @@ const login = async (req, res) => {
 	}
 };
 
+/* ----------------------------- password reset ----------------------------- */
+// Customers only. Admin accounts are never reset by email.
+
+const GENERIC_RESET_MESSAGE =
+	"If that email has an account, we sent a 6-digit code to it.";
+
+const findCustomerByEmail = async (cleanEmail) => {
+	const [rows] = await pool.query(
+		"SELECT user_id FROM `USER` WHERE email = ? AND role = 'customer'",
+		[cleanEmail],
+	);
+	return rows[0] ?? null;
+};
+
+// POST /api/auth/forgot-password
+// body: { email }
+// Always answers the same way, so it can't be used to find out which emails
+// have accounts.
+const forgotPassword = async (req, res) => {
+	const cleanEmail = String(req.body?.email ?? "").trim();
+	if (!EMAIL_PATTERN.test(cleanEmail)) {
+		return res.status(400).json({
+			success: false,
+			field: "email",
+			message: "Enter a valid email address.",
+		});
+	}
+
+	try {
+		if (await findCustomerByEmail(cleanEmail)) {
+			const result = await otpService.issue(cleanEmail, "reset");
+			if (result.status !== "sent" && result.status !== "cooldown") {
+				console.error(
+					`Password reset code not sent (${result.status}).`,
+				);
+			}
+		}
+		return res
+			.status(200)
+			.json({ success: true, message: GENERIC_RESET_MESSAGE });
+	} catch (error) {
+		console.error("Forgot password error:", error);
+		return res.status(500).json({
+			success: false,
+			message: "Something went wrong. Please try again.",
+		});
+	}
+};
+
+// POST /api/auth/reset-password
+// body: { email, otp, newPassword }
+const resetPassword = async (req, res) => {
+	const { email, otp, newPassword } = req.body ?? {};
+	const cleanEmail = String(email ?? "").trim();
+
+	if (!EMAIL_PATTERN.test(cleanEmail)) {
+		return res.status(400).json({
+			success: false,
+			field: "email",
+			message: "Enter a valid email address.",
+		});
+	}
+	if (
+		typeof newPassword !== "string" ||
+		newPassword.length < MIN_PASSWORD_LENGTH
+	) {
+		return res.status(400).json({
+			success: false,
+			field: "password",
+			message: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+		});
+	}
+
+	try {
+		const customer = await findCustomerByEmail(cleanEmail);
+		// No account gets the same answer as a code that was never sent.
+		const check = customer
+			? await otpService.verify(cleanEmail, otp, "reset")
+			: { status: "expired" };
+		if (check.status !== "ok") {
+			return res.status(400).json({
+				success: false,
+				field: "otp",
+				message: otpFailureMessage(check),
+			});
+		}
+
+		const passwordHash = await bcrypt.hash(newPassword, 10);
+		await pool.query(
+			"UPDATE `USER` SET password = ? WHERE user_id = ? AND role = 'customer'",
+			[passwordHash, customer.user_id],
+		);
+
+		// Code is single-use. A failed cleanup must not undo the reset.
+		await otpService.consume(cleanEmail, "reset").catch(() => {});
+
+		return res.status(200).json({
+			success: true,
+			message: "Password updated. You can now log in.",
+		});
+	} catch (error) {
+		console.error("Reset password error:", error);
+		return res.status(500).json({
+			success: false,
+			message: "Something went wrong while resetting the password.",
+		});
+	}
+};
+
 /* ---------------------------------- google --------------------------------- */
 
 // Username from the email's local part: letters/digits/underscore, 3+ chars.
@@ -334,24 +460,37 @@ const findUserForGoogle = async ({ googleId, email }) => {
 };
 
 // Creates a customer for a first-time Google sign-in. Returns the USER row.
-const createGoogleUser = async ({ googleId, email, name }) => {
+const createGoogleUser = async ({
+	googleId,
+	email,
+	name,
+	givenName,
+	familyName,
+}) => {
 	// Google accounts have no password: store a hash of random bytes nobody knows.
 	const unusablePassword = await bcrypt.hash(
 		crypto.randomBytes(32).toString("hex"),
 		10,
 	);
 	const fullName = (name || email.split("@")[0]).slice(0, 150);
+	// Prefer Google's own first/last name; otherwise split the full name once.
+	const { firstName, lastName } =
+		givenName || familyName
+			? { firstName: givenName ?? "", lastName: familyName ?? "" }
+			: splitName(fullName);
 
 	for (const username of usernameCandidates(email)) {
 		try {
 			const [result] = await pool.query(
-				"INSERT INTO `USER` (role, email, password, username, name, phone_num, google_id) VALUES (?, ?, ?, ?, ?, NULL, ?)",
+				"INSERT INTO `USER` (role, email, password, username, name, first_name, last_name, phone_num, google_id) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)",
 				[
 					"customer",
 					email,
 					unusablePassword,
 					username,
 					fullName,
+					firstName.slice(0, MAX_NAME_PART),
+					lastName.slice(0, MAX_NAME_PART),
 					googleId,
 				],
 			);
@@ -477,8 +616,9 @@ const parseUserId = (raw) => {
 	return Number.isInteger(userId) && userId > 0 ? userId : null;
 };
 
-// The USER table stores one `name` column ("First Last"); the Profile page
-// shows first and last name separately, so split on the first space.
+// USER keeps first_name and last_name separately (name = "First Last" is just
+// the combined copy other pages use). Rows created before those columns existed
+// have them NULL, so for those only, split `name` on the first space.
 const splitName = (fullName = "") => {
 	const trimmed = fullName.trim();
 	const space = trimmed.indexOf(" ");
@@ -511,7 +651,10 @@ const loadBookingStats = async (userId) => {
 
 // The profile the page shows. Never includes the password hash.
 const buildProfile = async (row) => {
-	const { firstName, lastName } = splitName(row.name);
+	const { firstName, lastName } =
+		row.first_name != null
+			? { firstName: row.first_name, lastName: row.last_name ?? "" }
+			: splitName(row.name);
 	const { phone } = normalizePhone(row.phone_num); // old signups were saved as +63...
 	const stats = await loadBookingStats(row.user_id);
 	return {
@@ -591,6 +734,10 @@ const updateProfile = async (req, res) => {
 		return fail(400, "firstName", "First name is required.");
 	if (!lastName?.trim())
 		return fail(400, "lastName", "Last name is required.");
+	if (firstName.trim().length > MAX_NAME_PART)
+		return fail(400, "firstName", "First name is too long.");
+	if (lastName.trim().length > MAX_NAME_PART)
+		return fail(400, "lastName", "Last name is too long.");
 	if (!EMAIL_PATTERN.test((email ?? "").trim()))
 		return fail(400, "email", "Enter a valid email address.");
 	if (!USERNAME_PATTERN.test((username ?? "").trim())) {
@@ -670,9 +817,11 @@ const updateProfile = async (req, res) => {
 				: avatarUrl;
 
 		await pool.query(
-			"UPDATE `USER` SET name = ?, email = ?, phone_num = ?, username = ?, password = ?, profile_photo_url = ? WHERE user_id = ?",
+			"UPDATE `USER` SET name = ?, first_name = ?, last_name = ?, email = ?, phone_num = ?, username = ?, password = ?, profile_photo_url = ? WHERE user_id = ?",
 			[
 				`${firstName.trim()} ${lastName.trim()}`,
+				firstName.trim(),
+				lastName.trim(),
 				cleanEmail,
 				cleanPhone,
 				cleanUsername,
@@ -704,6 +853,8 @@ module.exports = {
 	sendRegisterOtp,
 	login,
 	googleAuth,
+	forgotPassword,
+	resetPassword,
 	getProfile,
 	updateProfile,
 };

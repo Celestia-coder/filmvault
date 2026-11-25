@@ -51,6 +51,27 @@ export function googleLogin(credential, signal) {
 	});
 }
 
+// POST /api/auth/forgot-password
+// Emails a 6-digit reset code if `email` belongs to a customer account. Always
+// resolves the same way, so it doesn't reveal which emails are registered.
+export function requestPasswordReset(email, signal) {
+	return request("/api/auth/forgot-password", {
+		method: "POST",
+		signal,
+		body: { email },
+	});
+}
+
+// POST /api/auth/reset-password
+// Rejects with data.field "otp" (wrong / expired / locked code) or "password".
+export function resetPassword({ email, otp, newPassword }, signal) {
+	return request("/api/auth/reset-password", {
+		method: "POST",
+		signal,
+		body: { email, otp, newPassword },
+	});
+}
+
 // GET /api/auth/profile?userId=  ->  profile object
 export async function fetchProfile(userId, signal) {
 	const body = await request("/api/auth/profile", {

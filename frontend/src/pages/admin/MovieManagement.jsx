@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { clearUser } from "../../api/session.js";
+import { getToken } from "../../api/authToken.js";
+import { getAdminSession } from "../../api/admin.js";
 import "../../styles/MovieManagement.css";
 
 import AdminSidebar from "../../components/AdminSidebar";
@@ -63,6 +65,12 @@ const EMPTY_FORM = {
 // Backend API base URL.
 const API_URL = "http://localhost:5000";
 
+// Login token for the admin-only endpoints (the backend checks it).
+function authHeaders() {
+	const token = getToken();
+	return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 // Frees the temporary browser preview URL created by URL.createObjectURL.
 function revokeIfBlob(url) {
 	if (url && url.startsWith("blob:")) URL.revokeObjectURL(url);
@@ -77,6 +85,7 @@ async function uploadPoster(file) {
 	// Do NOT set Content-Type here: the browser adds the multipart boundary itself.
 	const res = await fetch(`${API_URL}/api/upload/poster`, {
 		method: "POST",
+		headers: authHeaders(), // no Content-Type: the browser sets the multipart one
 		body,
 	});
 
@@ -109,6 +118,8 @@ function normalizeMovie(row) {
 		status: row.status,
 		trailerUrl: row.trailer_url ?? "",
 		poster: row.poster,
+		createdByBranchId: row.created_by_branch_id ?? null,
+		createdByBranchName: row.created_by_branch_name ?? null,
 	};
 }
 
@@ -415,6 +426,8 @@ function toggleGenre(list, genre) {
 }
 
 function MovieManagement() {
+	// Movies are shared, but only the branch that added one can edit/delete it.
+	const adminBranchId = getAdminSession()?.branchId ?? null;
 	const [movies, setMovies] = useState([]);
 	const [loadError, setLoadError] = useState("");
 	const [search, setSearch] = useState("");
@@ -668,7 +681,10 @@ function MovieManagement() {
 
 			const res = await fetch(url, {
 				method,
-				headers: { "Content-Type": "application/json" },
+				headers: {
+					"Content-Type": "application/json",
+					...authHeaders(),
+				},
 				body: JSON.stringify(payload),
 			});
 			const data = await res.json();
@@ -692,7 +708,7 @@ function MovieManagement() {
 		try {
 			const res = await fetch(
 				`${API_URL}/api/admin/movies/${deletingId}`,
-				{ method: "DELETE" },
+				{ method: "DELETE", headers: authHeaders() },
 			);
 			const data = await res.json();
 
@@ -840,28 +856,45 @@ function MovieManagement() {
 											<p className="movie-price">
 												₱ {movie.price}
 											</p>
-											<div className="movie-row-actions">
-												<button
-													type="button"
-													className="movie-edit-btn"
-													onClick={() =>
-														openEditForm(movie)
-													}
-													aria-label={`Edit ${movie.title}`}
+											{movie.createdByBranchId ===
+											adminBranchId ? (
+												<div className="movie-row-actions">
+													<button
+														type="button"
+														className="movie-edit-btn"
+														onClick={() =>
+															openEditForm(movie)
+														}
+														aria-label={`Edit ${movie.title}`}
+													>
+														<IconEdit />
+													</button>
+													<button
+														type="button"
+														className="movie-edit-btn movie-edit-btn--danger"
+														onClick={() =>
+															setDeletingId(
+																movie.id,
+															)
+														}
+														aria-label={`Delete ${movie.title}`}
+													>
+														<IconTrash />
+													</button>
+												</div>
+											) : (
+												<span
+													className="movie-owner-note"
+													style={{
+														opacity: 0.6,
+														fontSize: "0.8rem",
+													}}
 												>
-													<IconEdit />
-												</button>
-												<button
-													type="button"
-													className="movie-edit-btn movie-edit-btn--danger"
-													onClick={() =>
-														setDeletingId(movie.id)
-													}
-													aria-label={`Delete ${movie.title}`}
-												>
-													<IconTrash />
-												</button>
-											</div>
+													Added by{" "}
+													{movie.createdByBranchName ??
+														"another branch"}
+												</span>
+											)}
 										</div>
 									</article>
 								))}

@@ -5,9 +5,10 @@
 // admin pick) cinemas that belong to that branch.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, Navigate } from "react-router";
 import { clearUser } from "../../api/session.js";
 import { getToken } from "../../api/authToken.js";
+import { getAdminSession } from "../../api/admin.js";
 import "../../styles/ScheduleManagement.css";
 
 import AdminSidebar from "../../components/AdminSidebar";
@@ -16,11 +17,6 @@ import navSchedule from "../../assets/images/dashboard/nav-schedule.svg";
 
 // Set this to wherever your backend actually runs.
 const API_BASE = "http://localhost:5000/api";
-
-// TEMP: the branch this admin owns. Replace with the logged-in admin's
-// branch_id (USER.branch_id) once the login session is available here.
-// 1 = Vista Mall Taguig, 2 = Market! Market!, 3 = Venice McKinley.
-const ADMIN_BRANCH_ID = 1;
 
 // Placeholder cinema list until a real /api/cinemas (or /api/branches)
 // endpoint exists — that's the Week 3 Search & Filter ticket, not this one.
@@ -38,10 +34,9 @@ const CINEMA_OPTIONS = [
 	{ value: 9, branchId: 3, label: "Cinema 3" },
 ];
 
-// Only the cinemas of the admin's own branch.
-const BRANCH_CINEMAS = CINEMA_OPTIONS.filter(
-	(cinema) => cinema.branchId === ADMIN_BRANCH_ID,
-);
+// Only the cinemas of the given branch.
+const cinemasOfBranch = (branchId) =>
+	CINEMA_OPTIONS.filter((cinema) => cinema.branchId === branchId);
 
 // Seat count for newly-added showtimes. Real per-cinema capacity (from the
 // SEAT table) isn't wired up yet — that's a separate ticket — so every new
@@ -342,6 +337,7 @@ function mapShowtime(row) {
 		id: row.showtime_id,
 		movieId: row.movie_id,
 		cinemaId: row.cinema_id,
+		branchId: Number(row.branch_id),
 		cinemaLabel: `Cinema ${row.cinema_num}`,
 		datetime: toDatetimeLocal(row.show_date, row.show_time),
 		seatsTotal: row.total_seats,
@@ -413,6 +409,15 @@ async function apiRequest(path, options = {}) {
 }
 
 function ScheduleManagement() {
+	// The branch comes from the logged-in admin, never a constant, so each
+	// branch admin sees and edits only their own showtimes.
+	const adminBranchId = getAdminSession()?.branchId ?? null;
+	const BRANCH_CINEMAS = useMemo(
+		() => cinemasOfBranch(adminBranchId),
+		[adminBranchId],
+	);
+	const defaultCinemaId = BRANCH_CINEMAS[0]?.value ?? null;
+
 	const [movies, setMovies] = useState([]);
 	const [schedule, setSchedule] = useState([]);
 	const [isLoading, setIsLoading] = useState(true);
@@ -428,13 +433,13 @@ function ScheduleManagement() {
 	const [addForm, setAddForm] = useState({
 		movieId: null,
 		datetime: "",
-		cinemaId: BRANCH_CINEMAS[0].value,
+		cinemaId: defaultCinemaId,
 	});
 
 	const [editingId, setEditingId] = useState(null);
 	const [editForm, setEditForm] = useState({
 		datetime: "",
-		cinemaId: BRANCH_CINEMAS[0].value,
+		cinemaId: defaultCinemaId,
 	});
 
 	const [deletingId, setDeletingId] = useState(null);
@@ -504,7 +509,7 @@ function ScheduleManagement() {
 		setAddForm({
 			movieId: addMovieOptions[0]?.value ?? null,
 			datetime: "",
-			cinemaId: BRANCH_CINEMAS[0].value,
+			cinemaId: defaultCinemaId,
 		});
 		setIsAddOpen(true);
 	};
@@ -599,9 +604,9 @@ function ScheduleManagement() {
 	// Only this admin's branch, then the Search/Movie/Date filters on top.
 	const searchTerm = searchQuery.trim().toLowerCase();
 	const filteredSchedule = schedule.filter((row) => {
-		const inBranch = BRANCH_CINEMAS.some(
-			(cinema) => cinema.value === row.cinemaId,
-		);
+		const inBranch =
+			row.branchId === adminBranchId &&
+			BRANCH_CINEMAS.some((cinema) => cinema.value === row.cinemaId);
 		const matchesMovie =
 			movieFilter === "all" || row.movieId === movieFilter;
 		const matchesDate = !dateFilter || row.datetime.startsWith(dateFilter);
@@ -621,6 +626,8 @@ function ScheduleManagement() {
 	const filterSummary = filterSummaryParts.length
 		? filterSummaryParts.join(", ")
 		: "All schedules";
+
+	if (adminBranchId === null) return <Navigate to="/admin/login" replace />;
 
 	return (
 		<div className="admin-dashboard">

@@ -48,6 +48,33 @@ const formatShowtime = (row) => ({
 const isPositiveInt = (value) =>
 	Number.isInteger(Number(value)) && Number(value) > 0;
 
+// Admin identity comes only from the verified login token (req.auth, set by
+// the authenticate middleware), never from the request body or URL.
+// Returns { userId, branchId } or sends 401/403 and returns null.
+const requireBranchAdmin = (req, res) => {
+	if (!req.auth) {
+		res.status(401).json({
+			success: false,
+			message: "Please log in as an admin.",
+		});
+		return null;
+	}
+	const admin = notificationAdmin(req);
+	if (!admin) {
+		res.status(403).json({
+			success: false,
+			message: "Admin access required.",
+		});
+		return null;
+	}
+	return admin;
+};
+
+const WRONG_BRANCH = {
+	success: false,
+	message: "That cinema or showtime belongs to another branch.",
+};
+
 // GET /api/showtimes?movieId=&cinemaId=&date=
 const getAllShowtimes = async (req, res) => {
 	const { movieId, cinemaId, date } = req.query;
@@ -56,12 +83,10 @@ const getAllShowtimes = async (req, res) => {
 
 	if (movieId !== undefined) {
 		if (!isPositiveInt(movieId)) {
-			return res
-				.status(400)
-				.json({
-					success: false,
-					message: "movieId must be a positive integer.",
-				});
+			return res.status(400).json({
+				success: false,
+				message: "movieId must be a positive integer.",
+			});
 		}
 		conditions.push("s.movie_id = ?");
 		params.push(Number(movieId));
@@ -69,12 +94,10 @@ const getAllShowtimes = async (req, res) => {
 
 	if (cinemaId !== undefined) {
 		if (!isPositiveInt(cinemaId)) {
-			return res
-				.status(400)
-				.json({
-					success: false,
-					message: "cinemaId must be a positive integer.",
-				});
+			return res.status(400).json({
+				success: false,
+				message: "cinemaId must be a positive integer.",
+			});
 		}
 		conditions.push("s.cinema_id = ?");
 		params.push(Number(cinemaId));
@@ -82,12 +105,10 @@ const getAllShowtimes = async (req, res) => {
 
 	if (date !== undefined) {
 		if (!DATE_RE.test(date)) {
-			return res
-				.status(400)
-				.json({
-					success: false,
-					message: "date must be in YYYY-MM-DD format.",
-				});
+			return res.status(400).json({
+				success: false,
+				message: "date must be in YYYY-MM-DD format.",
+			});
 		}
 		conditions.push("s.show_date = ?");
 		params.push(date);
@@ -137,26 +158,24 @@ const getShowtimesForMovie = async (req, res) => {
 			`${SHOWTIME_SELECT} WHERE s.movie_id = ? AND s.deleted_at IS NULL ORDER BY s.show_date, s.show_time`,
 			[movieId],
 		);
-		return res
-			.status(200)
-			.json({
-				success: true,
-				movieId,
-				showtimes: rows.map(formatShowtime),
-			});
+		return res.status(200).json({
+			success: true,
+			movieId,
+			showtimes: rows.map(formatShowtime),
+		});
 	} catch (error) {
 		console.error("getShowtimesForMovie error:", error);
-		return res
-			.status(500)
-			.json({
-				success: false,
-				message: "Failed to fetch showtimes for movie.",
-			});
+		return res.status(500).json({
+			success: false,
+			message: "Failed to fetch showtimes for movie.",
+		});
 	}
 };
 
 // POST /api/admin/showtimes  ("Add Showtime")
 const createShowtime = async (req, res) => {
+	const admin = requireBranchAdmin(req, res);
+	if (!admin) return;
 	const { movieId, cinemaId, showDate, showTime, totalSeats, status } =
 		req.body;
 
@@ -172,20 +191,16 @@ const createShowtime = async (req, res) => {
 		});
 	}
 	if (!DATE_RE.test(showDate || "")) {
-		return res
-			.status(400)
-			.json({
-				success: false,
-				message: "showDate must be in YYYY-MM-DD format.",
-			});
+		return res.status(400).json({
+			success: false,
+			message: "showDate must be in YYYY-MM-DD format.",
+		});
 	}
 	if (!TIME_RE.test(showTime || "")) {
-		return res
-			.status(400)
-			.json({
-				success: false,
-				message: "showTime must be in HH:MM or HH:MM:SS format.",
-			});
+		return res.status(400).json({
+			success: false,
+			message: "showTime must be in HH:MM or HH:MM:SS format.",
+		});
 	}
 	const finalStatus = status || "scheduled";
 	if (!VALID_STATUSES.includes(finalStatus)) {
@@ -206,13 +221,16 @@ const createShowtime = async (req, res) => {
 				.json({ success: false, message: "Movie does not exist." });
 		}
 		const [cinemaRows] = await pool.query(
-			"SELECT cinema_id FROM CINEMA WHERE cinema_id = ?",
+			"SELECT cinema_id, branch_id FROM CINEMA WHERE cinema_id = ?",
 			[cinemaId],
 		);
 		if (cinemaRows.length === 0) {
 			return res
 				.status(400)
 				.json({ success: false, message: "Cinema does not exist." });
+		}
+		if (Number(cinemaRows[0].branch_id) !== admin.branchId) {
+			return res.status(403).json(WRONG_BRANCH);
 		}
 
 		// Guard against double-booking the same cinema at the same date/time.
@@ -255,6 +273,8 @@ const createShowtime = async (req, res) => {
 const createUpdateShowtime =
 	({ db = pool, notifier = createRescheduleNotifier() } = {}) =>
 	async (req, res) => {
+		const admin = requireBranchAdmin(req, res);
+		if (!admin) return;
 		const id = Number(req.params.id);
 		if (!Number.isInteger(id) || id <= 0) {
 			return res
@@ -264,29 +284,22 @@ const createUpdateShowtime =
 
 		const { cinemaId, showDate, showTime } = req.body;
 		if (!isPositiveInt(cinemaId)) {
-			return res
-				.status(400)
-				.json({
-					success: false,
-					message:
-						"cinemaId is required and must be a positive integer.",
-				});
+			return res.status(400).json({
+				success: false,
+				message: "cinemaId is required and must be a positive integer.",
+			});
 		}
 		if (!DATE_RE.test(showDate || "")) {
-			return res
-				.status(400)
-				.json({
-					success: false,
-					message: "showDate must be in YYYY-MM-DD format.",
-				});
+			return res.status(400).json({
+				success: false,
+				message: "showDate must be in YYYY-MM-DD format.",
+			});
 		}
 		if (!TIME_RE.test(showTime || "")) {
-			return res
-				.status(400)
-				.json({
-					success: false,
-					message: "showTime must be in HH:MM or HH:MM:SS format.",
-				});
+			return res.status(400).json({
+				success: false,
+				message: "showTime must be in HH:MM or HH:MM:SS format.",
+			});
 		}
 
 		let conn;
@@ -306,6 +319,10 @@ const createUpdateShowtime =
 					.status(404)
 					.json({ success: false, message: "Showtime not found." });
 			}
+			if (Number(existing[0].branch_id) !== admin.branchId) {
+				await conn.rollback();
+				return res.status(403).json(WRONG_BRANCH);
+			}
 
 			const [cinemaRows] = await conn.query(
 				`SELECT c.cinema_id, c.cinema_num, c.branch_id, b.branch_name
@@ -314,12 +331,15 @@ const createUpdateShowtime =
 			);
 			if (cinemaRows.length === 0) {
 				await conn.rollback();
-				return res
-					.status(400)
-					.json({
-						success: false,
-						message: "Cinema does not exist.",
-					});
+				return res.status(400).json({
+					success: false,
+					message: "Cinema does not exist.",
+				});
+			}
+
+			if (Number(cinemaRows[0].branch_id) !== admin.branchId) {
+				await conn.rollback();
+				return res.status(403).json(WRONG_BRANCH);
 			}
 
 			const previous = existing[0];
@@ -393,8 +413,7 @@ const createUpdateShowtime =
 
 			let notification;
 			try {
-				// No middleware currently sets req.auth, so this integration
-				// remains unable to send until the Backend Team supplies verified auth.
+				// req.auth is set by the authenticate middleware from the login token.
 				notification = await notifier.notify({
 					prepared,
 					committed: true,
@@ -421,12 +440,10 @@ const createUpdateShowtime =
 				}
 			}
 			console.error("updateShowtime error:", error);
-			return res
-				.status(500)
-				.json({
-					success: false,
-					message: "Failed to reschedule showtime.",
-				});
+			return res.status(500).json({
+				success: false,
+				message: "Failed to reschedule showtime.",
+			});
 		} finally {
 			conn?.release();
 		}
@@ -438,6 +455,8 @@ const updateShowtime = createUpdateShowtime();
 // bookings for a current/upcoming screening. Bookings on past showtimes or
 // cancelled bookings do not block deletion, and historical rows stay intact.
 const deleteShowtime = async (req, res) => {
+	const admin = requireBranchAdmin(req, res);
+	if (!admin) return;
 	const id = Number(req.params.id);
 	if (!Number.isInteger(id) || id <= 0) {
 		return res
@@ -451,7 +470,9 @@ const deleteShowtime = async (req, res) => {
 		await conn.beginTransaction();
 
 		const [existing] = await conn.query(
-			"SELECT screening_id, booked_seats, deleted_at FROM SCREENING WHERE screening_id = ? FOR UPDATE",
+			`SELECT s.screening_id, s.booked_seats, s.deleted_at, c.branch_id
+       FROM SCREENING s JOIN CINEMA c ON c.cinema_id = s.cinema_id
+       WHERE s.screening_id = ? FOR UPDATE`,
 			[id],
 		);
 		if (existing.length === 0 || existing[0].deleted_at !== null) {
@@ -459,6 +480,10 @@ const deleteShowtime = async (req, res) => {
 			return res
 				.status(404)
 				.json({ success: false, message: "Showtime not found." });
+		}
+		if (Number(existing[0].branch_id) !== admin.branchId) {
+			await conn.rollback();
+			return res.status(403).json(WRONG_BRANCH);
 		}
 
 		const [activeBookings] = await conn.query(

@@ -31,7 +31,7 @@ import {
 } from "../../api/admin.js";
 
 const PAGE_SIZE = 10;
-const STATUS_TABS = ["All", "Confirmed", "Pending", "Cancelled"];
+const STATUS_TABS = ["All", "Confirmed", "Cancelled"];
 
 // "2026-06-06T10:30" -> "Jun 6, 2026 10:30 AM"
 function formatDatetime(value) {
@@ -275,7 +275,7 @@ function ListOfBookings({ branchId }) {
 	const tabCounts = {
 		All: matchesSearch.length,
 		Confirmed: 0,
-		Pending: 0,
+		// Pending: 0,
 		Cancelled: 0,
 	};
 	matchesSearch.forEach((booking) => {

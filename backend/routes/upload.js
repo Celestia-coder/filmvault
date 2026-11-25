@@ -1,14 +1,5 @@
 // routes/upload.js
 // Image uploads to Cloudinary. Mounted at /api/upload (see server.js).
-//
-//   POST /api/upload/poster    movie poster (public image)
-//   POST /api/upload/profile   profile picture (public image)
-//
-// Both return { url } with the permanent Cloudinary URL to save in the database.
-// ID photos are not handled here: they go through POST /api/bookings.
-//
-// TODO: no auth yet. Once login issues tokens, protect /poster with requireAdmin
-// and /profile with requireAuth (put them before the multer middleware).
 
 const express = require("express");
 const cloudinary = require("../config/cloudinary");
@@ -17,7 +8,8 @@ const {
 	profileUpload,
 	checkRealImage,
 } = require("../middleware/upload");
-// const { requireAuth, requireAdmin } = require("../middleware/auth");
+const authenticate = require("../middleware/authenticate");
+const requireAdmin = require("../middleware/requireAdmin");
 
 const router = express.Router();
 
@@ -32,10 +24,11 @@ const uploadBuffer = (buffer, options) =>
 			.end(buffer);
 	});
 
-// Poster (admin only once auth exists)
+// Poster (admin only)
 router.post(
 	"/poster",
-	/* requireAdmin, */
+	authenticate,
+	requireAdmin,
 	posterUpload.single("image"),
 	checkRealImage,
 	async (req, res) => {

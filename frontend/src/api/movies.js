@@ -11,6 +11,7 @@
 //   base_price             ->  price (number)
 //   genres (array)         ->  genres (array)
 //   cast (array of names)  ->  cast (array of names)
+//   trailer_url            ->  trailerUrl (YouTube link, may be empty)
 
 export const placeholderPoster =
 	"data:image/svg+xml," +
@@ -170,6 +171,7 @@ function mapMovie(raw) {
 		price: Number(raw.base_price),
 		status: raw.status,
 		cast: Array.isArray(raw.cast) ? raw.cast : [],
+		trailerUrl: raw.trailer_url ?? "",
 	};
 }
 

@@ -5,6 +5,7 @@ import { Link } from "react-router";
 import { clearUser } from "../../api/session.js";
 import { getToken } from "../../api/authToken.js";
 import { getAdminSession } from "../../api/admin.js";
+import { getYouTubeEmbedUrl } from "../../utils/youtube.js";
 import "../../styles/MovieManagement.css";
 
 import AdminSidebar from "../../components/AdminSidebar";
@@ -442,6 +443,7 @@ function MovieManagement() {
 	const [posterError, setPosterError] = useState(""); // wrong type, too large, or upload failed
 	const [posterRequiredError, setPosterRequiredError] = useState(""); // no poster
 	const [genreError, setGenreError] = useState("");
+	const [trailerError, setTrailerError] = useState("");
 	const [castInput, setCastInput] = useState(""); // name being typed
 	const posterInputRef = useRef(null);
 
@@ -508,6 +510,7 @@ function MovieManagement() {
 		setPosterError("");
 		setPosterRequiredError("");
 		setGenreError("");
+		setTrailerError("");
 		setCastInput("");
 		setFormMode("add");
 		setEditingId(null);
@@ -534,6 +537,7 @@ function MovieManagement() {
 		setPosterError("");
 		setPosterRequiredError("");
 		setGenreError("");
+		setTrailerError("");
 		setCastInput("");
 		setFormMode("edit");
 		setEditingId(movie.id);
@@ -615,6 +619,14 @@ function MovieManagement() {
 		}
 		setGenreError("");
 
+		// The trailer is optional, but if filled in it must be a YouTube video link.
+		const trailerUrl = form.trailerUrl.trim();
+		if (trailerUrl && !getYouTubeEmbedUrl(trailerUrl)) {
+			setTrailerError("Enter a valid YouTube video link.");
+			return;
+		}
+		setTrailerError("");
+
 		if (
 			!form.title ||
 			!form.director ||
@@ -669,7 +681,7 @@ function MovieManagement() {
 				duration: Number(form.durationMinutes),
 				status: form.status,
 				price: Number(form.price),
-				trailerUrl: form.trailerUrl,
+				trailerUrl,
 				poster: posterUrl, // permanent Cloudinary URL, saved in the database
 			};
 
@@ -1303,6 +1315,11 @@ function MovieManagement() {
 											}))
 										}
 									/>
+									{trailerError && (
+										<p className="genre-error">
+											{trailerError}
+										</p>
+									)}
 								</label>
 							</div>
 						</div>
